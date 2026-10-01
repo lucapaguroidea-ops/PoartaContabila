@@ -128,6 +128,6 @@ Decided by the owner on 2026-10-01.
 3. **Domain store = Postgres**, schema `domain`, alongside the LangGraph checkpointer tables in the same database. Idempotency keys in `IDEMPOTENCY.md` become unique indexes. Mongo is not used. Invariant 1 applies to every schema in that database.
 4. **Review page = v2.** v1 HITL surface is the HTTP resume endpoints only (`ARCHITECTURE.md` §10). No chat surface in v1.
 5. **Fresh start.** No data is migrated from the previous deployment. Old journal rows are not books here and never enter this database.
-6. **Deploy target** = the existing Railway project, replaced in place (EU region). The previous deployment is snapshotted outside this repo before the switch.
+6. **Deploy target** = a dedicated Railway project (`faithful-mercy`), region `europe-west4`, separate from the previous deployment's project (amended 2026-10-01 from "replaced in place": clean logs and variables). The previous project is not migrated; its code and setup are recorded outside this repo.
 
 Not changed by A1: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` of catalogs is unchanged.
