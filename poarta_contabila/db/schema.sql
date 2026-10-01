@@ -132,3 +132,18 @@ CREATE TABLE IF NOT EXISTS domain.agent_snapshots (
     body         jsonb NOT NULL,
     received_at  timestamptz NOT NULL DEFAULT now()
 );
+
+-- Runtime: tenants (what the SAGA mouth needs) and the files that witness their books.
+CREATE TABLE IF NOT EXISTS domain.tenants (
+    cui         text PRIMARY KEY,
+    body        jsonb NOT NULL,
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS domain.sink_exports (
+    export_id   text PRIMARY KEY,            -- {kind}:{sha256 of the file}
+    tenant_cui  text NOT NULL,
+    kind        text NOT NULL CHECK (kind IN ('rj', 'balanta', 'spv_register')),
+    product     text,
+    body        jsonb NOT NULL
+);

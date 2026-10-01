@@ -177,6 +177,8 @@ Agent never devalidates. Agent never auto-restores. Archive metadata must includ
 ## 10. HTTP
 
 ```
+PUT  /tenants/{cui}
+POST /tenants/{cui}/exports/{rj|balanta|spv_register}
 POST /ingest
 GET  /jobs/{id}
 POST /jobs/{id}/resume
@@ -191,7 +193,7 @@ POST /rules
 POST /filings/{id}/receipt
 ```
 
-Agent token ≠ Grok token. No `SAGA_SYSDBA` in Railway env.
+Agent token ≠ operator token ≠ Grok token. No `SAGA_SYSDBA` in Railway env.
 
 ## 11. Package
 
@@ -240,6 +242,7 @@ JEV_BASE_URL= JEV_API_KEY=
 GROK_API_KEY=
 RUNPOD_API_KEY=
 AGENT_SHARED_TOKEN=
+OPERATOR_TOKEN=        # people: tenants, uploads, ingest, answers (≠ agent token)
 ANAF_SPV_CLIENT_ID= ANAF_SPV_CLIENT_SECRET=   # SPV register / e-Factura pull (WP-05)
 ```
 

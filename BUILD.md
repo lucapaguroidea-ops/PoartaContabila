@@ -16,6 +16,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-04 | done | WP-03 | ingest graph through `packaged` + `v3_approve` interrupt (no SAGA before interrupt) |
 | WP-05 | done | WP-04 | PRE recon: RJ or SPV register already has the doc → `already_in_sink`, no package |
 | WP-06 | done | WP-03 | Windows agent pull / backup label / Import / `wait_validare` human |
+| WP-06R | done | WP-06 | Runtime: Postgres checkpointer, S3 bucket, tenants + witness uploads, operator API |
 | WP-07 | todo | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
 | WP-08 | todo | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
 | WP-09 | todo | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
@@ -82,6 +83,19 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   so the deployed agent routes answer 503 until it is. The Windows agent program itself is not in
   this repo. A snapshot that stops showing an acked document is reported (`acked_not_shown`),
   never acted on; `request_devalidare` stays a person's step.
+
+### WP-06R Runtime
+- `runtime.py` assembles stores, bucket, checkpointer, ingest graph and agent service;
+  `runtime_from_env` needs `DATABASE_URL` + `S3_*` (else `/ready` names what is missing and the
+  agent/operator routes answer 503). LangGraph threads live in Postgres (`PostgresSaver`).
+- `registry.py`: tenants (`domain.tenants`) and uploaded witnesses (`domain.sink_exports`: SAGA /
+  NextUp journal and balance, SPV register); a SAGA export naming another firm is refused. PRE
+  reads the latest journal export (+ balance) and register per tenant.
+- `operator_api.py` (bearer `OPERATOR_TOKEN`, must differ from the agent token):
+  `PUT /tenants/{cui}`, `POST /tenants/{cui}/exports/{kind}`, `POST /ingest` (SPV zip or UBL XML
+  only, XML first), `GET /jobs/{id}`, `POST /jobs/{id}/resume`.
+- Open: no Jev judge yet, so every document asks `v3_approve`. No triage of other sources over
+  HTTP yet (PDF, receipts, statements, expense reports).
 
 ### WP-07 SagaEye v1
 - Parse SAGA report pack / RJ-CM **headers only** first (harvest C-11). Column map lives in `sinks/saga_eye.py`, not in graph code.
