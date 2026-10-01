@@ -15,7 +15,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-03 | in-progress | WP-02 | `iesire_factura_xml` + `intrare_factura_xml` fixtures; human import on copy firm |
 | WP-04 | done | WP-03 | ingest graph through `packaged` + `v3_approve` interrupt (no SAGA before interrupt) |
 | WP-05 | done | WP-04 | PRE recon: RJ or SPV register already has the doc → `already_in_sink`, no package |
-| WP-06 | todo | WP-03 | Windows agent pull / backup label / Import / `wait_validare` human |
+| WP-06 | done | WP-03 | Windows agent pull / backup label / Import / `wait_validare` human |
 | WP-07 | todo | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
 | WP-08 | todo | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
 | WP-09 | todo | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
@@ -72,6 +72,16 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 ### WP-06 Agent
 - HTTP as ARCHITECTURE.md §10. AGENT user cannot devalidate.
 - Tests: fake agent; `wait_validare` without snapshot ≠ acked.
+- Built: `agent.py` (`AgentService`: pull per firm folder within `max_docs_per_run`, backup
+  label `{cui}:{folder}:{utc}` acknowledged per tenant, import report → `wait_validare` or
+  `needs_human`, snapshot → resumes `wait_validare` with the SAGA key of the matching validated
+  document; closed months held), `agent_api.py` (bearer `AGENT_SHARED_TOKEN`, 503 when unset),
+  ingest node `wait_validare` (`acked` only with a key a stored snapshot shows validated;
+  `validated: false` → `reopened`), `domain.agent_backups` / `domain.agent_snapshots`.
+- Open: the production runtime (Postgres checkpointer, S3 blob store, ingest runner) is not wired,
+  so the deployed agent routes answer 503 until it is. The Windows agent program itself is not in
+  this repo. A snapshot that stops showing an acked document is reported (`acked_not_shown`),
+  never acted on; `request_devalidare` stays a person's step.
 
 ### WP-07 SagaEye v1
 - Parse SAGA report pack / RJ-CM **headers only** first (harvest C-11). Column map lives in `sinks/saga_eye.py`, not in graph code.

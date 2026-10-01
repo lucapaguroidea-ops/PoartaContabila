@@ -225,6 +225,12 @@ snapshot_request → parse report pack or replica → POST /agent/snapshot
 
 AGENT: import only. No Devalidare, no închidere lună, no admin.
 
+Pull hands out packages per `(cui, saga_firm_folder)` with the module's backup rule; an import
+under a module that needs a backup is accepted only with an acknowledged label of that firm and
+folder. A snapshot lists SAGA documents (`saga_doc_key`, class, number, date, gross,
+`validated`) and closed months; a closed month gets nothing. `acked` = a snapshot shows the
+matching document validated. A snapshot never moves a job out of `acked`.
+
 ## 14. Env
 
 ```

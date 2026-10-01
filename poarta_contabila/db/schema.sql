@@ -113,3 +113,22 @@ CREATE TABLE IF NOT EXISTS domain.explained_rules (
     body     jsonb NOT NULL,
     PRIMARY KEY (cui, rule_id, version)
 );
+
+-- WP-06 Windows agent. A backup label is {cui}:{folder}:{utc}; a restore is refused
+-- when the label's tenant differs. Snapshots are what SAGA showed the agent (the eye).
+CREATE TABLE IF NOT EXISTS domain.agent_backups (
+    label       text PRIMARY KEY,
+    tenant_cui  text NOT NULL,
+    folder      text NOT NULL,
+    taken_at    timestamptz NOT NULL,
+    acked_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS domain.agent_snapshots (
+    snapshot_id  text PRIMARY KEY,           -- sha256 of the body
+    tenant_cui   text NOT NULL,
+    folder       text NOT NULL,
+    taken_at     timestamptz NOT NULL,
+    body         jsonb NOT NULL,
+    received_at  timestamptz NOT NULL DEFAULT now()
+);

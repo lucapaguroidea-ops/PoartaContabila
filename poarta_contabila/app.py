@@ -1,4 +1,4 @@
-"""HTTP entry point (ARCHITECTURE §10). v1 shell: health, readiness, schema on boot.
+"""HTTP entry point (ARCHITECTURE §10): health, readiness, schema on boot, agent routes.
 
 The catalog is law: if it does not load, the process does not start.
 """
@@ -11,6 +11,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from poarta_contabila.agent import AgentService
+from poarta_contabila.agent_api import agent_router
 from poarta_contabila.catalog import load_catalog
 from poarta_contabila.db import schema_sql
 
@@ -19,8 +21,19 @@ def _database_url_from_env() -> str | None:
     return os.environ.get("DATABASE_URL") or None
 
 
-def create_app(database_url: str | None | object = ...) -> FastAPI:
-    """Build the app. *database_url* defaults to ``$DATABASE_URL``; ``None`` disables the DB."""
+def create_app(
+    database_url: str | None | object = ...,
+    *,
+    agent: AgentService | None = None,
+    agent_token: str | None | object = ...,
+) -> FastAPI:
+    """Build the app. *database_url* defaults to ``$DATABASE_URL``; ``None`` disables the DB.
+
+    *agent* is the wired agent runtime (stores, bucket, ingest graph). Until the
+    production runtime is wired, the agent routes answer 503. *agent_token* defaults
+    to ``$AGENT_SHARED_TOKEN``.
+    """
+    token = os.environ.get("AGENT_SHARED_TOKEN") if agent_token is ... else agent_token
     dsn = _database_url_from_env() if database_url is ... else database_url
 
     @asynccontextmanager
@@ -56,6 +69,7 @@ def create_app(database_url: str | None | object = ...) -> FastAPI:
         ok = all(v == "ok" for v in checks.values())
         return JSONResponse({"checks": checks}, status_code=200 if ok else 503)
 
+    app.include_router(agent_router(lambda: agent, lambda: token or None))
     return app
 
 

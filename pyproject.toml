@@ -39,3 +39,6 @@ extend-exclude = ["annex", "fixtures"]  # pack files kept as delivered
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header"]

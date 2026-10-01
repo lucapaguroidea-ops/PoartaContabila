@@ -1,6 +1,6 @@
 """ingest_source_doc (WP-04): a Job walks its articol de cale up to `packaged`.
 
-    bind → reconcile_pre → approve (v3_approve) → package
+    bind → reconcile_pre → approve (v3_approve) → package → wait_validare
 
 - **bind**: ArticoleFlux.matches on stored fields. One survivor binds; none or a tie asks
   ``define_articol`` (the answer must be a real articol on this graph).
@@ -12,6 +12,11 @@
   SAGA before this answer (no side effect sits before ``interrupt()``).
 - **package**: render through the articol's invoice WriteModule and write the XML once per
   ``export_key``; a replay of the node writes nothing.
+- **wait_validare** (WP-06): waits for SAGA. The Windows agent imports the package
+  (status ``wait_validare``), a person validates in SAGA, and the agent's snapshot
+  resumes the thread. ``acked`` needs ``validated`` with a ``saga_doc_key`` that a
+  stored snapshot shows validated; an answer without one is asked again.
+  ``validated: false`` (import cancelled) → ``reopened``.
 
 Edges read ``state["status"]`` only. Runs on ``job:`` threads only.
 """
@@ -49,6 +54,11 @@ class V3ApproveResume(Closed):
     edit: dict[str, Any] | None = None
 
 
+class WaitValidareResume(Closed):
+    validated: bool
+    saga_doc_key: str | None = None
+
+
 @dataclass
 class IngestDeps:
     catalog: Catalog
@@ -59,6 +69,8 @@ class IngestDeps:
     judge: Callable[[CanonicalDocument, dict], dict]
     tenant_name: Callable[[str], str]
     allow_draft: bool = True
+    snapshot_validated: Callable[[str, str], bool] = lambda cui, saga_doc_key: False
+    """(tenant cui, saga_doc_key) → a stored agent snapshot shows it validated."""
 
     def package(self, job: JobRecord, doc: CanonicalDocument, module: WriteModule) -> PackageRow:
         """Render and write once; set the job to `packaged`. Safe to replay."""
@@ -137,7 +149,7 @@ def _needs_question(deps: IngestDeps, job: JobRecord, articol: dict, verdict: di
 def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
     """Compile ingest_source_doc. Edges read stored status only."""
     cat = deps.catalog
-    for kind in ("define_articol", "v3_approve"):
+    for kind in ("define_articol", "v3_approve", "wait_validare"):
         cat.hitl_kind(kind, graph_id=GRAPH_ID)
 
     def bind(state: IngestState, config) -> IngestState:
@@ -256,6 +268,36 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
             return {"status": "needs_human", "error": str(exc)}
         return {"status": "packaged", "export_key": row.export_key}
 
+    def wait_validare(state: IngestState) -> IngestState:
+        job_id = state["job_id"]
+
+        def check(answer: WaitValidareResume) -> str | None:
+            job = deps.jobs.get(job_id)
+            if job.status != "wait_validare":
+                return f"job is {job.status}, not imported into SAGA yet"
+            if not answer.validated:
+                return "saga_doc_key is only given with validated" if answer.saga_doc_key else None
+            if not answer.saga_doc_key:
+                return "validated needs the saga_doc_key"
+            if not deps.snapshot_validated(job.tenant.cui, answer.saga_doc_key):
+                return f"no SAGA snapshot shows {answer.saga_doc_key!r} validated"
+            return None
+
+        answer = ask(
+            "wait_validare",
+            {"job_id": job_id, "export_key": state.get("export_key")},
+            WaitValidareResume,
+            check,
+        )
+        if answer.validated:
+            deps.jobs.update(job_id, status="acked", saga={"saga_doc_key": answer.saga_doc_key})
+            return {"status": "acked"}
+        deps.jobs.update(job_id, status="reopened")
+        return {"status": "reopened"}
+
+    def after_package(state: IngestState) -> str:
+        return "wait_validare" if state["status"] == "packaged" else END
+
     def after_pre(state: IngestState) -> str:
         return "approve" if state["status"] == "reconcile_pre" else END
 
@@ -267,9 +309,11 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
     g.add_node("reconcile_pre", reconcile_pre)
     g.add_node("approve", approve)
     g.add_node("package", package)
+    g.add_node("wait_validare", wait_validare)
     g.add_edge(START, "bind")
     g.add_edge("bind", "reconcile_pre")
     g.add_conditional_edges("reconcile_pre", after_pre, ["approve", END])
     g.add_conditional_edges("approve", after_approve, ["package", END])
-    g.add_edge("package", END)
+    g.add_conditional_edges("package", after_package, ["wait_validare", END])
+    g.add_edge("wait_validare", END)
     return g.compile(checkpointer=checkpointer)
