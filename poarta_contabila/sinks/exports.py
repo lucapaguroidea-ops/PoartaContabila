@@ -16,6 +16,7 @@ The book of record is read, never written. Rules that keep the reading honest:
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -169,6 +170,20 @@ def _date(value: Any, datemode: Any, where: str) -> str:
             except ValueError:
                 pass
     raise ExportError(f"{where}: not a date: {value!r}")
+
+
+_FIRM_CUI_RE = re.compile(r"c\.\s*f\.\s*:?\s*((?:RO)?\s*\d{2,10})\b", re.IGNORECASE)
+
+
+def read_firm_cui(path: str | Path) -> str | None:
+    """The firm's CUI from a SAGA export header (``... c.f. RO123 r.c. ...``), or None."""
+    values, _, _ = _sheet_cells(Path(path))
+    for row in values[:6]:
+        for value in row:
+            m = _FIRM_CUI_RE.search(_text(value))
+            if m:
+                return cui_key(m.group(1))
+    return None
 
 
 def _find_header(values: list[list[Any]], labels: tuple[str, ...], where: str) -> int:
@@ -452,13 +467,23 @@ class ExportEye:
         lines: list[SinkLine],
         balance: list[BalanceRow] | None = None,
         partner_cuis: dict[str, str] | None = None,
+        cui: str | None = None,
+        periods: Iterable[str] | None = None,
     ) -> None:
+        """``cui``: the firm the export belongs to (SAGA: :func:`read_firm_cui`). Without it
+        the eye covers nothing. ``periods``: months the export was taken for; by default
+        the months that have journal lines."""
         self.product = product
         self.lines = lines
         self.balance = balance or []
         cuis = {r.account: r.partner_cui for r in self.balance if r.partner_cui}
         cuis.update(partner_cuis or {})
         self.partner_cuis = cuis
+        self.cui = cui
+        self.periods = frozenset(periods if periods is not None else (ln.date[:7] for ln in lines))
+
+    def covers(self, cui: str, period: str) -> bool:
+        return self.cui is not None and self.cui == cui and period in self.periods
 
     def documents(self, cui: str, period: str) -> list[SinkDoc]:
         journals = _INVOICE_JOURNALS[self.product]

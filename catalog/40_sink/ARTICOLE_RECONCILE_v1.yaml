@@ -11,6 +11,7 @@ valid_from: "2026-01-01"
 enums:
   stage: [pre, post]
   verdict_det: [absent, already_posted, how_ok, how_mismatch, ambiguous]
+  number_match: [exact, alnum, digits_core]
   verdict_review: [confirm, contest, abstain]
   sink_source: [registru_jurnal, cartea_mare]
 
@@ -35,7 +36,7 @@ flux:
     status: draft
     stage: pre
     filters: {fiscal_class: bon}
-    extra_filters: {}
+    extra_filters: {is_storno: false}
     require: {}
     forbid: {}
     profile_id: pre_bon_date_gross
@@ -48,7 +49,7 @@ flux:
     status: draft
     stage: pre
     filters: {fiscal_class: extras}
-    extra_filters: {}
+    extra_filters: {is_storno: false}
     require: {}
     forbid: {}
     profile_id: pre_extras_date_gross
@@ -104,6 +105,8 @@ profiles:
     status: draft
     sink_source: registru_jurnal
     match_keys: [number, date]
+    number_match: [exact, alnum, digits_core]
+    number_match_note: "[de confirmat] A2: exact = trimmed, upper; alnum = letters+digits only; digits_core = digits without leading zeros, counts only with the same partner CUI."
     expect_accounts_from: flux_or_job
     fallback_accounts: ["401", "4111"]
     tolerance: "0.05"
@@ -137,6 +140,8 @@ profiles:
     status: draft
     sink_source: registru_jurnal
     match_keys: [number, date]
+    number_match: [exact, alnum, digits_core]
+    number_match_note: "[de confirmat] A2: exact = trimmed, upper; alnum = letters+digits only; digits_core = digits without leading zeros, counts only with the same partner CUI."
     expect_accounts_from: flux_or_job
     fallback_accounts: ["401", "4111", "4426", "4427"]
     tolerance: "0.05"
@@ -161,6 +166,8 @@ profiles:
     status: draft
     sink_source: registru_jurnal
     match_keys: [number, date]
+    number_match: [exact, alnum, digits_core]
+    number_match_note: "[de confirmat] A2: exact = trimmed, upper; alnum = letters+digits only; digits_core = digits without leading zeros, counts only with the same partner CUI."
     expect_accounts_from: flux
     fallback_accounts: ["4428"]
     tolerance: "0.05"

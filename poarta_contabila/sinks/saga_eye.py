@@ -13,6 +13,13 @@ from poarta_contabila.types import SinkDoc
 
 @runtime_checkable
 class SagaEye(Protocol):
+    def covers(self, cui: str, period: str) -> bool:
+        """True only if this witness holds the firm's books for that month.
+
+        "Not in the books" may be concluded only for a covered month (PRE ``absent``).
+        """
+        ...
+
     def documents(self, cui: str, period: str) -> list[SinkDoc]: ...
 
     def solduri(self, cui: str, period: str) -> dict[str, dict]: ...
@@ -22,6 +29,9 @@ class SagaEye(Protocol):
 
 class FakeSagaEye:
     """Witness with nothing in it. For tests and for graphs before WP-07."""
+
+    def covers(self, cui: str, period: str) -> bool:
+        return False
 
     def documents(self, cui: str, period: str) -> list[SinkDoc]:
         return []

@@ -11,6 +11,7 @@ from poarta_contabila.flux import MatchContext, match_articole
 from poarta_contabila.ingest import IngestDeps, build_ingest_graph, start_payload
 from poarta_contabila.jobs import InMemoryJobStore
 from poarta_contabila.packages import InMemoryBlobStore, InMemoryPackageStore
+from poarta_contabila.recon.pre import PreResult
 from poarta_contabila.sinks.saga_xml import fixture_documents
 from poarta_contabila.triage import EmitDecision, Pack
 
@@ -32,7 +33,9 @@ class World:
             jobs=self.jobs,
             packages=self.packages,
             blobs=self.blobs,
-            pre_check=lambda job, doc: pre,
+            pre_check=lambda job, doc, **kw: PreResult(
+                verdict=pre, reason="test", profile_id=None, snapshot_id="test"
+            ),
             judge=judge
             or (lambda doc, articol: {"accounts_ok": True, "risk": "low", "needs_human": False}),
             tenant_name=lambda cui: "Firma Test",

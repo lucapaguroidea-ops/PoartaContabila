@@ -214,9 +214,43 @@ def nextup_balanta() -> None:
     wb.save(HERE / "nextup_balanta.xlsx")
 
 
+def spv_register() -> None:
+    """SPV invoice register (harvest C-F12): one row per invoice and VAT rate."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Facturi SPV"
+    ws.append(["Registru facturi SPV"])
+    ws.append([])
+    ws.append(["Companie", "Trimestru", "Data facturii", "Numar factura", "Numele furnizorului",
+               "Suma net per % de TVA", "Cota TVA", "TVA", "Gross", "Status", "Obs re status",
+               "Ordine"])
+    rows = [
+        # posted, and in the SAGA journal fixture (number stored as a number)
+        (date(2026, 9, 3), 1427, "FURNIZOR TEST SRL", 1000.00, 0.21, 210.00, 1210.00,
+         "Înregistrat în SAGA", None, 1),
+        # still to post; the SAGA journal already has it as AB0058
+        (date(2026, 9, 10), "AB 0058", "ALT FURNIZOR SRL", 150.50, 0.11, 16.56, 167.06,
+         "De înregistrat", "lipsa NIR", 2),
+        # posted per the register, two VAT rates, not in the journal fixture
+        (date(2026, 9, 12), "F 77", "AL TREILEA SRL", 100.00, 0.21, 21.00, 121.00,
+         "Inregistrat in SAGA", None, 3),
+        (date(2026, 9, 12), "F 77", "AL TREILEA SRL", 50.00, 0.11, 5.50, 55.50,
+         "Inregistrat in SAGA", None, 3),
+    ]
+    for d, number, supplier, net, rate, vat, gross, status, obs, order in rows:
+        ws.append(["FIRMA TEST SRL", "T3 2026", datetime.combine(d, datetime.min.time()), number,
+                   supplier, net, rate, vat, gross, status, obs, order])
+        r = ws.max_row
+        ws.cell(r, 7).number_format = "0%"
+        for c in (6, 8, 9):
+            ws.cell(r, c).number_format = "#,##0.00"
+    wb.save(HERE / "spv_register.xlsx")
+
+
 if __name__ == "__main__":
     saga_rj()
     saga_balanta()
     nextup_rj()
     nextup_balanta()
+    spv_register()
     print("written:", sorted(p.name for p in HERE.iterdir() if p.suffix in (".xls", ".xlsx")))

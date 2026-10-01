@@ -14,7 +14,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-02 | done | WP-01 | folder_triage + SourceDoc emit gates + Job unique `(cui, source_hash)` |
 | WP-03 | in-progress | WP-02 | `iesire_factura_xml` + `intrare_factura_xml` fixtures; human import on copy firm |
 | WP-04 | done | WP-03 | ingest graph through `packaged` + `v3_approve` interrupt (no SAGA before interrupt) |
-| WP-05 | todo | WP-04 | PRE recon: RJ or SPV register already has the doc → `already_in_sink`, no package |
+| WP-05 | done | WP-04 | PRE recon: RJ or SPV register already has the doc → `already_in_sink`, no package |
 | WP-06 | todo | WP-03 | Windows agent pull / backup label / Import / `wait_validare` human |
 | WP-07 | todo | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
 | WP-08 | todo | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
@@ -61,6 +61,13 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Profiles from `ARTICOLE_RECONCILE_v1.yaml`.
 - `spv_register` SourceDoc additive feeds expected keys.
 - Tests: matching number+date in sink_lines → `already_in_sink`.
+- Built: `recon/pre.py` (`make_pre_check` → `IngestDeps.pre_check`; profile by flux on stage `pre`;
+  verdict stored once per `(job_id, pre, sink_snapshot_id)`), `recon/numbers.py` (`number_match`
+  ladder exact → alnum → digits_core, `[de confirmat]` on the profile), `sinks/spv_register.py`
+  (C-F12 register, checked), `SagaEye.covers` (absent only for months whose books were read).
+- Open: `recon_ambiguous` / `need_rj_export` answers live on the `reconcile_sink` graph (not built);
+  until then such jobs stop at `needs_human` with the reason. Storno has no PRE row in the catalog,
+  so every storno asks. Register partners match by name only (it carries no CUI).
 
 ### WP-06 Agent
 - HTTP as ARCHITECTURE.md §10. AGENT user cannot devalidate.

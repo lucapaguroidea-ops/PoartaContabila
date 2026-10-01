@@ -130,10 +130,13 @@ Validare: human until the module fixture is green on a copy firm.
 ## 6. SagaEye v1
 
 ```
+covers(cui, period) -> bool        # this witness holds that firm's books for that month
 documents(cui, period) -> list[SinkDoc]
 solduri(cui, period) -> dict
 analytic(cui, period, root) -> dict
 ```
+
+PRE may conclude `absent` only for covered months (`need_rj_export` otherwise).
 
 v1 reads SAGA report pack / RJ-CM export (practice takeover pack), or, for a tenant with `book_of_record = nextup`, NextUp's journal and balance exports (A2, eye only). FDB SQL later on a pinned SAGA C build. Core graphs depend only on the protocol.
 

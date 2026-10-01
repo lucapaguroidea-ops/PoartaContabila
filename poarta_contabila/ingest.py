@@ -5,7 +5,8 @@
 - **bind**: ArticoleFlux.matches on stored fields. One survivor binds; none or a tie asks
   ``define_articol`` (the answer must be a real articol on this graph).
 - **reconcile_pre**: already in the books → ``already_in_sink`` and stop; ambiguous →
-  ``needs_human`` and stop. The real check is WP-05; here it is an injected function.
+  ``needs_human`` and stop (the reason is on the job). The check is
+  :func:`poarta_contabila.recon.pre.make_pre_check` (WP-05), injected.
 - **approve**: the articol's HITL policy (``always`` / ``first_n`` / ``never_if_risk_low``)
   plus the Jev judge decide whether a person must answer ``v3_approve``. Nothing touches
   SAGA before this answer (no side effect sits before ``interrupt()``).
@@ -28,6 +29,7 @@ from poarta_contabila.catalog import Catalog
 from poarta_contabila.flux import MatchContext, match_articole
 from poarta_contabila.hitl import ask
 from poarta_contabila.packages import BlobStore, PackageRow, PackageStore, write_once
+from poarta_contabila.recon.pre import PreResult
 from poarta_contabila.sinks.saga_xml import SagaXmlError, export_key, render_invoice
 from poarta_contabila.types import CanonicalDocument, Closed, JobRecord, Slug, WriteModule
 
@@ -36,8 +38,6 @@ THREAD_PREFIX = "job:"
 _INVOICE_MOUTHS = ("iesire_factura_xml", "intrare_factura_xml")
 _OUTBOUND = {"iesire", "storn_iesire"}
 _INBOUND = {"intrare", "storn_intrare"}
-
-PreVerdict = Literal["absent", "already_posted", "ambiguous"]
 
 
 class DefineArticolResume(Closed):
@@ -55,7 +55,7 @@ class IngestDeps:
     jobs: Any  # InMemoryJobStore | PostgresJobStore
     packages: PackageStore
     blobs: BlobStore
-    pre_check: Callable[[JobRecord, CanonicalDocument], PreVerdict]
+    pre_check: Callable[..., PreResult]  # (job, doc, *, fiscal_class, axes)
     judge: Callable[[CanonicalDocument, dict], dict]
     tenant_name: Callable[[str], str]
     allow_draft: bool = True
@@ -90,6 +90,7 @@ class IngestState(TypedDict, total=False):
     status: str
     export_key: str
     error: str
+    pre: dict[str, Any]
 
 
 def start_payload(
@@ -180,14 +181,24 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
 
     def reconcile_pre(state: IngestState) -> IngestState:
         job = deps.jobs.update(state["job_id"], status="reconcile_pre")
-        verdict = deps.pre_check(job, CanonicalDocument.model_validate(state["canonical"]))
-        if verdict == "already_posted":
+        source = cat.source_docs.get(state["source_doc_id"]) or {}
+        pre = deps.pre_check(
+            job,
+            CanonicalDocument.model_validate(state["canonical"]),
+            fiscal_class=source.get("fiscal_class"),
+            axes=state.get("axes") or {},
+        )
+        if pre.verdict == "already_posted":
             deps.jobs.update(job.job_id, status="already_in_sink")
-            return {"status": "already_in_sink"}
-        if verdict != "absent":
-            deps.jobs.update(job.job_id, status="needs_human", error=f"reconcile_pre: {verdict}")
-            return {"status": "needs_human"}
-        return {"status": "reconcile_pre"}
+            return {"status": "already_in_sink", "pre": pre.model_dump()}
+        if pre.verdict != "absent":
+            deps.jobs.update(
+                job.job_id,
+                status="needs_human",
+                error=f"reconcile_pre: {pre.verdict}: {pre.reason}",
+            )
+            return {"status": "needs_human", "pre": pre.model_dump()}
+        return {"status": "reconcile_pre", "pre": pre.model_dump()}
 
     def approve(state: IngestState) -> IngestState:
         job = deps.jobs.get(state["job_id"])

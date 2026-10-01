@@ -3,6 +3,7 @@
     matches(ctx): status allowed AND date in range AND graph_id
       AND filters exact AND extra_filters exact
       AND require ⊆ ctx.axes AND forbid ∩ ctx.axes = ∅
+      AND (ctx.stage unset OR stage = ctx.stage)
     Tie-break: more filters > narrower require > latest valid_from; else HITL.
 
 Only stored fields are read; no model is consulted. ``allow_draft`` admits Lane B
@@ -27,6 +28,7 @@ class MatchContext(Closed):
     our_cui_on_doc: bool | None = None
     axes: dict[str, str] = Field(default_factory=dict)
     day: FiscalDate | None = None
+    stage: str | None = None  # reconcile_sink rows: "pre" or "post"
 
 
 def _allowed_status(row: dict[str, Any], allow_draft: bool) -> bool:
@@ -42,6 +44,8 @@ def _in_range(row: dict[str, Any], day: str | None) -> bool:
 
 
 def _matches(row: dict[str, Any], ctx: MatchContext) -> bool:
+    if ctx.stage is not None and row.get("stage") != ctx.stage:
+        return False
     for key, want in (row.get("filters") or {}).items():
         if getattr(ctx, key, None) != want:
             return False
