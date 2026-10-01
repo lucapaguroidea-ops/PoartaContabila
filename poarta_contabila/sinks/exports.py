@@ -533,6 +533,9 @@ class ExportEye:
             )
         return sorted(docs, key=lambda d: (d.date, d.saga_key))
 
+    def journal_lines(self, cui: str, period: str) -> list[SinkLine]:
+        return [ln for ln in self.lines if ln.date.startswith(period)]
+
     def turnover(self, cui: str, period: str) -> dict[str, dict[str, str]]:
         """Period turnover per synthetic account: from the journal lines when there are
         any, else from the balance's period columns."""

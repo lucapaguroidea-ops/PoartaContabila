@@ -19,7 +19,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-06R | done | WP-06 | Runtime: Postgres checkpointer, S3 bucket, tenants + witness uploads, operator API |
 | WP-07 | done | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
 | WP-08 | done | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
-| WP-09 | todo | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
+| WP-09 | done | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
 | WP-10 | todo | WP-09 | monthly_close + V2 pack; material cannot be cleared by Jev |
 | WP-11 | todo | WP-01 | CO.DiT seed from Pins + T* F* + additive axes; no silent `tva_platitor` |
 | WP-12 | todo | WP-10 | Filing items + `filing_receipt`; V2 `file` ≠ ANAF submit |
@@ -127,6 +127,12 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 ### WP-09 Explained rules
 - `POST /rules` versioned. HITL `explained_rule` and `control_disposition`.
 - Tests: rule tags sink lines to `explained_sink_only`; cannot hide unexplained without `rule_id`.
+- Built: `rules.py` — `RuleBody` (scope `document`: side / partner CUI / number prefix / gross
+  ceiling; scope `line`: debit / credit account patterns, journal, words), `ExplainedRule`
+  versions per `(cui, rule_id)` (same body = same version; `domain.explained_rules`), applied in
+  `build_period_diff` (documents → `explained_sink_only` + `rule_id`; lines → explained turnover on
+  the parity side, never a line of a document already counted). `POST /rules`, `GET /rules/{cui}`.
+  Answer checks for `explained_rule` and `control_disposition` (used by the close graph, WP-10).
 
 ### WP-10 Close + V2
 - Thread `close:{cui}:{period}`. Layer 2 JSON only.

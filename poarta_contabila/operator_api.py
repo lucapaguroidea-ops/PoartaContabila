@@ -13,10 +13,17 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 
 from poarta_contabila.registry import ExportKind, Product, Tenant
+from poarta_contabila.rules import ExplainedRule, RuleBody
 from poarta_contabila.runtime import IngestRefused, Runtime
 from poarta_contabila.sinks.exports import ExportError
+from poarta_contabila.types import Cui, Slug
 
 _RAW = Body(..., media_type="application/octet-stream")
+
+
+class RuleRequest(RuleBody):
+    cui: Cui
+    rule_id: Slug
 
 
 def operator_router(
@@ -80,6 +87,20 @@ def operator_router(
     ) -> dict[str, Any]:
         axes = {k: v for k, v in (("tva", tva), ("exig", exig)) if v}
         return rt.period_diff(cui, period, axes)
+
+    @router.post("/rules")
+    def post_rule(body: RuleRequest, rt: Runtime = Depends(operator)) -> ExplainedRule:
+        """A person writes a rule; a changed body is a new version, the old ones stay."""
+        if rt.rules is None:
+            raise HTTPException(503, "rule store not wired")
+        if rt.registry.tenant(body.cui) is None:
+            raise HTTPException(422, f"tenant {body.cui} is not registered")
+        rule = RuleBody.model_validate(body.model_dump(exclude={"cui", "rule_id"}))
+        return rt.rules.add(body.cui, body.rule_id, rule)
+
+    @router.get("/rules/{cui}")
+    def get_rules(cui: str, rt: Runtime = Depends(operator)) -> list[ExplainedRule]:
+        return rt.rules.active(cui) if rt.rules is not None else []
 
     @router.get("/jobs/{job_id}")
     def get_job(job_id: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:

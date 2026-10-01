@@ -55,6 +55,7 @@ class Runtime:
     agent_store: Any
     checkpointer: Any
     periods: Any = None  # InMemoryPeriodStore | PostgresPeriodStore
+    rules: Any = None  # InMemoryRuleStore | PostgresRuleStore
 
     def __post_init__(self) -> None:
         self.deps = IngestDeps(
@@ -127,7 +128,10 @@ class Runtime:
             status="bound",
         )
         eye = witnesses_provider(self.registry, self.blobs)(probe).eye
-        diff, runs = build_period_diff(self.catalog, cui, period, expected, eye, axes=axes)
+        rules = self.rules.active(cui) if self.rules is not None else []
+        diff, runs = build_period_diff(
+            self.catalog, cui, period, expected, eye, axes=axes, rules=rules
+        )
         if self.periods is not None:
             self.periods.save(diff, runs)
         return {
@@ -235,6 +239,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     from poarta_contabila.period_diff import PostgresPeriodStore
     from poarta_contabila.recon.pre import PostgresReconStore
     from poarta_contabila.registry import PostgresRegistry
+    from poarta_contabila.rules import PostgresRuleStore
 
     pool = ConnectionPool(
         dsn,
@@ -253,5 +258,6 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         agent_store=PostgresAgentStore(dsn),
         checkpointer=checkpointer,
         periods=PostgresPeriodStore(dsn),
+        rules=PostgresRuleStore(dsn),
     )
     return runtime, "ok"

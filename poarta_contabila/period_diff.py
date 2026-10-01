@@ -5,8 +5,10 @@ rules (WP-09). Right operand: what the SagaEye shows. Nothing is plugged: a rema
 is a bucket row or a failed control, never an adjusting entry.
 
 - **Buckets.** Every sink document of the period is matched to an expected one (by the
-  SAGA key a job carries, else side + number + date + gross) → ``expected``; otherwise
-  ``unexplained`` (``explained_sink_only`` arrives with rules, WP-09).
+  SAGA key a job carries, else side + number + date + gross) → ``expected``; else to a
+  document rule → ``explained_sink_only`` with its ``rule_id`` (WP-09); else
+  ``unexplained``. Line rules explain journal movements (bank fees, payroll) on the
+  parity side; lines of documents already counted are never counted twice.
 - **Outbound holes.** Expected jobs not ``acked`` / ``already_in_sink``.
 - **Synthetic parity (C0).** For each watched account, the period turnover the expected
   documents imply (purchase: 401 Cr gross, 4426 Dr VAT; sale: 4111 Dr gross, 4427 Cr
@@ -30,6 +32,7 @@ from typing import Any
 
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.recon.numbers import normalize
+from poarta_contabila.rules import ExplainedRule, explained_turnover
 from poarta_contabila.sinks.saga_eye import SagaEye
 from poarta_contabila.types import (
     AccountDelta,
@@ -116,9 +119,11 @@ def build_period_diff(
     eye: SagaEye,
     *,
     axes: dict[str, str] | None = None,
+    rules: list[ExplainedRule] | None = None,
 ) -> tuple[PeriodDiff, list[ControlRun]]:
     """PeriodDiff + one ControlRun per v2/both control row."""
     axes = axes or {}
+    rules = [r for r in rules or [] if r.cui == cui and r.applies_to(period)]
     exp = [e for e in expected if e.job.status not in _NOT_EXPECTED]
     items = [e.item() for e in exp]
     covered = eye.covers(cui, period)
@@ -126,10 +131,23 @@ def build_period_diff(
     turnover = eye.turnover(cui, period) if covered else {}
 
     inbound: list[BucketRow] = []
+    explained_docs: list[tuple[SinkDoc, str]] = []
     for sd in sink_docs:
         e = _match(exp, sd)
         if e is None:
-            inbound.append(BucketRow(kind="unexplained", sink=sd, delta_gross=sd.gross))
+            rule = next((r for r in rules if r.scope == "document" and r.matches_doc(sd)), None)
+            if rule is not None:
+                explained_docs.append((sd, rule.rule_id))
+                inbound.append(
+                    BucketRow(
+                        kind="explained_sink_only",
+                        sink=sd,
+                        rule_id=rule.rule_id,
+                        delta_gross="0.00",
+                    )
+                )
+            else:
+                inbound.append(BucketRow(kind="unexplained", sink=sd, delta_gross=sd.gross))
         else:
             inbound.append(
                 BucketRow(
@@ -145,6 +163,19 @@ def build_period_diff(
     watched = list(control.get("watched") or [])
     epsilon = Decimal(str(control.get("epsilon", "0.01")))
     implied = expected_turnover(items)
+    counted = {(normalize(i.number, "alnum"), i.date) for i in items} | {
+        (normalize(d.number, "alnum"), d.date) for d, _ in explained_docs
+    }
+    explained_lines = []
+    line_rules = [r for r in rules if r.scope == "line"]
+    for ln in eye.journal_lines(cui, period) if covered and line_rules else []:
+        if (normalize(ln.doc_number, "alnum"), ln.date) in counted:
+            continue
+        if any(r.matches_line(ln) for r in line_rules):
+            explained_lines.append(ln)
+    for account, sides in explained_turnover(explained_docs, explained_lines).items():
+        for side, amount in sides.items():
+            implied.setdefault(account, {"debit": Decimal(0), "credit": Decimal(0)})[side] += amount
     synthetic: dict[str, AccountDelta] = {}
     for account in watched:
         for side in ("debit", "credit"):
@@ -166,6 +197,7 @@ def build_period_diff(
                 "sink": [d.model_dump() for d in sink_docs],
                 "turnover": turnover,
                 "axes": axes,
+                "rules": sorted((r.rule_id, r.version) for r in rules),
             },
             sort_keys=True,
         ).encode()

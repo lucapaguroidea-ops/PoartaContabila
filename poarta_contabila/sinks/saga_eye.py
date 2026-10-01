@@ -15,6 +15,7 @@ from poarta_contabila.sinks.exports import (
     BalanceRow,
     ExportError,
     ExportEye,
+    SinkLine,
     _date,
     _doc_number,
     _money,
@@ -39,6 +40,10 @@ class SagaEye(Protocol):
         """Period turnover per synthetic account: ``{account: {debit, credit}}``."""
         ...
 
+    def journal_lines(self, cui: str, period: str) -> list[SinkLine]:
+        """The journal register's lines of the month ([] when the eye has none)."""
+        ...
+
     def solduri(self, cui: str, period: str) -> dict[str, dict]: ...
 
     def analytic(self, cui: str, period: str, root: str) -> dict[str, dict]: ...
@@ -52,6 +57,9 @@ class FakeSagaEye:
 
     def turnover(self, cui: str, period: str) -> dict[str, dict[str, str]]:
         return {}
+
+    def journal_lines(self, cui: str, period: str) -> list[SinkLine]:
+        return []
 
     def documents(self, cui: str, period: str) -> list[SinkDoc]:
         return []
@@ -174,6 +182,9 @@ class ReportPackEye:
 
     def turnover(self, cui: str, period: str) -> dict[str, dict[str, str]]:
         return self._balance.turnover(cui, period)
+
+    def journal_lines(self, cui: str, period: str) -> list[SinkLine]:
+        return []
 
     def solduri(self, cui: str, period: str) -> dict[str, dict]:
         return self._balance.solduri(cui, period)
