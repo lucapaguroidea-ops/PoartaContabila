@@ -8,7 +8,7 @@ Self-contained. Catalogs in `catalog/` are the row-level law. This file is the m
 sources (SPV UBL, S3 dump, Telegram, email, photo, SPV register, SAGA report pack)
     → Railway  four compiled LangGraph graphs
          Jev in nodes · Grok HITL text · RunPod if needs_ocr
-         Mongo domain · Postgres checkpointer · Bucket blobs
+         Postgres domain + checkpointer · Bucket blobs
     → XML/DBF packages
     → Windows VPS  SAGA C as AGENT (Import; Validare human in v1)
     ← SagaEye v1 from SAGA report pack / RJ-CM export
@@ -25,7 +25,7 @@ SAGA is the mouth. The report pack is the v1 eye. This system hops documente pri
 | reconcile_sink | `recon:{cui}:{period}` | Jobs + sink lines | pre/post verdict |
 | monthly_close | `close:{cui}:{period}` | lock | file / hold + V4 |
 
-Do not nest compiled graphs. Glue = Mongo ids.
+Do not nest compiled graphs. Glue = domain-store ids.
 
 ### folder_triage
 
@@ -107,11 +107,11 @@ Close is a CloseRun, not a Job.
 
 | Store | Holds | Does not |
 |---|---|---|
-| Mongo jobs, canonical, maps, expected_sets, explained_rules, write_modules, close_snapshots, codit, filings, control_runs | domain | FDB rows |
+| Postgres `domain` schema: jobs, canonical, maps, expected_sets, explained_rules, write_modules, close_snapshots, codit, filings, control_runs | domain | FDB rows |
 | Postgres checkpointer | cursor, interrupts | domain |
 | Bucket | source, XML/DBF, report packs, backup labels, receipts | secrets |
 
-After a SAGA side effect: write Mongo, then return from the node.
+After a SAGA side effect: write the domain row, then return from the node.
 
 Object key: `tenants/{cui}/{punct}/{period}/{kind}/{jobId}/...`
 
@@ -191,7 +191,7 @@ Agent token ≠ Grok token. No `SAGA_SYSDBA` in Railway env.
 ## 11. Package
 
 ```
-langclaw_acct/
+poarta_contabila/
   types/
   graphs/document.py period.py reconcile.py triage.py
   jev/packs/v3_classify.json v3_judge.json v2_declaration_gate.json
@@ -223,14 +223,13 @@ AGENT: import only. No Devalidare, no închidere lună, no admin.
 ## 14. Env
 
 ```
-LANGCLAW__CHECKPOINTER__BACKEND=postgres
-LANGCLAW__CHECKPOINTER__POSTGRES__DSN=
-MONGODB_URI=
+DATABASE_URL=          # one Postgres: schema `domain` + LangGraph checkpointer tables
 S3_ENDPOINT= S3_ACCESS_KEY= S3_SECRET_KEY= S3_BUCKET=
 JEV_BASE_URL= JEV_API_KEY=
 GROK_API_KEY=
 RUNPOD_API_KEY=
 AGENT_SHARED_TOKEN=
+ANAF_SPV_CLIENT_ID= ANAF_SPV_CLIENT_SECRET=   # SPV register / e-Factura pull (WP-05)
 ```
 
 Absent: `SAGA_SYSDBA`, Firebird write password, `CIEL_SA`, `NEXTUP_*`.

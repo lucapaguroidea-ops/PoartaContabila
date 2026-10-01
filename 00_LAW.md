@@ -1,7 +1,7 @@
 # 00 — Law
 
 Status: LOCKED for implementers.  
-Package working name: `langclaw_acct`.  
+Package: `poarta_contabila` (A1).  
 Product face: Poarta Primară.
 
 ## 0. Unit
@@ -25,16 +25,16 @@ Graful Primar walks that catalog: more expandable than a frozen database applica
 SAGA C is the only statutory mouth.  
 Firebird replica / SAGA report pack is the only statutory eye.  
 Nothing in this system posts a *notă contabilă*.  
-Mongo may hold an expected set and witness snapshots. Not a ledger.
+The domain store (Postgres, A1) may hold an expected set and witness snapshots. Not a ledger.
 
 ## 3. Invariants (fail the build)
 
-1. No chart of accounts, journal, or 5-column trial balance stored as books in Postgres or Mongo.
+1. No chart of accounts, journal, or 5-column trial balance stored as books in any store.
 2. No process on Railway holds SYSDBA or writes INSERT/UPDATE/DELETE on `CONT_BAZA.FDB`.
 3. Posting = official SAGA path only: XML/DBF → Import date → Validare. Direct FDB write = `FORBIDDEN_FDB`.
 4. Graph edges read only stored fields or Jev answers already on state. No LLM on an edge.
 5. Jev is System One. Grok is System Two (explain, HITL). Grok never posts. RunPod only if `needs_ocr`.
-6. `interrupt()` resume re-enters the node from line 1. Side effects sit after the interrupt, behind Mongo idempotency.
+6. `interrupt()` resume re-enters the node from line 1. Side effects sit after the interrupt, behind domain-store idempotency (Postgres unique keys).
 7. One firm-period has one statutory sink: SAGA C.
 8. Compensation is SAGA-shaped: Anulează importul | Devalidare | Stornare. Backup/restore is firm-wide.
 9. Month closed in SAGA ⇒ agent writes `0`.
@@ -50,10 +50,10 @@ Mongo may hold an expected set and witness snapshots. Not a ledger.
 
 | Face | Says | Does not lead with |
 |---|---|---|
-| Cabinet — Poarta Primară | document primar, articol de cale, catalog de cale, poartă, buckets | Graph, LangGraph, OpenClaw |
+| Cabinet — Poarta Primară | document primar, articol de cale, catalog de cale, poartă, buckets | Graph, LangGraph, chat |
 | Engineering — Graful Primar | four compiled graphs, Path/cale, WriteModule, PreFile, Latch/Hold/Gate | Chat supervisor, ReAct, ledger |
 
-OpenClaw / chat / multi-tool is a later `chat:` face. It is not a mouth, matcher, or closer. It never resumes `job:`, `recon:`, or `close:`.
+Chat / multi-tool is a later `chat:` face. It is not a mouth, matcher, or closer. It never resumes `job:`, `recon:`, or `close:`.
 
 ## 5. Lexicon (complete for this pack)
 
@@ -92,7 +92,7 @@ Mouth = SAGA C Import + Validare. Eye = report pack / RJ-CM / later FDB replica.
 
 ### Collisions
 
-LangClaw = working code name, not the cover. Flux = keep filename; say cale. Naked “articol” / “catalog” / “graph” / “flow” / “file at ANAF” are banned in new prose.
+LangClaw, langclaw_acct, OpenClaw = retired names (A1). This repo does not depend on or reference that framework. Flux = keep filename; say cale. Naked “articol” / “catalog” / “graph” / “flow” / “file at ANAF” are banned in new prose.
 
 Romanian domain words stay Romanian. Code identifiers stay English.
 
@@ -116,3 +116,18 @@ Changing sink product, FDB write policy, graph topology, interrupt kinds, or wat
 Adding an articol de cale inside existing enums is not an amendment. It still needs `status: draft` until the fixture/accountant rule in the row is met.
 
 A Telegram message is not an amendment.
+
+## 8. Amendments
+
+### A1 · 2026-10-01 — standalone stack, Postgres domain
+
+Decided by the owner on 2026-10-01.
+
+1. **Standalone.** This repo is built from scratch on LangGraph + Pydantic + FastAPI. It does not depend on, import, or copy code from the LangClaw framework or its fork. Ideas may be re-implemented; files are not copied.
+2. **Package** is `poarta_contabila` (was the working name `langclaw_acct`).
+3. **Domain store = Postgres**, schema `domain`, alongside the LangGraph checkpointer tables in the same database. Idempotency keys in `IDEMPOTENCY.md` become unique indexes. Mongo is not used. Invariant 1 applies to every schema in that database.
+4. **Review page = v2.** v1 HITL surface is the HTTP resume endpoints only (`ARCHITECTURE.md` §10). No chat surface in v1.
+5. **Fresh start.** No data is migrated from the previous deployment. Old journal rows are not books here and never enter this database.
+6. **Deploy target** = the existing Railway project, replaced in place (EU region). The previous deployment is snapshotted outside this repo before the switch.
+
+Not changed by A1: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` of catalogs is unchanged.

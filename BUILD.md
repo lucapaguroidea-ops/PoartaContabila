@@ -9,7 +9,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 
 | id | status | depends | title |
 |---|---|---|---|
-| WP-00 | todo | — | Scaffold `langclaw_acct` types + Mongo indexes + fake SagaEye |
+| WP-00 | todo | — | Scaffold `poarta_contabila` types + Postgres domain schema + fake SagaEye |
 | WP-01 | todo | WP-00 | Load Lane B YAML; fail closed on unknown articol / HITL kind |
 | WP-02 | todo | WP-01 | folder_triage + SourceDoc emit gates + Job unique `(cui, source_hash)` |
 | WP-03 | todo | WP-02 | `iesire_factura_xml` + `intrare_factura_xml` fixtures; human import on copy firm |
@@ -26,14 +26,14 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-14 | parked | — | ArticolBon / `bon_via_nota` |
 | WP-15 | parked | — | FDB SQL SagaEye |
 | WP-16 | parked | — | Agent Validare |
-| WP-17 | parked | — | Engagement backlog / OpenClaw `chat:` |
+| WP-17 | parked | — | Engagement backlog / `chat:` face |
 | WP-18 | parked | — | Take-on / year-end / D406 producer / FX engine |
 | WP-D3 | decision | WP-11 | Non-payer RC books: 4423 vs 446x on copy-firm note |
 
 ## WP details
 
 ### WP-00 Scaffold
-- Build: `langclaw_acct/types/` from ARCHITECTURE.md §3. Checkpointer MemorySaver in tests.
+- Build: `poarta_contabila/types/` from ARCHITECTURE.md §3. Checkpointer MemorySaver in tests.
 - Fake `SagaEye` returns empty lists.
 - Tests: models reject extra keys; money fields are str.
 

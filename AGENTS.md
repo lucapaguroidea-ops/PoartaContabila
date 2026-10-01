@@ -34,7 +34,7 @@ mark the WP done in BUILD.md in the same change
 - Do not invent catalog ids from Jev output. Off-list → HITL `define_articol`.
 - Do not mix `thread_id` prefixes.
 - Do not put client PII, live CUIs, IBANs, or real amounts in this repo.
-- Do not implement OpenClaw, ReAct supervisors, or `chat:` as a poster.
+- Do not implement a chat agent, ReAct supervisors, or `chat:` as a poster.
 - Do not promote `bon_via_nota` or ArticolBon in v1 WPs.
 - Do not generate D406 from this system. SAGA files D406.
 - Do not treat V2 `file` as “submitted to ANAF”.
@@ -76,4 +76,4 @@ Do not create `ArticoleJev`, `ArticolePack`, or `ArticoleEmit`.
 
 ## Identity of the machine
 
-Four compiled graphs only: `folder_triage`, `ingest_source_doc`, `reconcile_sink`, `monthly_close`. Glue = Mongo ids. Do not `add_node(compiled_other_graph)`.
+Four compiled graphs only: `folder_triage`, `ingest_source_doc`, `reconcile_sink`, `monthly_close`. Glue = domain-store ids (Postgres). Do not `add_node(compiled_other_graph)`.

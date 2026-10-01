@@ -1,6 +1,6 @@
 # Idempotency keys
 
-Write Mongo after the SAGA side effect. Resume re-enters the node from line 1.
+Write the domain row (Postgres) after the SAGA side effect. Resume re-enters the node from line 1.
 
 | Object | Key | Collision |
 |---|---|---|
