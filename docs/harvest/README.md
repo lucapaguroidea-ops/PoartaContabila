@@ -7,8 +7,10 @@
 > - **"Langclaw today" lines describe the retired framework** (00_LAW A1). PoartaContabila was built
 >   from scratch; it does not keep books, so harvest items about posting, a journal or a trial
 >   balance apply only as *witness* (eye) or *control* rules here.
-> The second-pass reading of the same workspaces (formats confirmed from real files, what changed in
-> PoartaContabila because of it) is in [`HARVEST_V2.md`](HARVEST_V2.md).
+> A second pass read the real files in the same workspaces. It is kept privately with the practice,
+> not in this repository. Its outcome for this repo: the SAGA witness readers (WP-07) will be rebuilt
+> against exports from one definitive SAGA session on the practice's own SAGA build. Until then,
+> the layouts in `CATALOGUES.md` §C-F11 are descriptions, not verified contracts.
 > `RAILWAY_SNAPSHOT_LANGCLAW.md` records the retired langclaw Railway project (`comfortable-nature`).
 
 # Accounting harvest: implementation plan
