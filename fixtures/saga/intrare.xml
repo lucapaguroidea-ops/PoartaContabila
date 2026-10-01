@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Facturi>
+  <Factura>
+    <Antet>
+      <FurnizorNume>Furnizor Test SRL</FurnizorNume>
+      <FurnizorCIF>20000005</FurnizorCIF>
+      <FurnizorNrRegCom />
+      <FurnizorIBAN />
+      <ClientNume>Firma Test</ClientNume>
+      <ClientCIF>1000009</ClientCIF>
+      <FacturaNumar>A-77</FacturaNumar>
+      <FacturaData>20.09.2026</FacturaData>
+      <FacturaScadenta />
+      <FacturaTaxareInversa>Nu</FacturaTaxareInversa>
+      <FacturaTVAIncasare>Nu</FacturaTVAIncasare>
+      <FacturaMoneda>RON</FacturaMoneda>
+      <FacturaCotaTVA>21</FacturaCotaTVA>
+    </Antet>
+    <Detalii>
+      <Continut>
+        <Linie>
+          <LinieNrCrt>1</LinieNrCrt>
+          <Descriere>Consumabile test</Descriere>
+          <UM>buc</UM>
+          <Cantitate>4</Cantitate>
+          <Pret>50.00</Pret>
+          <Valoare>200.00</Valoare>
+          <TVA>42.00</TVA>
+        </Linie>
+      </Continut>
+    </Detalii>
+  </Factura>
+</Facturi>

@@ -14,4 +14,4 @@ RUN uv sync --frozen --no-dev
 
 ENV PORT=8080
 EXPOSE 8080
-CMD ["sh", "-c", "exec /app/.venv/bin/uvicorn poarta_contabila.app:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "exec /app/.venv/bin/uvicorn poarta_contabila.app:app --host 0.0.0.0 --port ${PORT} --log-config /app/poarta_contabila/log_config.json"]
