@@ -21,7 +21,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any, Literal
 
-from poarta_contabila.types import Closed, FiscalDate, Money, SinkDoc, cui_is_valid
+from poarta_contabila.types import Closed, FiscalDate, Money, SinkDoc, cui_key
 
 Product = Literal["saga", "nextup"]
 _CENT = Decimal("0.01")
@@ -385,11 +385,6 @@ def read_nextup_rj(path: str | Path) -> list[SinkLine]:
     return lines
 
 
-def _cui_key(raw: str) -> str | None:
-    digits = re.sub(r"^RO", "", raw.strip().upper())
-    return digits if cui_is_valid(digits) else None
-
-
 def read_nextup_balanta(path: str | Path) -> list[BalanceRow]:
     """NextUp *Balanță* export → BalanceRow per account, with the partner CIF when it is a CUI."""
     values, _, _ = _sheet_cells(Path(path))
@@ -424,7 +419,7 @@ def read_nextup_balanta(path: str | Path) -> list[BalanceRow]:
                 row=i + 1,
                 account=cells[0],
                 name=cells[head.index("Titlu cont")],
-                partner_cui=_cui_key(cells[head.index("CIF partener")]),
+                partner_cui=cui_key(cells[head.index("CIF partener")]),
                 **amounts,
             )
         )

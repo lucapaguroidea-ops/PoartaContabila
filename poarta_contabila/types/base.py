@@ -23,6 +23,14 @@ def cui_is_valid(value: str) -> bool:
     return (0 if expected == 10 else expected) == check
 
 
+def cui_key(raw: str | None) -> str | None:
+    """A printed fiscal code (``RO 123``, ``ro123``, ``123``) → the CUI key, or None if invalid."""
+    if not raw:
+        return None
+    digits = raw.replace(" ", "").upper().removeprefix("RO")
+    return digits if cui_is_valid(digits) else None
+
+
 def _check_cui(value: str) -> str:
     if not cui_is_valid(value):
         raise ValueError("CUI must be 2-10 digits without RO prefix and with a valid check digit")

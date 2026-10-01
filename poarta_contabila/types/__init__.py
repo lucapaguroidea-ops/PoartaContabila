@@ -9,6 +9,7 @@ from poarta_contabila.types.base import (
     Rate,
     Slug,
     cui_is_valid,
+    cui_key,
 )
 from poarta_contabila.types.models import (
     AccountDelta,
@@ -58,4 +59,5 @@ __all__ = [
     "Totals",
     "WriteModule",
     "cui_is_valid",
+    "cui_key",
 ]
