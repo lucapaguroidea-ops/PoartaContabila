@@ -20,7 +20,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-07 | done | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
 | WP-08 | done | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
 | WP-09 | done | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
-| WP-10 | todo | WP-09 | monthly_close + V2 pack; material cannot be cleared by Jev |
+| WP-10 | done | WP-09 | monthly_close + V2 pack; material cannot be cleared by Jev |
 | WP-11 | todo | WP-01 | CO.DiT seed from Pins + T* F* + additive axes; no silent `tva_platitor` |
 | WP-12 | todo | WP-10 | Filing items + `filing_receipt`; V2 `file` ≠ ANAF submit |
 | WP-13 | todo | WP-05 | `extras_statement_pdf` extract path (document_ai); no MT940-first |
@@ -137,6 +137,16 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 ### WP-10 Close + V2
 - Thread `close:{cui}:{period}`. Layer 2 JSON only.
 - Tests: Jev action `file` with material=true is ignored.
+- Built: `close.py` — `monthly_close` on `close:{cui}:{period}`: `lock_expected_set` (hash locked once
+  per `(cui, period)` in `domain.close_runs`; a changed set is a lock mismatch, material until
+  `reopen`), `period_diff` (Layer 1 with the tenant's eye and rules), `v2_gate` (Layer 2 must
+  validate as `V2Gate` JSON or is ignored; its `file` on a material month is dropped; the person's
+  `v2_close` cannot `file` while material, and an `explained_rule` named must exist), `v4_codit`
+  after `file` (answer recorded). Close kind from the axes (unknown → material).
+  Operator: `POST /close/{cui}/{period}`, `GET /close/{cui}/{period}`, `POST …/resume`.
+- Open: no Jev call wired (Layer 2 is empty); the POST recon and Cartea Mare pull nodes are not
+  separate yet (the period diff reads the latest uploaded books); V4 records the answer, CO.DiT
+  itself is WP-11.
 
 ### WP-11 CO.DiT
 - Seed copies Pins. T1–T3 hard. New axes default null. Certainty required on write.

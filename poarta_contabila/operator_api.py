@@ -88,6 +88,27 @@ def operator_router(
         axes = {k: v for k, v in (("tva", tva), ("exig", exig)) if v}
         return rt.period_diff(cui, period, axes)
 
+    @router.post("/close/{cui}/{period}")
+    def start_close(
+        cui: str,
+        period: str,
+        tva: str | None = Query(default=None, description="CO.DiT axis tva until WP-11"),
+        exig: str | None = Query(default=None),
+        rt: Runtime = Depends(operator),
+    ) -> dict[str, Any]:
+        axes = {k: v for k, v in (("tva", tva), ("exig", exig)) if v}
+        return rt.start_close(cui, period, axes)
+
+    @router.get("/close/{cui}/{period}")
+    def get_close(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
+        return rt.close_view(cui, period)
+
+    @router.post("/close/{cui}/{period}/resume")
+    def resume_close(
+        cui: str, period: str, body: Any = Body(...), rt: Runtime = Depends(operator)
+    ) -> dict[str, Any]:
+        return rt.resume_close(cui, period, body)
+
     @router.post("/rules")
     def post_rule(body: RuleRequest, rt: Runtime = Depends(operator)) -> ExplainedRule:
         """A person writes a rule; a changed body is a new version, the old ones stay."""

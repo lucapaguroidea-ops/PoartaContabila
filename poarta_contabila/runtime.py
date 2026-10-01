@@ -19,6 +19,7 @@ from langgraph.types import Command
 
 from poarta_contabila.agent import AgentService
 from poarta_contabila.catalog import Catalog
+from poarta_contabila.close import CloseDeps, InMemoryCloseStore, build_close_graph
 from poarta_contabila.extract.ubl import UblError, parse_ubl, read_spv_zip, to_canonical
 from poarta_contabila.ingest import IngestDeps, build_ingest_graph, start_payload
 from poarta_contabila.packages import BlobStore, PackageStore
@@ -56,6 +57,7 @@ class Runtime:
     checkpointer: Any
     periods: Any = None  # InMemoryPeriodStore | PostgresPeriodStore
     rules: Any = None  # InMemoryRuleStore | PostgresRuleStore
+    closes: Any = None  # InMemoryCloseStore | PostgresCloseStore
 
     def __post_init__(self) -> None:
         self.deps = IngestDeps(
@@ -80,6 +82,19 @@ class Runtime:
             canonical=self.canonical,
         )
         self.deps.snapshot_validated = self.agent.snapshot_validated
+        if self.closes is None:
+            self.closes = InMemoryCloseStore()
+        self.close = build_close_graph(
+            CloseDeps(
+                catalog=self.catalog,
+                store=self.closes,
+                expected=self.expected,
+                eye=self._eye,
+                rules=self.rules,
+                period_store=self.periods,
+            ),
+            checkpointer=self.checkpointer,
+        )
         self.deps.posted_doc = self.agent.posted_doc
 
     # -- helpers --
@@ -111,23 +126,54 @@ class Runtime:
 
     # -- period --
 
-    def period_diff(
-        self, cui: str, period: str, axes: dict[str, str] | None = None
-    ) -> dict[str, Any]:
-        """Layer 1 for one firm-month: PeriodDiff, control runs, and whether V2 may file."""
-        expected = []
+    def expected(self, cui: str, period: str) -> list[ExpectedJob]:
+        """The month's jobs with the documents their threads carry."""
+        out = []
         for job in self.jobs.for_period(cui, period):
             values = self.ingest.get_state(self._cfg(job.job_id)).values
             if "canonical" in values:
                 doc = CanonicalDocument.model_validate(values["canonical"])
-                expected.append(ExpectedJob(job=self.jobs.get(job.job_id), doc=doc))
+                out.append(ExpectedJob(job=job, doc=doc))
+        return out
+
+    def _eye(self, cui: str, period: str):
         probe = JobRecord(
             job_id="period",
             tenant=TenantRef(cui=cui, saga_firm_folder="-"),
             period=period,
             status="bound",
         )
-        eye = witnesses_provider(self.registry, self.blobs)(probe).eye
+        return witnesses_provider(self.registry, self.blobs)(probe).eye
+
+    # -- close --
+
+    @staticmethod
+    def _close_cfg(cui: str, period: str) -> dict:
+        return {"configurable": {"thread_id": f"close:{cui}:{period}"}}
+
+    def close_view(self, cui: str, period: str) -> dict[str, Any]:
+        state = self.close.get_state(self._close_cfg(cui, period))
+        question = next((i.value for t in state.tasks for i in t.interrupts), None)
+        stored = self.closes.get(cui, period)
+        return {"run": stored.model_dump() if stored else None, "question": question}
+
+    def start_close(self, cui: str, period: str, axes: dict[str, str]) -> dict[str, Any]:
+        cfg = self._close_cfg(cui, period)
+        if self.close.get_state(cfg).tasks:
+            return self.close_view(cui, period)  # already waiting on a person
+        self.close.invoke({"cui": cui, "period": period, "axes": axes}, cfg)
+        return self.close_view(cui, period)
+
+    def resume_close(self, cui: str, period: str, payload: Any) -> dict[str, Any]:
+        self.close.invoke(Command(resume=payload), self._close_cfg(cui, period))
+        return self.close_view(cui, period)
+
+    def period_diff(
+        self, cui: str, period: str, axes: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        """Layer 1 for one firm-month: PeriodDiff, control runs, and whether V2 may file."""
+        expected = self.expected(cui, period)
+        eye = self._eye(cui, period)
         rules = self.rules.active(cui) if self.rules is not None else []
         diff, runs = build_period_diff(
             self.catalog, cui, period, expected, eye, axes=axes, rules=rules
@@ -234,6 +280,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     from psycopg_pool import ConnectionPool
 
     from poarta_contabila.agent import PostgresAgentStore
+    from poarta_contabila.close import PostgresCloseStore
     from poarta_contabila.jobs import PostgresJobStore
     from poarta_contabila.packages import PostgresPackageStore
     from poarta_contabila.period_diff import PostgresPeriodStore
@@ -259,5 +306,6 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         checkpointer=checkpointer,
         periods=PostgresPeriodStore(dsn),
         rules=PostgresRuleStore(dsn),
+        closes=PostgresCloseStore(dsn),
     )
     return runtime, "ok"
