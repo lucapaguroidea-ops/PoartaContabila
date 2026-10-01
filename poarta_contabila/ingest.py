@@ -1,15 +1,19 @@
 """ingest_source_doc (WP-04): a Job walks its articol de cale up to `packaged`.
 
-    bind → reconcile_pre → approve (v3_approve) → package → wait_validare → intent_check
+    bind → reconcile_pre → judge → approve (v3_approve) → package → wait_validare → intent_check
 
 - **bind**: ArticoleFlux.matches on stored fields. One survivor binds; none or a tie asks
   ``define_articol`` (the answer must be a real articol on this graph).
 - **reconcile_pre**: already in the books → ``already_in_sink`` and stop; ambiguous →
   ``needs_human`` and stop (the reason is on the job). The check is
   :func:`poarta_contabila.recon.pre.make_pre_check` (WP-05), injected.
+- **judge** (``v3_judge``): Jev's verdict, checkpointed on the thread before ``approve``.
+  ``approve`` re-runs from its first line on resume; were Jev asked there, a call that failed
+  (a person asked) and then answered on the replay would skip the question and drop the
+  person's answer. Any error is a verdict that asks a person.
 - **approve**: the articol's HITL policy (``always`` / ``first_n`` / ``never_if_risk_low``)
-  plus the Jev judge decide whether a person must answer ``v3_approve``. Nothing touches
-  SAGA before this answer (no side effect sits before ``interrupt()``).
+  plus the stored verdict decide whether a person must answer ``v3_approve``. Nothing
+  touches SAGA before this answer (no side effect sits before ``interrupt()``).
 - **package**: render through the articol's invoice WriteModule and write the XML once per
   ``export_key``; a replay of the node writes nothing.
 - **wait_validare** (WP-06): waits for SAGA. The Windows agent imports the package
@@ -37,6 +41,7 @@ from pydantic import ValidationError
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.flux import MatchContext, match_articole
 from poarta_contabila.hitl import ask
+from poarta_contabila.jev import unjudged
 from poarta_contabila.packages import BlobStore, PackageRow, PackageStore, write_once
 from poarta_contabila.period_diff import prefile_failures
 from poarta_contabila.recon.pre import PreResult
@@ -114,6 +119,7 @@ class IngestState(TypedDict, total=False):
     saga_doc_key: str
     error: str
     pre: dict[str, Any]
+    judge: dict[str, Any]
 
 
 def start_payload(
@@ -243,11 +249,21 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
             return {"status": "needs_human", "pre": pre.model_dump()}
         return {"status": "reconcile_pre", "pre": pre.model_dump()}
 
+    def judge(state: IngestState) -> IngestState:
+        doc = CanonicalDocument.model_validate(state["canonical"])
+        try:
+            verdict = deps.judge(doc, cat.articol(state["articol_id"]))
+        except Exception as exc:  # fail closed: a person is asked
+            verdict = unjudged(f"judge failed: {type(exc).__name__}: {exc}")
+        if not isinstance(verdict, dict):
+            verdict = unjudged("judge gave no verdict object")
+        return {"judge": verdict}
+
     def approve(state: IngestState) -> IngestState:
         job = deps.jobs.get(state["job_id"])
         doc = CanonicalDocument.model_validate(state["canonical"])
         articol = cat.articol(state["articol_id"])
-        verdict = deps.judge(doc, articol)
+        verdict = state.get("judge") or unjudged("no verdict on the thread")
         if _needs_question(deps, job, articol, verdict):
 
             def check(answer: V3ApproveResume) -> str | None:
@@ -362,7 +378,7 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
         return "wait_validare" if state["status"] == "packaged" else END
 
     def after_pre(state: IngestState) -> str:
-        return "approve" if state["status"] == "reconcile_pre" else END
+        return "judge" if state["status"] == "reconcile_pre" else END
 
     def after_approve(state: IngestState) -> str:
         return "package" if state["status"] == "approved" else END
@@ -370,13 +386,15 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
     g = StateGraph(IngestState)
     g.add_node("bind", bind)
     g.add_node("reconcile_pre", reconcile_pre)
+    g.add_node("judge", judge)
     g.add_node("approve", approve)
     g.add_node("package", package)
     g.add_node("wait_validare", wait_validare)
     g.add_node("intent_check", intent_check)
     g.add_edge(START, "bind")
     g.add_edge("bind", "reconcile_pre")
-    g.add_conditional_edges("reconcile_pre", after_pre, ["approve", END])
+    g.add_conditional_edges("reconcile_pre", after_pre, ["judge", END])
+    g.add_edge("judge", "approve")
     g.add_conditional_edges("approve", after_approve, ["package", END])
     g.add_conditional_edges("package", after_package, ["wait_validare", END])
     g.add_conditional_edges("wait_validare", after_wait, ["intent_check", END])

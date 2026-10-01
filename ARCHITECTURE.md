@@ -109,7 +109,7 @@ Close is a CloseRun, not a Job.
 
 | Store | Holds | Does not |
 |---|---|---|
-| Postgres `domain` schema: jobs, canonical, maps, expected_sets, explained_rules, write_modules, close_snapshots, codit, filings, control_runs | domain | FDB rows |
+| Postgres `domain` schema: jobs, canonical, maps, expected_sets, explained_rules, write_modules, close_snapshots, codit, filings, control_runs, jev_answers | domain | FDB rows |
 | Postgres checkpointer | cursor, interrupts | domain |
 | Bucket | source, XML/DBF, report packs, backup labels, receipts | secrets |
 
@@ -219,6 +219,8 @@ No ReAct supervisor. No `Journal.post`.
 `v2_declaration_gate` → `{books_support_declaration, gap_materiality, action}`  
 
 JSON only. Cache `{pack, input_hash}`. Layer 2 cannot clear `material`.
+Code: `poarta_contabila/jev.py`. The answer is stored on the thread in its own node (`judge`,
+`layer2`) before the node that asks a person, so a resume never asks Jev again.
 
 ## 13. Windows agent
 

@@ -2,8 +2,9 @@
 
 ``build_runtime`` takes every part explicitly (tests pass in-memory ones);
 ``runtime_from_env`` builds the production one from ``DATABASE_URL`` and ``S3_*``.
-Parts not wired yet fail closed: there is no Jev judge, so every document is asked
-(``v3_approve``); a tenant without an uploaded journal export gets ``need_rj_export``.
+Parts not wired fail closed: without Jev (``JEV_BASE_URL`` + ``JEV_API_KEY``) every document
+is asked (``v3_approve``) and the close gets no Layer 2 suggestion; a tenant without an
+uploaded journal export gets ``need_rj_export``.
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ from poarta_contabila.extract.ubl import UblError, parse_ubl, read_spv_zip, to_c
 from poarta_contabila.filings import due_filings
 from poarta_contabila.filings import views as filing_views
 from poarta_contabila.ingest import IngestDeps, build_ingest_graph, start_payload
+from poarta_contabila.jev import make_judge, make_v2
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
 from poarta_contabila.recon.pre import ReconStore, make_pre_check
@@ -52,10 +54,6 @@ class IngestRefused(ValueError):
     """The upload cannot become a Job; the message says which gate."""
 
 
-def _no_judge(doc: CanonicalDocument, articol: dict) -> dict:
-    return {"accounts_ok": False, "risk": "unknown", "needs_human": True, "judge": "not wired"}
-
-
 @dataclass
 class Runtime:
     catalog: Catalog
@@ -71,6 +69,7 @@ class Runtime:
     closes: Any = None  # InMemoryCloseStore | PostgresCloseStore
     codits: Any = None  # InMemoryCoditStore | PostgresCoditStore
     filings: Any = None  # InMemoryFilingStore | PostgresFilingStore
+    jev: Any = None  # jev.Jev; None = not wired (fail closed)
 
     def __post_init__(self) -> None:
         self.deps = IngestDeps(
@@ -81,7 +80,7 @@ class Runtime:
             pre_check=make_pre_check(
                 self.catalog, witnesses_provider(self.registry, self.blobs), store=self.recon
             ),
-            judge=_no_judge,
+            judge=make_judge(self.jev),
             tenant_name=self._tenant_name,
         )
         self.ingest = build_ingest_graph(self.deps, checkpointer=self.checkpointer)
@@ -108,6 +107,7 @@ class Runtime:
                 eye=self._eye,
                 rules=self.rules,
                 period_store=self.periods,
+                jev_v2=make_v2(self.jev, self.axes),
                 codit=lambda cui, period: (
                     self.codits.get(cui, period) if self.codits is not None else None
                 ),
@@ -429,6 +429,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     from poarta_contabila.close import PostgresCloseStore
     from poarta_contabila.codit import PostgresCoditStore
     from poarta_contabila.filings import PostgresFilingStore
+    from poarta_contabila.jev import PostgresJevCache, jev_from_env
     from poarta_contabila.jobs import PostgresJobStore
     from poarta_contabila.packages import PostgresPackageStore
     from poarta_contabila.period_diff import PostgresPeriodStore
@@ -457,5 +458,6 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         closes=PostgresCloseStore(dsn),
         codits=PostgresCoditStore(dsn),
         filings=PostgresFilingStore(dsn),
+        jev=jev_from_env(PostgresJevCache(dsn)),
     )
     return runtime, "ok"

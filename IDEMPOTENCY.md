@@ -12,6 +12,7 @@ Write the domain row (Postgres) after the SAGA side effect. Resume re-enters the
 | extract | `source_hash` + backend | reuse `normalized/` |
 | package XML/DBF | `export_key` = `{module_id}:{job_id}:{schema_version}` | write once |
 | PRE recon | `(job_id, stage=pre, sink_snapshot_id)` | |
+| Jev answer | `(pack, input_hash)`, hash of `{pack, version, input}` | reuse, never paid twice |
 | POST recon | `(job_id, stage=post, sink_snapshot_id)` | |
 | HITL resume | `(thread_id, interrupt_id)` | same body twice = same state |
 | CloseRun lock | `(cui, period)` | one expected-set hash |
