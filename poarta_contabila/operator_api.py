@@ -70,6 +70,17 @@ def operator_router(
         except IngestRefused as exc:
             raise HTTPException(422, str(exc)) from exc
 
+    @router.get("/periods/{cui}/{period}/diff")
+    def period_diff(
+        cui: str,
+        period: str,
+        tva: str | None = Query(default=None, description="CO.DiT axis tva until WP-11"),
+        exig: str | None = Query(default=None),
+        rt: Runtime = Depends(operator),
+    ) -> dict[str, Any]:
+        axes = {k: v for k, v in (("tva", tva), ("exig", exig)) if v}
+        return rt.period_diff(cui, period, axes)
+
     @router.get("/jobs/{job_id}")
     def get_job(job_id: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
         try:

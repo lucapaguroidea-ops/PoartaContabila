@@ -35,6 +35,10 @@ class SagaEye(Protocol):
 
     def documents(self, cui: str, period: str) -> list[SinkDoc]: ...
 
+    def turnover(self, cui: str, period: str) -> dict[str, dict[str, str]]:
+        """Period turnover per synthetic account: ``{account: {debit, credit}}``."""
+        ...
+
     def solduri(self, cui: str, period: str) -> dict[str, dict]: ...
 
     def analytic(self, cui: str, period: str, root: str) -> dict[str, dict]: ...
@@ -45,6 +49,9 @@ class FakeSagaEye:
 
     def covers(self, cui: str, period: str) -> bool:
         return False
+
+    def turnover(self, cui: str, period: str) -> dict[str, dict[str, str]]:
+        return {}
 
     def documents(self, cui: str, period: str) -> list[SinkDoc]:
         return []
@@ -164,6 +171,9 @@ class ReportPackEye:
         return sorted(
             (d for d in self.docs if d.date.startswith(period)), key=lambda d: (d.date, d.saga_key)
         )
+
+    def turnover(self, cui: str, period: str) -> dict[str, dict[str, str]]:
+        return self._balance.turnover(cui, period)
 
     def solduri(self, cui: str, period: str) -> dict[str, dict]:
         return self._balance.solduri(cui, period)

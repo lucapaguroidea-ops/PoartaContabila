@@ -457,6 +457,12 @@ def _under(account: str, roots: tuple[str, ...]) -> bool:
     )
 
 
+def synthetic(account: str) -> str:
+    """The synthetic account of an analytic code: ``401.00010`` / ``401_X`` / ``401XV`` → 401."""
+    m = re.match(r"\d+", account)
+    return m.group(0) if m else account
+
+
 class ExportEye:
     """SagaEye implementation over parsed exports (v1 witness, A2)."""
 
@@ -526,6 +532,30 @@ class ExportEye:
                 )
             )
         return sorted(docs, key=lambda d: (d.date, d.saga_key))
+
+    def turnover(self, cui: str, period: str) -> dict[str, dict[str, str]]:
+        """Period turnover per synthetic account: from the journal lines when there are
+        any, else from the balance's period columns."""
+        sums: dict[str, list[Decimal]] = {}
+        if self.lines:
+            for ln in self.lines:
+                if not ln.date.startswith(period):
+                    continue
+                for side, account in ((0, ln.debit), (1, ln.credit)):
+                    if account:
+                        sums.setdefault(synthetic(account), [Decimal(0), Decimal(0)])[side] += (
+                            Decimal(ln.amount)
+                        )
+        else:
+            for r in self.balance:
+                if r.account.isdigit():
+                    pair = sums.setdefault(r.account, [Decimal(0), Decimal(0)])
+                    pair[0] += Decimal(r.turnover_debit)
+                    pair[1] += Decimal(r.turnover_credit)
+        return {
+            k: {"debit": str(v[0].quantize(_CENT)), "credit": str(v[1].quantize(_CENT))}
+            for k, v in sums.items()
+        }
 
     def solduri(self, cui: str, period: str) -> dict[str, dict]:
         out: dict[str, dict] = {}

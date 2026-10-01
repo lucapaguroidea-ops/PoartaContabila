@@ -199,7 +199,7 @@ class WriteModule(Closed):
 
 
 class ControlRun(Closed):
-    control_id: Slug
+    control_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")  # catalog ids: C0_…, M1_1_…
     status: Literal["PASS", "FAIL", "INFO"]
     target: Money | None = None
     actual: Money | None = None

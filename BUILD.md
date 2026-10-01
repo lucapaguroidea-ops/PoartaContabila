@@ -18,7 +18,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-06 | done | WP-03 | Windows agent pull / backup label / Import / `wait_validare` human |
 | WP-06R | done | WP-06 | Runtime: Postgres checkpointer, S3 bucket, tenants + witness uploads, operator API |
 | WP-07 | done | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
-| WP-08 | todo | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
+| WP-08 | done | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
 | WP-09 | todo | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
 | WP-10 | todo | WP-09 | monthly_close + V2 pack; material cannot be cleared by Jev |
 | WP-11 | todo | WP-01 | CO.DiT seed from Pins + T* F* + additive axes; no silent `tva_platitor` |
@@ -114,6 +114,15 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Implement `catalog/60_harvest/ARTICOLE_CONTROLS_v1.yaml`.
 - `hard_failures > 0` ⇒ package refused and V2 `file` refused.
 - Tests: unexplained inbound → file impossible; already_posted → no package.
+- Built: `period_diff.py` — `build_period_diff` (buckets expected / unexplained, outbound holes,
+  synthetic parity on the watched accounts from the turnover the expected documents imply:
+  purchase 401 Cr gross + 4426 Dr VAT, sale 4111 Dr gross + 4427 Cr VAT), one `ControlRun` per
+  catalog row, `can_file`; `prefile_failures` gates `package`; `SagaEye.turnover`; stored in
+  `close_snapshots` / `control_runs`; operator `GET /periods/{cui}/{period}/diff`.
+- Fail closed: a blocking control without the input it needs FAILs (TVA regime unknown until
+  WP-11; 4428 open documents for TVA-la-încasare; a bank/cash movement with no source until WP-13).
+  Expected postings other than invoices (reverse charge, 404/408, bank, cash) are not modelled yet,
+  so they show as differences for a person, never as plugs.
 
 ### WP-09 Explained rules
 - `POST /rules` versioned. HITL `explained_rule` and `control_disposition`.

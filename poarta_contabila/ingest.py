@@ -38,6 +38,7 @@ from poarta_contabila.catalog import Catalog
 from poarta_contabila.flux import MatchContext, match_articole
 from poarta_contabila.hitl import ask
 from poarta_contabila.packages import BlobStore, PackageRow, PackageStore, write_once
+from poarta_contabila.period_diff import prefile_failures
 from poarta_contabila.recon.pre import PreResult
 from poarta_contabila.sinks.saga_xml import SagaXmlError, export_key, render_invoice
 from poarta_contabila.types import CanonicalDocument, Closed, JobRecord, Slug, WriteModule
@@ -289,6 +290,11 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
         if len(mouths) != 1:
             deps.jobs.update(job.job_id, status="needs_human", error="no single invoice mouth")
             return {"status": "needs_human", "error": "no single invoice mouth"}
+        failed = prefile_failures(cat, pre_verdict=(state.get("pre") or {}).get("verdict"))
+        if failed:  # ArticoleControls prefile layer: hard failures refuse the package
+            error = "prefile controls: " + "; ".join(failed)
+            deps.jobs.update(job.job_id, status="needs_human", error=error)
+            return {"status": "needs_human", "error": error}
         try:
             row = deps.package(job, doc, cat.write_modules[mouths[0]])
         except SagaXmlError as exc:

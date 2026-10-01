@@ -22,6 +22,7 @@ from poarta_contabila.catalog import Catalog
 from poarta_contabila.extract.ubl import UblError, parse_ubl, read_spv_zip, to_canonical
 from poarta_contabila.ingest import IngestDeps, build_ingest_graph, start_payload
 from poarta_contabila.packages import BlobStore, PackageStore
+from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
 from poarta_contabila.recon.pre import ReconStore, make_pre_check
 from poarta_contabila.registry import (
     ExportKind,
@@ -32,7 +33,7 @@ from poarta_contabila.registry import (
     witnesses_provider,
 )
 from poarta_contabila.triage import Pack, decide_emit
-from poarta_contabila.types import CanonicalDocument, JobRecord, SourceRef
+from poarta_contabila.types import CanonicalDocument, JobRecord, SourceRef, TenantRef
 
 
 class IngestRefused(ValueError):
@@ -53,6 +54,7 @@ class Runtime:
     recon: ReconStore | None
     agent_store: Any
     checkpointer: Any
+    periods: Any = None  # InMemoryPeriodStore | PostgresPeriodStore
 
     def __post_init__(self) -> None:
         self.deps = IngestDeps(
@@ -105,6 +107,34 @@ class Runtime:
         self.jobs.get(job_id)  # KeyError for an unknown job
         self.ingest.invoke(Command(resume=payload), self._cfg(job_id))
         return self.view(job_id)
+
+    # -- period --
+
+    def period_diff(
+        self, cui: str, period: str, axes: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        """Layer 1 for one firm-month: PeriodDiff, control runs, and whether V2 may file."""
+        expected = []
+        for job in self.jobs.for_period(cui, period):
+            values = self.ingest.get_state(self._cfg(job.job_id)).values
+            if "canonical" in values:
+                doc = CanonicalDocument.model_validate(values["canonical"])
+                expected.append(ExpectedJob(job=self.jobs.get(job.job_id), doc=doc))
+        probe = JobRecord(
+            job_id="period",
+            tenant=TenantRef(cui=cui, saga_firm_folder="-"),
+            period=period,
+            status="bound",
+        )
+        eye = witnesses_provider(self.registry, self.blobs)(probe).eye
+        diff, runs = build_period_diff(self.catalog, cui, period, expected, eye, axes=axes)
+        if self.periods is not None:
+            self.periods.save(diff, runs)
+        return {
+            "diff": diff.model_dump(),
+            "controls": [r.model_dump() for r in runs],
+            "can_file": can_file(diff),
+        }
 
     # -- uploads --
 
@@ -202,6 +232,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     from poarta_contabila.agent import PostgresAgentStore
     from poarta_contabila.jobs import PostgresJobStore
     from poarta_contabila.packages import PostgresPackageStore
+    from poarta_contabila.period_diff import PostgresPeriodStore
     from poarta_contabila.recon.pre import PostgresReconStore
     from poarta_contabila.registry import PostgresRegistry
 
@@ -221,5 +252,6 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         recon=PostgresReconStore(dsn),
         agent_store=PostgresAgentStore(dsn),
         checkpointer=checkpointer,
+        periods=PostgresPeriodStore(dsn),
     )
     return runtime, "ok"
