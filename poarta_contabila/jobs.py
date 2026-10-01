@@ -60,6 +60,13 @@ class InMemoryJobStore:
                 return new
         raise KeyError(job_id)
 
+    def for_period(self, cui: str, period: str) -> list[JobRecord]:
+        return [j for j in self.jobs.values() if j.tenant.cui == cui and j.period == period]
+
+    def by_status(self, status: str, cui: str | None = None) -> list[JobRecord]:
+        """Jobs in one status (optionally one tenant), oldest first by insertion."""
+        return [j for j in self.jobs.values() if j.status == status and cui in (None, j.tenant.cui)]
+
     def packaged_count(self, cui: str, articol_id: str) -> int:
         """Jobs of this tenant on this articol that already reached `packaged` or later."""
         return sum(
@@ -136,6 +143,24 @@ class PostgresJobStore:
                 (new.status, new.model_dump_json(), job_id),
             )
         return new
+
+    def for_period(self, cui: str, period: str) -> list[JobRecord]:
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT body FROM domain.jobs WHERE tenant_cui = %s AND period = %s"
+                " ORDER BY created_at, job_id",
+                (cui, period),
+            ).fetchall()
+        return [JobRecord.model_validate(r[0], strict=False) for r in rows]
+
+    def by_status(self, status: str, cui: str | None = None) -> list[JobRecord]:
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT body FROM domain.jobs WHERE status = %s"
+                " AND (%s::text IS NULL OR tenant_cui = %s) ORDER BY created_at, job_id",
+                (status, cui, cui),
+            ).fetchall()
+        return [JobRecord.model_validate(r[0], strict=False) for r in rows]
 
     def packaged_count(self, cui: str, articol_id: str) -> int:
         with self._psycopg.connect(self._dsn) as conn:

@@ -14,3 +14,4 @@ Loader rule: merge by `catalog:` name. Additive `rows` / `kinds` / `controls` / 
 | ARTICOLE_EXTRAS_GRAIN_v1.yaml | WP-13: line Jobs, not statement-total match |
 
 Parked on purpose: ArticolBon stays in `30_cale/` and is not referenced by BUILD v1.
+| ARTICOLE_JOBS_ADD_v1.yaml | job_extras_line (WP-13: one Job per statement movement line) |

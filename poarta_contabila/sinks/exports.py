@@ -447,6 +447,8 @@ _INVOICE_JOURNALS = {
     "saga": {"Intrari": "intrare", "Iesiri": "iesire"},
     "nextup": {"JC": "intrare", "JV": "iesire"},
 }
+_BANK_JOURNALS = {"saga": ("Banca",), "nextup": ("JB",)}
+_BANK_ROOTS = ("5121",)
 _SUPPLIER_ROOTS = ("401", "404", "408")
 _CUSTOMER_ROOTS = ("4111", "411", "418")
 
@@ -455,6 +457,12 @@ def _under(account: str, roots: tuple[str, ...]) -> bool:
     return any(
         account == r or (account.startswith(r) and not account[len(r)].isdigit()) for r in roots
     )
+
+
+def synthetic(account: str) -> str:
+    """The synthetic account of an analytic code: ``401.00010`` / ``401_X`` / ``401XV`` → 401."""
+    m = re.match(r"\d+", account)
+    return m.group(0) if m else account
 
 
 class ExportEye:
@@ -525,7 +533,65 @@ class ExportEye:
                     analytic=analytic,
                 )
             )
+        docs.extend(self._bank_documents(period))
         return sorted(docs, key=lambda d: (d.date, d.saga_key))
+
+    def _bank_documents(self, period: str) -> list[SinkDoc]:
+        """Bank-journal entries as documents: 5121 debit → încasare, 5121 credit → plată."""
+        groups: dict[tuple[str, str, str, str], list[SinkLine]] = {}
+        for ln in self.lines:
+            if ln.journal not in _BANK_JOURNALS[self.product] or not ln.date.startswith(period):
+                continue
+            for side, account in (("incasare", ln.debit), ("plata", ln.credit)):
+                if _under(account, _BANK_ROOTS):
+                    key = (ln.journal, ln.doc_number or "", ln.date, side)
+                    groups.setdefault(key, []).append(ln)
+        out = []
+        for (journal, number, day, side), lines in groups.items():
+            amount = sum((Decimal(ln.amount) for ln in lines), Decimal(0)).quantize(_CENT)
+            account = lines[0].debit if side == "incasare" else lines[0].credit
+            out.append(
+                SinkDoc(
+                    saga_key=f"{self.product}:{journal}:{number}:{day}:{side}",
+                    doc_class=side,
+                    number=number,
+                    date=day,
+                    partner_cui=None,
+                    gross=str(amount),
+                    net=str(amount),
+                    vat="0.00",
+                    validated=True,
+                    analytic=account,
+                )
+            )
+        return out
+
+    def journal_lines(self, cui: str, period: str) -> list[SinkLine]:
+        return [ln for ln in self.lines if ln.date.startswith(period)]
+
+    def turnover(self, cui: str, period: str) -> dict[str, dict[str, str]]:
+        """Period turnover per synthetic account: from the journal lines when there are
+        any, else from the balance's period columns."""
+        sums: dict[str, list[Decimal]] = {}
+        if self.lines:
+            for ln in self.lines:
+                if not ln.date.startswith(period):
+                    continue
+                for side, account in ((0, ln.debit), (1, ln.credit)):
+                    if account:
+                        sums.setdefault(synthetic(account), [Decimal(0), Decimal(0)])[side] += (
+                            Decimal(ln.amount)
+                        )
+        else:
+            for r in self.balance:
+                if r.account.isdigit():
+                    pair = sums.setdefault(r.account, [Decimal(0), Decimal(0)])
+                    pair[0] += Decimal(r.turnover_debit)
+                    pair[1] += Decimal(r.turnover_credit)
+        return {
+            k: {"debit": str(v[0].quantize(_CENT)), "credit": str(v[1].quantize(_CENT))}
+            for k, v in sums.items()
+        }
 
     def solduri(self, cui: str, period: str) -> dict[str, dict]:
         out: dict[str, dict] = {}

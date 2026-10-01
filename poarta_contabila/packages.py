@@ -13,6 +13,8 @@ from typing import Protocol
 class BlobStore(Protocol):
     def put(self, key: str, data: bytes) -> None: ...
 
+    def get(self, key: str) -> bytes: ...
+
 
 @dataclass
 class InMemoryBlobStore:
@@ -22,6 +24,9 @@ class InMemoryBlobStore:
     def put(self, key: str, data: bytes) -> None:
         self.puts += 1
         self.data[key] = data
+
+    def get(self, key: str) -> bytes:
+        return self.data[key]
 
 
 @dataclass(frozen=True)
@@ -35,6 +40,8 @@ class PackageRow:
 class PackageStore(Protocol):
     def get(self, export_key: str) -> PackageRow | None: ...
 
+    def for_job(self, job_id: str) -> list[PackageRow]: ...
+
     def add(self, row: PackageRow) -> bool: ...
 
 
@@ -44,6 +51,9 @@ class InMemoryPackageStore:
 
     def get(self, export_key: str) -> PackageRow | None:
         return self.rows.get(export_key)
+
+    def for_job(self, job_id: str) -> list[PackageRow]:
+        return [r for r in self.rows.values() if r.job_id == job_id]
 
     def add(self, row: PackageRow) -> bool:
         if row.export_key in self.rows:
@@ -68,6 +78,15 @@ class PostgresPackageStore:
                 (export_key,),
             ).fetchone()
         return PackageRow(*row) if row else None
+
+    def for_job(self, job_id: str) -> list[PackageRow]:
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT export_key, job_id, module_id, bucket_key FROM domain.packages"
+                " WHERE job_id = %s ORDER BY export_key",
+                (job_id,),
+            ).fetchall()
+        return [PackageRow(*r) for r in rows]
 
     def add(self, row: PackageRow) -> bool:
         with self._psycopg.connect(self._dsn, autocommit=True) as conn:

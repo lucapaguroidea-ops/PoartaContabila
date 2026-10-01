@@ -38,5 +38,6 @@ def test_broken_catalog_refuses_to_start(tmp_path, monkeypatch):
 def test_ready_with_database_applies_schema():
     with TestClient(create_app(database_url=os.environ["POARTA_TEST_DSN"])) as client:
         body = client.get("/ready").json()
-        assert body["checks"] == {"catalog": "ok", "database": "ok"}
+        assert (body["checks"]["catalog"], body["checks"]["database"]) == ("ok", "ok")
+        assert "S3_" in body["checks"]["runtime"]  # not wired here: reported, not fatal
         assert client.get("/ready").status_code == 200

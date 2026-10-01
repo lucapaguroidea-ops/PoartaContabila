@@ -247,10 +247,54 @@ def spv_register() -> None:
     wb.save(HERE / "spv_register.xlsx")
 
 
+def saga_tva_journal(side: str) -> None:
+    """SAGA report pack purchase/sales journal (harvest C-F11), one row per document."""
+    wb = xlwt.Workbook()
+    ws = wb.add_sheet("Sheet")
+    money = xlwt.easyxf(num_format_str="###,###,##0.00")
+    dfmt = xlwt.easyxf(num_format_str="dd.mm.yyyy")
+    ws.write(0, 0, FIRM)
+    title = "JURNAL DE CUMPARARI" if side == "cumparari" else "JURNAL DE VANZARI"
+    ws.write(3, 0, title)
+    ws.write(4, 0, "Luna septembrie 2026")
+    head = ["Nr. crt", "Data", "Nr. doc", "Denumire partener", "Cod fiscal", "Total document",
+            "Baza 21%", "TVA 21%", "Baza 11%", "TVA 11%"]
+    for c, v in enumerate(head):
+        ws.write(6, c, v)
+    rows = {
+        "cumparari": [
+            (date(2026, 9, 3), 1427, "FURNIZOR TEST SRL", "RO40000000", 1210.00,
+             1000.00, 210.00, 0, 0),
+            (date(2026, 9, 10), "AB0058", "ALT FURNIZOR SRL", "RO20000005", 167.06,
+             0, 0, 150.50, 16.56),
+        ],
+        "vanzari": [
+            (date(2026, 9, 10), "FX-101", "CLIENT TEST SRL", "30000002", 182.11,
+             150.50, 31.61, 0, 0),
+        ],
+    }[side]
+    r = 7
+    for i, (d, number, name, cif, total, b21, v21, b11, v11) in enumerate(rows, start=1):
+        ws.write(r, 0, i)
+        ws.write(r, 1, _serial(d), dfmt)
+        ws.write(r, 2, number)
+        ws.write(r, 3, name)
+        ws.write(r, 4, cif)
+        for c, v in zip(range(5, 10), (total, b21, v21, b11, v11), strict=True):
+            ws.write(r, c, v, money)
+        r += 1
+    ws.write(r, 0, "Total")
+    ws.write(r, 5, sum(row[4] for row in rows), money)
+    ws.write(r + 3, 0, "Pagina 1/1  SAGA C")
+    wb.save(str(HERE / f"saga_jurnal_{side}.xls"))
+
+
 if __name__ == "__main__":
     saga_rj()
     saga_balanta()
     nextup_rj()
     nextup_balanta()
     spv_register()
+    saga_tva_journal("cumparari")
+    saga_tva_journal("vanzari")
     print("written:", sorted(p.name for p in HERE.iterdir() if p.suffix in (".xls", ".xlsx")))

@@ -15,14 +15,15 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-03 | in-progress | WP-02 | `iesire_factura_xml` + `intrare_factura_xml` fixtures; human import on copy firm |
 | WP-04 | done | WP-03 | ingest graph through `packaged` + `v3_approve` interrupt (no SAGA before interrupt) |
 | WP-05 | done | WP-04 | PRE recon: RJ or SPV register already has the doc → `already_in_sink`, no package |
-| WP-06 | todo | WP-03 | Windows agent pull / backup label / Import / `wait_validare` human |
-| WP-07 | todo | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
-| WP-08 | todo | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
-| WP-09 | todo | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
-| WP-10 | todo | WP-09 | monthly_close + V2 pack; material cannot be cleared by Jev |
-| WP-11 | todo | WP-01 | CO.DiT seed from Pins + T* F* + additive axes; no silent `tva_platitor` |
-| WP-12 | todo | WP-10 | Filing items + `filing_receipt`; V2 `file` ≠ ANAF submit |
-| WP-13 | todo | WP-05 | `extras_statement_pdf` extract path (document_ai); no MT940-first |
+| WP-06 | done | WP-03 | Windows agent pull / backup label / Import / `wait_validare` human |
+| WP-06R | done | WP-06 | Runtime: Postgres checkpointer, S3 bucket, tenants + witness uploads, operator API |
+| WP-07 | done | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
+| WP-08 | done | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
+| WP-09 | done | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
+| WP-10 | done | WP-09 | monthly_close + V2 pack; material cannot be cleared by Jev |
+| WP-11 | done | WP-01 | CO.DiT seed from Pins + T* F* + additive axes; no silent `tva_platitor` |
+| WP-12 | done | WP-10 | Filing items + `filing_receipt`; V2 `file` ≠ ANAF submit |
+| WP-13 | done | WP-05 | `extras_statement_pdf` extract path (document_ai); no MT940-first |
 | WP-14 | parked | — | ArticolBon / `bon_via_nota` |
 | WP-15 | parked | — | FDB SQL SagaEye |
 | WP-16 | parked | — | Agent Validare |
@@ -72,36 +73,120 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 ### WP-06 Agent
 - HTTP as ARCHITECTURE.md §10. AGENT user cannot devalidate.
 - Tests: fake agent; `wait_validare` without snapshot ≠ acked.
+- Built: `agent.py` (`AgentService`: pull per firm folder within `max_docs_per_run`, backup
+  label `{cui}:{folder}:{utc}` acknowledged per tenant, import report → `wait_validare` or
+  `needs_human`, snapshot → resumes `wait_validare` with the SAGA key of the matching validated
+  document; closed months held), `agent_api.py` (bearer `AGENT_SHARED_TOKEN`, 503 when unset),
+  ingest node `wait_validare` (`acked` only with a key a stored snapshot shows validated;
+  `validated: false` → `reopened`), `domain.agent_backups` / `domain.agent_snapshots`.
+- Open: the production runtime (Postgres checkpointer, S3 blob store, ingest runner) is not wired,
+  so the deployed agent routes answer 503 until it is. The Windows agent program itself is not in
+  this repo. A snapshot that stops showing an acked document is reported (`acked_not_shown`),
+  never acted on; `request_devalidare` stays a person's step.
+
+### WP-06R Runtime
+- `runtime.py` assembles stores, bucket, checkpointer, ingest graph and agent service;
+  `runtime_from_env` needs `DATABASE_URL` + `S3_*` (else `/ready` names what is missing and the
+  agent/operator routes answer 503). LangGraph threads live in Postgres (`PostgresSaver`).
+- `registry.py`: tenants (`domain.tenants`) and uploaded witnesses (`domain.sink_exports`: SAGA /
+  NextUp journal and balance, SPV register); a SAGA export naming another firm is refused. PRE
+  reads the latest journal export (+ balance) and register per tenant.
+- `operator_api.py` (bearer `OPERATOR_TOKEN`, must differ from the agent token):
+  `PUT /tenants/{cui}`, `POST /tenants/{cui}/exports/{kind}`, `POST /ingest` (SPV zip or UBL XML
+  only, XML first), `GET /jobs/{id}`, `POST /jobs/{id}/resume`.
+- Open: no Jev judge yet, so every document asks `v3_approve`. No triage of other sources over
+  HTTP yet (PDF, receipts, statements, expense reports).
 
 ### WP-07 SagaEye v1
 - Parse SAGA report pack / RJ-CM **headers only** first (harvest C-11). Column map lives in `sinks/saga_eye.py`, not in graph code.
 - Tests: fixture export (synthetic) → SinkDoc list.
+- Built: `read_saga_tva_journal` (purchase/sales journal → SinkDoc with partner CUI, net, VAT; rows
+  must add up; column map `TVA_JOURNAL_COLUMNS` in `sinks/saga_eye.py`, `[de confirmat]` against a
+  real report-pack export) and `ReportPackEye`; uploads `jurnal_cumparari` / `jurnal_vanzari`, which
+  PRE prefers over the journal register. Ingest node `intent_check` after `wait_validare`: what SAGA
+  shows (side, gross; net, VAT, partner CUI when the snapshot carries them) must equal the package,
+  else `needs_human` with the differences (`acked` otherwise).
+- Open: the report pack's other sheets (ledger, supplier situation, aging, fixed assets) are not read
+  yet; the agent's snapshot must carry net/VAT/partner for the full intent check (gross is always
+  checked).
 
 ### WP-08 Controls
 - Implement `catalog/60_harvest/ARTICOLE_CONTROLS_v1.yaml`.
 - `hard_failures > 0` ⇒ package refused and V2 `file` refused.
 - Tests: unexplained inbound → file impossible; already_posted → no package.
+- Built: `period_diff.py` — `build_period_diff` (buckets expected / unexplained, outbound holes,
+  synthetic parity on the watched accounts from the turnover the expected documents imply:
+  purchase 401 Cr gross + 4426 Dr VAT, sale 4111 Dr gross + 4427 Cr VAT), one `ControlRun` per
+  catalog row, `can_file`; `prefile_failures` gates `package`; `SagaEye.turnover`; stored in
+  `close_snapshots` / `control_runs`; operator `GET /periods/{cui}/{period}/diff`.
+- Fail closed: a blocking control without the input it needs FAILs (TVA regime unknown until
+  WP-11; 4428 open documents for TVA-la-încasare; a bank/cash movement with no source until WP-13).
+  Expected postings other than invoices (reverse charge, 404/408, bank, cash) are not modelled yet,
+  so they show as differences for a person, never as plugs.
 
 ### WP-09 Explained rules
 - `POST /rules` versioned. HITL `explained_rule` and `control_disposition`.
 - Tests: rule tags sink lines to `explained_sink_only`; cannot hide unexplained without `rule_id`.
+- Built: `rules.py` — `RuleBody` (scope `document`: side / partner CUI / number prefix / gross
+  ceiling; scope `line`: debit / credit account patterns, journal, words), `ExplainedRule`
+  versions per `(cui, rule_id)` (same body = same version; `domain.explained_rules`), applied in
+  `build_period_diff` (documents → `explained_sink_only` + `rule_id`; lines → explained turnover on
+  the parity side, never a line of a document already counted). `POST /rules`, `GET /rules/{cui}`.
+  Answer checks for `explained_rule` and `control_disposition` (used by the close graph, WP-10).
 
 ### WP-10 Close + V2
 - Thread `close:{cui}:{period}`. Layer 2 JSON only.
 - Tests: Jev action `file` with material=true is ignored.
+- Built: `close.py` — `monthly_close` on `close:{cui}:{period}`: `lock_expected_set` (hash locked once
+  per `(cui, period)` in `domain.close_runs`; a changed set is a lock mismatch, material until
+  `reopen`), `period_diff` (Layer 1 with the tenant's eye and rules), `v2_gate` (Layer 2 must
+  validate as `V2Gate` JSON or is ignored; its `file` on a material month is dropped; the person's
+  `v2_close` cannot `file` while material, and an `explained_rule` named must exist), `v4_codit`
+  after `file` (answer recorded). Close kind from the axes (unknown → material).
+  Operator: `POST /close/{cui}/{period}`, `GET /close/{cui}/{period}`, `POST …/resume`.
+- Open: no Jev call wired (Layer 2 is empty); the POST recon and Cartea Mare pull nodes are not
+  separate yet (the period diff reads the latest uploaded books); V4 records the answer, CO.DiT
+  itself is WP-11.
 
 ### WP-11 CO.DiT
 - Seed copies Pins. T1–T3 hard. New axes default null. Certainty required on write.
 - Tests: neplătitor + exig încasare → ValidationError; empty profile is not platitor.
+- Built: `codit.py` — `write_codit` (closed axis values; certainty on every axis written; exig
+  default fills an omitted exig, and a defaulted one follows a new tva; hard T1–T3 then F5 F6 F1 F2
+  F4 F3 raise `CoditError` and nothing is saved; soft F7.* / A* + `A_FLIP` / `A_CONTESTED` flags,
+  `blocks_file` ones block the close), pins copied at seed, `derive()` (unset axes absent),
+  `domain.codit`. The period diff, close and ingest take their axes from the period's CO.DiT
+  (operator query axes only where no CO.DiT exists). `PUT/GET /codit/{cui}/{period}`; a filed
+  period's CO.DiT is not rewritten.
+- Open: V4 records the answer but does not patch CO.DiT yet (`may_patch: auto, saf_t, exig`;
+  `seed_next_period_on`); R1 (identity join) is enforced at triage, not here.
 
 ### WP-12 Filings
 - Rows from `ARTICOLE_FILING_v1.yaml`. Receipt closes item.
 - Tests: calendar date passing does not close; receipt does.
+- Built: `filings.py` — due items from the ArticoleFiling rows that fit the period's CO.DiT (no
+  CO.DiT → nothing assumed due), each with its `books_gate` (named controls' latest status) and due
+  date `[de confirmat]` (legal.lock not pinned); `domain.filing_items` (+ `submitted_by`), filed only
+  with a receipt (CHECK). Operator: `POST /filings/{cui}/{period}` opens, `GET` lists,
+  `POST /filings/{cui}/{period}/{filing_id}/receipt` stores the receipt in the bucket and closes
+  that item. A period with any receipt gets no new package (ingest gate).
+- Open: due dates wait for `legal.lock`; nothing here submits to ANAF or builds a declaration.
 
 ### WP-13 Extras PDF
 - Only after WP-05. Follow `EXTRACT.md` and `catalog/60_harvest/ARTICOLE_EXTRAS_GRAIN_v1.yaml`.
 - Statement Pack + line Jobs. Do not match date+gross on one statement Job.
 - Tests: extras without tenant identity do not emit; a two-line fixture mints two movement Jobs.
+- Built: `extract/statement.py` — the extract contract's tables (`tables.json` from the backend) →
+  movement lines, checked (one side per line, whole cents, opening − debits + credits = closing,
+  holder CUI = tenant, RON only); `job_extras_line` (additive ArticoleJobs: one Job per line,
+  `source_hash = sha256(statement_id:seq)`); each line Job carries an `incasare` / `plata` document
+  with the bank side only (no counterparty guessed from text). SAGA / NextUp bank-journal entries
+  are witness documents, so PRE finds lines already booked (date + amount + side) and the period
+  diff matches them; expected lines count on 5121. A bank entry whose journal lines all fall under a
+  line rule is `explained_sink_only`. Operator `POST /extras/{cui}` (PDF + tables + header).
+- Open: no Document AI call is wired (the tables come from the extract backend); the bank mouths
+  (`incasare_xml` / `plata_xml`) are not rendered, so an unbooked line stops at `needs_human`; 5311
+  (cash) statements and foreign-currency accounts are not read.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

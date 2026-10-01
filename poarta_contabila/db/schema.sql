@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS domain.filing_items (
     PRIMARY KEY (cui, period, filing_id),
     CONSTRAINT filed_needs_receipt CHECK (state = 'open' OR receipt_key IS NOT NULL)
 );
+ALTER TABLE domain.filing_items ADD COLUMN IF NOT EXISTS submitted_by text;
 
 CREATE TABLE IF NOT EXISTS domain.codit (
     cui     text NOT NULL,
@@ -112,4 +113,39 @@ CREATE TABLE IF NOT EXISTS domain.explained_rules (
     version  integer NOT NULL,
     body     jsonb NOT NULL,
     PRIMARY KEY (cui, rule_id, version)
+);
+
+-- WP-06 Windows agent. A backup label is {cui}:{folder}:{utc}; a restore is refused
+-- when the label's tenant differs. Snapshots are what SAGA showed the agent (the eye).
+CREATE TABLE IF NOT EXISTS domain.agent_backups (
+    label       text PRIMARY KEY,
+    tenant_cui  text NOT NULL,
+    folder      text NOT NULL,
+    taken_at    timestamptz NOT NULL,
+    acked_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS domain.agent_snapshots (
+    snapshot_id  text PRIMARY KEY,           -- sha256 of the body
+    tenant_cui   text NOT NULL,
+    folder       text NOT NULL,
+    taken_at     timestamptz NOT NULL,
+    body         jsonb NOT NULL,
+    received_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- Runtime: tenants (what the SAGA mouth needs) and the files that witness their books.
+CREATE TABLE IF NOT EXISTS domain.tenants (
+    cui         text PRIMARY KEY,
+    body        jsonb NOT NULL,
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS domain.sink_exports (
+    export_id   text PRIMARY KEY,            -- {kind}:{sha256 of the file}
+    tenant_cui  text NOT NULL,
+    kind        text NOT NULL CHECK (kind IN ('rj', 'balanta', 'spv_register',
+                                       'jurnal_cumparari', 'jurnal_vanzari')),
+    product     text,
+    body        jsonb NOT NULL
 );

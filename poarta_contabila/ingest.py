@@ -1,6 +1,6 @@
 """ingest_source_doc (WP-04): a Job walks its articol de cale up to `packaged`.
 
-    bind → reconcile_pre → approve (v3_approve) → package
+    bind → reconcile_pre → approve (v3_approve) → package → wait_validare → intent_check
 
 - **bind**: ArticoleFlux.matches on stored fields. One survivor binds; none or a tie asks
   ``define_articol`` (the answer must be a real articol on this graph).
@@ -12,6 +12,14 @@
   SAGA before this answer (no side effect sits before ``interrupt()``).
 - **package**: render through the articol's invoice WriteModule and write the XML once per
   ``export_key``; a replay of the node writes nothing.
+- **wait_validare** (WP-06): waits for SAGA. The Windows agent imports the package
+  (status ``wait_validare``), a person validates in SAGA, and the agent's snapshot
+  resumes the thread with the ``saga_doc_key`` of a document a stored snapshot shows
+  validated; an answer without one is asked again. ``validated: false`` (import
+  cancelled) → ``reopened``.
+- **intent_check** (WP-07): what SAGA posted must be what was packaged — side,
+  gross, and net / VAT / partner CUI where the eye shows them. Same → ``acked``;
+  any difference → ``needs_human`` with the differences (Devalidare is a person's).
 
 Edges read ``state["status"]`` only. Runs on ``job:`` threads only.
 """
@@ -20,6 +28,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -29,6 +38,7 @@ from poarta_contabila.catalog import Catalog
 from poarta_contabila.flux import MatchContext, match_articole
 from poarta_contabila.hitl import ask
 from poarta_contabila.packages import BlobStore, PackageRow, PackageStore, write_once
+from poarta_contabila.period_diff import prefile_failures
 from poarta_contabila.recon.pre import PreResult
 from poarta_contabila.sinks.saga_xml import SagaXmlError, export_key, render_invoice
 from poarta_contabila.types import CanonicalDocument, Closed, JobRecord, Slug, WriteModule
@@ -49,6 +59,11 @@ class V3ApproveResume(Closed):
     edit: dict[str, Any] | None = None
 
 
+class WaitValidareResume(Closed):
+    validated: bool
+    saga_doc_key: str | None = None
+
+
 @dataclass
 class IngestDeps:
     catalog: Catalog
@@ -59,6 +74,13 @@ class IngestDeps:
     judge: Callable[[CanonicalDocument, dict], dict]
     tenant_name: Callable[[str], str]
     allow_draft: bool = True
+    snapshot_validated: Callable[[str, str], bool] = lambda cui, saga_doc_key: False
+    """(tenant cui, saga_doc_key) → a stored agent snapshot shows it validated."""
+    period_filed: Callable[[str, str], bool] = lambda cui, period: False
+    """(cui, period) → a filing receipt exists: the period's packages are never regenerated."""
+    posted_doc: Callable[[str, str], dict[str, Any] | None] = lambda cui, saga_doc_key: None
+    """(tenant cui, saga_doc_key) → what SAGA shows for it (gross; net, vat, partner_cui,
+    doc_class when known), or None."""
 
     def package(self, job: JobRecord, doc: CanonicalDocument, module: WriteModule) -> PackageRow:
         """Render and write once; set the job to `packaged`. Safe to replay."""
@@ -89,6 +111,7 @@ class IngestState(TypedDict, total=False):
     articol_id: str
     status: str
     export_key: str
+    saga_doc_key: str
     error: str
     pre: dict[str, Any]
 
@@ -109,6 +132,26 @@ def start_payload(
         "axes": dict(axes or {}),
         "canonical": doc.model_dump(),
     }
+
+
+_SIDE = {"intrare": "in", "storn_intrare": "in", "iesire": "out", "storn_iesire": "out"}
+
+
+def intent_diffs(doc: CanonicalDocument, posted: dict[str, Any]) -> list[str]:
+    """What SAGA shows against what was packaged; empty when they agree."""
+    out = []
+    side = posted.get("doc_class")
+    if side and _SIDE.get(side, side) != _SIDE.get(doc.doc_class, doc.doc_class):
+        out.append(f"posted as {side}, packaged as {doc.doc_class}")
+    for field in ("gross", "net", "vat"):
+        shown = posted.get(field)
+        want = getattr(doc.totals, field)
+        if shown is not None and Decimal(str(shown)) != Decimal(want):
+            out.append(f"{field} {shown} in SAGA, {want} packaged")
+    shown_cui = posted.get("partner_cui")
+    if shown_cui and doc.partner.cui and shown_cui != doc.partner.cui:
+        out.append(f"partner {shown_cui} in SAGA, {doc.partner.cui} packaged")
+    return out
 
 
 def _our_role(doc: CanonicalDocument) -> str | None:
@@ -137,7 +180,7 @@ def _needs_question(deps: IngestDeps, job: JobRecord, articol: dict, verdict: di
 def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
     """Compile ingest_source_doc. Edges read stored status only."""
     cat = deps.catalog
-    for kind in ("define_articol", "v3_approve"):
+    for kind in ("define_articol", "v3_approve", "wait_validare"):
         cat.hitl_kind(kind, graph_id=GRAPH_ID)
 
     def bind(state: IngestState, config) -> IngestState:
@@ -247,14 +290,76 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
             if m in _INVOICE_MOUTHS
         ]
         if len(mouths) != 1:
-            deps.jobs.update(job.job_id, status="needs_human", error="no single invoice mouth")
-            return {"status": "needs_human", "error": "no single invoice mouth"}
+            declared = cat.articol(state["articol_id"]).get("write_modules") or []
+            error = (
+                "bank mouths (incasare_xml / plata_xml) are not rendered yet: post it in SAGA"
+                if any(m in ("incasare_xml", "plata_xml") for m in declared)
+                else "no single invoice mouth"
+            )
+            deps.jobs.update(job.job_id, status="needs_human", error=error)
+            return {"status": "needs_human", "error": error}
+        failed = prefile_failures(cat, pre_verdict=(state.get("pre") or {}).get("verdict"))
+        if deps.period_filed(job.tenant.cui, doc.period):
+            failed.append(f"{doc.period} has a filing receipt: no new package for it")
+        if failed:  # ArticoleControls prefile layer: hard failures refuse the package
+            error = "prefile controls: " + "; ".join(failed)
+            deps.jobs.update(job.job_id, status="needs_human", error=error)
+            return {"status": "needs_human", "error": error}
         try:
             row = deps.package(job, doc, cat.write_modules[mouths[0]])
         except SagaXmlError as exc:
             deps.jobs.update(job.job_id, status="needs_human", error=str(exc))
             return {"status": "needs_human", "error": str(exc)}
         return {"status": "packaged", "export_key": row.export_key}
+
+    def wait_validare(state: IngestState) -> IngestState:
+        job_id = state["job_id"]
+
+        def check(answer: WaitValidareResume) -> str | None:
+            job = deps.jobs.get(job_id)
+            if job.status != "wait_validare":
+                return f"job is {job.status}, not imported into SAGA yet"
+            if not answer.validated:
+                return "saga_doc_key is only given with validated" if answer.saga_doc_key else None
+            if not answer.saga_doc_key:
+                return "validated needs the saga_doc_key"
+            if not deps.snapshot_validated(job.tenant.cui, answer.saga_doc_key):
+                return f"no SAGA snapshot shows {answer.saga_doc_key!r} validated"
+            return None
+
+        answer = ask(
+            "wait_validare",
+            {"job_id": job_id, "export_key": state.get("export_key")},
+            WaitValidareResume,
+            check,
+        )
+        if answer.validated:
+            return {"status": "validated", "saga_doc_key": answer.saga_doc_key}
+        deps.jobs.update(job_id, status="reopened")
+        return {"status": "reopened"}
+
+    def intent_check(state: IngestState) -> IngestState:
+        job = deps.jobs.get(state["job_id"])
+        key = state["saga_doc_key"]
+        doc = CanonicalDocument.model_validate(state["canonical"])
+        posted = deps.posted_doc(job.tenant.cui, key)
+        diffs = intent_diffs(doc, posted) if posted else ["SAGA shows no document for the key"]
+        if diffs:
+            deps.jobs.update(
+                job.job_id,
+                status="needs_human",
+                error="intent_check: " + "; ".join(diffs),
+                saga={"saga_doc_key": key},
+            )
+            return {"status": "needs_human"}
+        deps.jobs.update(job.job_id, status="acked", saga={"saga_doc_key": key})
+        return {"status": "acked"}
+
+    def after_wait(state: IngestState) -> str:
+        return "intent_check" if state["status"] == "validated" else END
+
+    def after_package(state: IngestState) -> str:
+        return "wait_validare" if state["status"] == "packaged" else END
 
     def after_pre(state: IngestState) -> str:
         return "approve" if state["status"] == "reconcile_pre" else END
@@ -267,9 +372,13 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
     g.add_node("reconcile_pre", reconcile_pre)
     g.add_node("approve", approve)
     g.add_node("package", package)
+    g.add_node("wait_validare", wait_validare)
+    g.add_node("intent_check", intent_check)
     g.add_edge(START, "bind")
     g.add_edge("bind", "reconcile_pre")
     g.add_conditional_edges("reconcile_pre", after_pre, ["approve", END])
     g.add_conditional_edges("approve", after_approve, ["package", END])
-    g.add_edge("package", END)
+    g.add_conditional_edges("package", after_package, ["wait_validare", END])
+    g.add_conditional_edges("wait_validare", after_wait, ["intent_check", END])
+    g.add_edge("intent_check", END)
     return g.compile(checkpointer=checkpointer)
