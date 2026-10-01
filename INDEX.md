@@ -10,6 +10,7 @@ ARCHITECTURE.md          system to build (self-contained)
 BUILD.md                 work packages an agent may pick
 EXTRACT.md               extract adaptor contract
 IDEMPOTENCY.md           keys
+RESEARCH_LOG.md          external formats/APIs quoted from official pages (or why not)
 CATALOG_LOOKUP.md        which YAML to open
 catalog/                 Catalog Cale — executable law
   10_lege_firma          Pins, T*, F*

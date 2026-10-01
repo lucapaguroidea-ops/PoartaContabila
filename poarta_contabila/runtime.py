@@ -2,8 +2,9 @@
 
 ``build_runtime`` takes every part explicitly (tests pass in-memory ones);
 ``runtime_from_env`` builds the production one from ``DATABASE_URL`` and ``S3_*``.
-Parts not wired yet fail closed: there is no Jev judge, so every document is asked
-(``v3_approve``); a tenant without an uploaded journal export gets ``need_rj_export``.
+Parts not wired fail closed: without Jev (``JEV_BASE_URL`` + ``JEV_API_KEY``) every document
+is asked (``v3_approve``) and the close gets no Layer 2 suggestion; a tenant without an
+uploaded journal export gets ``need_rj_export``.
 """
 
 from __future__ import annotations
@@ -22,6 +23,13 @@ from poarta_contabila.agent import AgentService
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.close import CloseDeps, InMemoryCloseStore, build_close_graph
 from poarta_contabila.codit import Codit, CoditInput, write_codit
+from poarta_contabila.extract.contract import (
+    Extraction,
+    InMemoryExtractStore,
+    read_extraction,
+    write_extraction,
+)
+from poarta_contabila.extract.document_ai import DocumentAiError, shows_iban
 from poarta_contabila.extract.statement import (
     StatementError,
     StatementMeta,
@@ -33,6 +41,7 @@ from poarta_contabila.extract.ubl import UblError, parse_ubl, read_spv_zip, to_c
 from poarta_contabila.filings import due_filings
 from poarta_contabila.filings import views as filing_views
 from poarta_contabila.ingest import IngestDeps, build_ingest_graph, start_payload
+from poarta_contabila.jev import make_judge, make_v2
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
 from poarta_contabila.recon.pre import ReconStore, make_pre_check
@@ -52,10 +61,6 @@ class IngestRefused(ValueError):
     """The upload cannot become a Job; the message says which gate."""
 
 
-def _no_judge(doc: CanonicalDocument, articol: dict) -> dict:
-    return {"accounts_ok": False, "risk": "unknown", "needs_human": True, "judge": "not wired"}
-
-
 @dataclass
 class Runtime:
     catalog: Catalog
@@ -71,6 +76,9 @@ class Runtime:
     closes: Any = None  # InMemoryCloseStore | PostgresCloseStore
     codits: Any = None  # InMemoryCoditStore | PostgresCoditStore
     filings: Any = None  # InMemoryFilingStore | PostgresFilingStore
+    jev: Any = None  # jev.Jev; None = not wired (fail closed)
+    statement_reader: Any = None  # (pdf, *, tenant_cui) -> Extraction; DocumentAiReader
+    extracts: Any = None  # InMemoryExtractStore | PostgresExtractStore
 
     def __post_init__(self) -> None:
         self.deps = IngestDeps(
@@ -81,7 +89,7 @@ class Runtime:
             pre_check=make_pre_check(
                 self.catalog, witnesses_provider(self.registry, self.blobs), store=self.recon
             ),
-            judge=_no_judge,
+            judge=make_judge(self.jev),
             tenant_name=self._tenant_name,
         )
         self.ingest = build_ingest_graph(self.deps, checkpointer=self.checkpointer)
@@ -100,6 +108,8 @@ class Runtime:
         )
         if self.closes is None:
             self.closes = InMemoryCloseStore()
+        if self.extracts is None:
+            self.extracts = InMemoryExtractStore()
         self.close = build_close_graph(
             CloseDeps(
                 catalog=self.catalog,
@@ -108,6 +118,7 @@ class Runtime:
                 eye=self._eye,
                 rules=self.rules,
                 period_store=self.periods,
+                jev_v2=make_v2(self.jev, self.axes),
                 codit=lambda cui, period: (
                     self.codits.get(cui, period) if self.codits is not None else None
                 ),
@@ -187,23 +198,64 @@ class Runtime:
 
     # -- bank statements (WP-13) --
 
+    def read_statement(self, tenant: Tenant, period: str, pdf: bytes) -> tuple[Extraction, str]:
+        """The extract contract for a statement PDF (WP-21): read once per
+        ``(source_hash, document_ai)``, reused after; returns it with the PDF's bucket key."""
+        cui = tenant.cui
+        source_hash = hashlib.sha256(pdf).hexdigest()
+        row = self.extracts.get(source_hash, "document_ai")
+        if row is not None:
+            if not str(row["prefix"]).startswith(f"tenants/{cui}/"):
+                raise IngestRefused("this PDF was read for another tenant")
+            return read_extraction(self.blobs, row["prefix"]), f"{row['prefix']}/statement.pdf"
+        if self.statement_reader is None:
+            raise IngestRefused(
+                "no statement reader is wired (DOCUMENT_AI_PROCESSOR): send the extract tables"
+            )
+        try:
+            extraction = self.statement_reader(pdf, tenant_cui=cui)
+        except DocumentAiError as exc:
+            raise IngestRefused(str(exc)) from exc
+        prefix = f"tenants/{cui}/{tenant.punct}/{period}/extras/source/{source_hash}"
+        self.blobs.put(f"{prefix}/statement.pdf", pdf)
+        write_extraction(self.blobs, prefix, extraction)
+        self.extracts.put(extraction.meta, prefix)  # the row after the files it proves
+        return extraction, f"{prefix}/statement.pdf"
+
     def ingest_statement(
-        self, cui: str, meta: StatementMeta, tables: list[dict[str, Any]], pdf: bytes
+        self,
+        cui: str,
+        meta: StatementMeta,
+        tables: list[dict[str, Any]] | None,
+        pdf: bytes,
     ) -> dict[str, Any]:
-        """A PDF statement + its extract tables → a pack and one Job per movement line."""
+        """A PDF statement → a pack and one Job per movement line.
+
+        The movement tables come with the upload or, when none are sent, from the statement
+        reader (Document AI), which must also show the tenant's CUI and the header's IBAN.
+        """
         tenant: Tenant | None = self.registry.tenant(cui)
         if tenant is None:
             raise IngestRefused(f"tenant {cui} is not registered")
         if not pdf.startswith(b"%PDF"):
             raise IngestRefused("the statement source must be the bank's PDF")
+        period = meta.statement_date[:7]
+        pdf_key = None
+        if tables is None:
+            extraction, pdf_key = self.read_statement(tenant, period, pdf)
+            if not extraction.meta.identity_ok:
+                raise IngestRefused(f"stmt_no_identity: the statement does not show CUI {cui}")
+            if not shows_iban(extraction.markdown, meta.iban):
+                raise IngestRefused(f"the statement does not show the IBAN {meta.iban}")
+            tables = extraction.tables
         try:
             statement = parse_statement(tables, meta, cui)
         except StatementError as exc:
             raise IngestRefused(str(exc)) from exc
-        period = meta.statement_date[:7]
         base = f"tenants/{cui}/{tenant.punct}/{period}/extras/{statement.statement_id}"
-        pdf_key = f"{base}/statement.pdf"
-        self.blobs.put(pdf_key, pdf)
+        if pdf_key is None:
+            pdf_key = f"{base}/statement.pdf"
+            self.blobs.put(pdf_key, pdf)
         self.blobs.put(f"{base}/statement.json", statement.model_dump_json().encode())
         jobs = []
         for line in statement.lines:
@@ -428,7 +480,10 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     from poarta_contabila.agent import PostgresAgentStore
     from poarta_contabila.close import PostgresCloseStore
     from poarta_contabila.codit import PostgresCoditStore
+    from poarta_contabila.extract.contract import PostgresExtractStore
+    from poarta_contabila.extract.document_ai import document_ai_from_env
     from poarta_contabila.filings import PostgresFilingStore
+    from poarta_contabila.jev import PostgresJevCache, jev_from_env
     from poarta_contabila.jobs import PostgresJobStore
     from poarta_contabila.packages import PostgresPackageStore
     from poarta_contabila.period_diff import PostgresPeriodStore
@@ -457,5 +512,8 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         closes=PostgresCloseStore(dsn),
         codits=PostgresCoditStore(dsn),
         filings=PostgresFilingStore(dsn),
+        jev=jev_from_env(PostgresJevCache(dsn)),
+        statement_reader=document_ai_from_env(),
+        extracts=PostgresExtractStore(dsn),
     )
     return runtime, "ok"

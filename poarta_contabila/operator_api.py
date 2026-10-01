@@ -27,10 +27,11 @@ _RAW = Body(..., media_type="application/octet-stream")
 
 
 class StatementUpload(BaseModel):
-    """The bank's PDF plus what the extract backend read from it."""
+    """The bank's PDF, its header, and the movement tables if already read (EXTRACT.md);
+    without tables the statement reader (Document AI) reads them."""
 
     meta: StatementMeta
-    tables: list[dict[str, Any]]
+    tables: list[dict[str, Any]] | None = None
     pdf_b64: str
 
 
@@ -121,7 +122,7 @@ def operator_router(
     def post_statement(
         cui: str, body: StatementUpload, rt: Runtime = Depends(operator)
     ) -> dict[str, Any]:
-        """A PDF statement with its extract tables (EXTRACT.md) → one Job per movement line."""
+        """A PDF statement (+ its extract tables, or read here) → one Job per movement line."""
         try:
             pdf = base64.b64decode(body.pdf_b64, validate=True)
         except (binascii.Error, ValueError) as exc:

@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS domain.extracts (
     meta         jsonb NOT NULL,
     PRIMARY KEY (source_hash, backend)
 );
+-- WP-21: the bucket prefix holding {prefix}/normalized/ (EXTRACT.md) for that source.
+ALTER TABLE domain.extracts ADD COLUMN IF NOT EXISTS prefix text;
 
 CREATE TABLE IF NOT EXISTS domain.packages (
     export_key  text PRIMARY KEY,           -- {module_id}:{job_id}:{schema_version}
@@ -96,6 +98,16 @@ CREATE TABLE IF NOT EXISTS domain.codit (
     body    jsonb NOT NULL,
     hash    text NOT NULL,
     PRIMARY KEY (cui, period)
+);
+
+-- Jev answers (ARCHITECTURE §12): validated JSON only, so a replay or a repeated question
+-- is not paid for twice. A suggestion store, not books.
+CREATE TABLE IF NOT EXISTS domain.jev_answers (
+    pack        text NOT NULL,
+    input_hash  text NOT NULL,              -- sha256 of {pack, version, input}
+    body        jsonb NOT NULL,
+    at          timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY (pack, input_hash)
 );
 
 -- Lane A (per client)

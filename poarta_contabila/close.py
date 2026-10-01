@@ -1,14 +1,17 @@
 """monthly_close (WP-10): a CloseRun per firm-month, never a Job.
 
-    lock_expected_set → period_diff → v2_gate (v2_close) → v4_codit → end
+    lock_expected_set → period_diff → layer2 → v2_gate (v2_close) → v4_codit → end
 
 - **lock_expected_set**: the month's expected jobs are hashed and locked once per
   ``(cui, period)``. A later run whose set differs is a lock mismatch: material.
 - **period_diff**: Layer 1 (WP-08/09) against the tenant's eye and rules.
-- **v2_gate**: Layer 2 (Jev, ``v2_declaration_gate``) may only suggest, as JSON that
-  validates against :class:`V2Gate`; anything else is ignored. Jev cannot clear
-  ``material``: its ``file`` on a material month is dropped. Then a person answers
-  ``v2_close``; ``file`` is refused while Layer 1 is material (00_LAW 13).
+- **layer2**: Layer 2 (Jev, ``v2_declaration_gate``) may only suggest, as JSON that
+  validates against :class:`V2Gate`; anything else, an error or a timeout is no suggestion.
+  Jev cannot clear ``material``: on a material month its ``file`` and any reading that the
+  books are fine are dropped. The suggestion is stored on the thread before ``v2_gate``
+  asks, so a resume shows and records the same one without asking Jev again.
+- **v2_gate**: a person answers ``v2_close``; ``file`` is refused while Layer 1 is material
+  (00_LAW 13).
 - **v4_codit**: only after ``file``; the CO.DiT answer is recorded (CO.DiT itself, WP-11).
   ``reopen`` releases the lock so the next run takes the month's jobs afresh.
 
@@ -28,6 +31,7 @@ from pydantic import Field, ValidationError
 
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.hitl import ask
+from poarta_contabila.jev import V2Gate
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
 from poarta_contabila.rules import ExplainedRuleResume, check_explained_rule
 from poarta_contabila.sinks.saga_eye import SagaEye
@@ -37,14 +41,6 @@ GRAPH_ID = "monthly_close"
 THREAD_PREFIX = "close:"
 
 CloseStatus = Literal["opened", "locked", "sink_pulled", "v2_ready", "hold", "filed", "v4_done"]
-
-
-class V2Gate(Closed):
-    """Layer 2 output (``v2_declaration_gate``): JSON only, a suggestion."""
-
-    books_support_declaration: bool
-    gap_materiality: Literal["none", "immaterial", "material"]
-    action: Literal["file", "hold", "patch_maps", "reopen"]
 
 
 class V2CloseResume(Closed):
@@ -125,7 +121,7 @@ class CloseDeps:
     eye: Callable[[str, str], SagaEye]
     rules: Any = None  # rule store (WP-09)
     period_store: Any = None
-    jev_v2: Callable[[PeriodDiff], Any] = lambda diff: None  # Layer 2; not wired yet
+    jev_v2: Callable[[PeriodDiff], Any] = lambda diff: None  # Layer 2 (jev.make_v2)
     codit: Callable[[str, str], Any] = lambda cui, period: None  # CO.DiT (WP-11)
 
 
@@ -135,6 +131,7 @@ class CloseState(TypedDict, total=False):
     axes: dict[str, str]
     diff: dict[str, Any]
     controls: list[dict[str, Any]]
+    jev: dict[str, Any] | None
     status: str
 
 
@@ -229,12 +226,17 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
             "status": "v2_ready",
         }
 
+    def layer2(state: CloseState) -> CloseState:
+        diff = PeriodDiff.model_validate(state["diff"])
+        material = bool(_run(state).material) or not can_file(diff)
+        return {"jev": _layer2(deps.jev_v2, diff, material)}
+
     def v2_gate(state: CloseState) -> CloseState:
         cui = state["cui"]
         diff = PeriodDiff.model_validate(state["diff"])
         run = _run(state)
         material = bool(run.material) or not can_file(diff)
-        jev = _layer2(deps.jev_v2, diff, material)
+        jev = state.get("jev")
 
         def check(answer: V2CloseResume) -> str | None:
             if answer.action == "file" and material:
@@ -291,19 +293,24 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
     g = StateGraph(CloseState)
     g.add_node("lock_expected_set", lock_expected_set)
     g.add_node("period_diff", period_diff)
+    g.add_node("layer2", layer2)
     g.add_node("v2_gate", v2_gate)
     g.add_node("v4_codit", v4_codit)
     g.add_edge(START, "lock_expected_set")
     g.add_edge("lock_expected_set", "period_diff")
-    g.add_edge("period_diff", "v2_gate")
+    g.add_edge("period_diff", "layer2")
+    g.add_edge("layer2", "v2_gate")
     g.add_conditional_edges("v2_gate", after_v2, ["v4_codit", END])
     g.add_edge("v4_codit", END)
     return g.compile(checkpointer=checkpointer)
 
 
 def _layer2(jev: Callable[[PeriodDiff], Any], diff: PeriodDiff, material: bool) -> dict | None:
-    """Jev's suggestion if it is valid JSON for V2Gate; never a ``file`` on a material month."""
-    raw = jev(diff)
+    """Jev's suggestion if it is valid JSON for V2Gate; it never clears a material month."""
+    try:
+        raw = jev(diff)
+    except Exception as exc:  # fail closed: no suggestion, the person decides
+        return {"ignored": f"Layer 2 unavailable: {type(exc).__name__}: {exc}"}
     if raw is None:
         return None
     try:
@@ -314,8 +321,18 @@ def _layer2(jev: Callable[[PeriodDiff], Any], diff: PeriodDiff, material: bool) 
         )
     except ValidationError as exc:
         return {"ignored": f"not V2Gate JSON: {exc.error_count()} error(s)"}
-    out = gate.model_dump()
-    if material and gate.action == "file":
-        out["ignored"] = "Jev may not clear material: its file is dropped"
-        out["action"] = None
+    out: dict[str, Any] = gate.model_dump()
+    if material:
+        dropped = []
+        if gate.action == "file":
+            out["action"] = None
+            dropped.append("action 'file'")
+        if gate.gap_materiality != "material":
+            out["gap_materiality"] = None
+            dropped.append(f"gap_materiality {gate.gap_materiality!r}")
+        if gate.books_support_declaration:
+            out["books_support_declaration"] = None
+            dropped.append("books_support_declaration true")
+        if dropped:
+            out["ignored"] = "Jev may not clear material: dropped " + ", ".join(dropped)
     return out
