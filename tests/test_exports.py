@@ -159,7 +159,12 @@ def test_saga_eye_documents(saga_lines):
     )
     assert isinstance(eye, SagaEye)
     docs = {d.number: d for d in eye.documents("1000009", "2026-09")}
-    assert set(docs) == {"1427", "AB0058", "FX-101"}
+    assert set(docs) == {"1427", "AB0058", "FX-101", "1"}  # "1": the bank payment (WP-13)
+    assert (docs["1"].doc_class, docs["1"].gross, docs["1"].analytic) == (
+        "plata",
+        "1210.00",
+        "5121.090110",
+    )
     purchase = docs["1427"]
     assert (purchase.doc_class, purchase.gross, purchase.vat, purchase.net) == (
         "intrare",

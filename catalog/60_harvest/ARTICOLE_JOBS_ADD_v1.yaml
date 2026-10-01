@@ -1,0 +1,29 @@
+# ARTICOLE_JOBS_ADD_v1.yaml
+# Additive job kinds (WP-13). Do not delete rows in ARTICOLE_JOBS_v1.yaml.
+# ARTICOLE_EXTRAS_GRAIN_v1: the job unit of a PDF statement is the movement line,
+# keyed [statement_id, seq]; the statement itself is a pack, never a Job.
+
+file_schema: "1"
+catalog: ArticoleJobs
+status: draft
+valid_from: "2026-01-01"
+mode: additive
+
+jobs:
+
+  - job_kind: job_extras_line
+    schema_version: "1"
+    status: draft
+    graph_id: ingest_source_doc
+    thread_prefix: job
+    source_doc_ids: [extras_statement_pdf]
+    allowed_flux: [extras_statement]
+    required_fields:
+      - tenant_cui
+      - period
+      - source_hash
+    optional_fields: [iban, counterparty]
+    reconcile: {pre: true, post: true}
+    hitl_kinds: [v3_approve, wait_validare, recon_ambiguous]
+    unique_key: [tenant_cui, source_hash]
+    note: "One Job per statement movement line; source_hash = sha256(statement_id:seq). The statement total is never matched."

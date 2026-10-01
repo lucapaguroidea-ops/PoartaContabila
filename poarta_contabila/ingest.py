@@ -290,8 +290,14 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
             if m in _INVOICE_MOUTHS
         ]
         if len(mouths) != 1:
-            deps.jobs.update(job.job_id, status="needs_human", error="no single invoice mouth")
-            return {"status": "needs_human", "error": "no single invoice mouth"}
+            declared = cat.articol(state["articol_id"]).get("write_modules") or []
+            error = (
+                "bank mouths (incasare_xml / plata_xml) are not rendered yet: post it in SAGA"
+                if any(m in ("incasare_xml", "plata_xml") for m in declared)
+                else "no single invoice mouth"
+            )
+            deps.jobs.update(job.job_id, status="needs_human", error=error)
+            return {"status": "needs_human", "error": error}
         failed = prefile_failures(cat, pre_verdict=(state.get("pre") or {}).get("verdict"))
         if deps.period_filed(job.tenant.cui, doc.period):
             failed.append(f"{doc.period} has a filing receipt: no new package for it")

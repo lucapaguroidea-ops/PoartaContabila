@@ -88,14 +88,14 @@ def test_extras_without_tenant_identity_does_not_emit(cat):
     assert ok.emit and ok.job_kind == "job_extras"
 
 
-def test_extras_pdf_has_no_job_kind_until_wp13(cat):
+def test_extras_pdf_lines_are_job_extras_line(cat):
     d = decide_emit(
         cat,
         _pack(
             source_doc_id="extras_statement_pdf", kinds=["pdf"], our_role="n/a", identity_ok=True
         ),
     )
-    assert not d.emit and "job_kind" in d.failed
+    assert d.emit and d.job_kind == "job_extras_line"  # WP-13: one Job per movement line
 
 
 def test_storno_ubl_emits_job_storno(cat):

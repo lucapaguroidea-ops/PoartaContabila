@@ -1,0 +1,165 @@
+"""WP-13: PDF bank statements — a pack, one Job per movement line, never the statement total."""
+
+from __future__ import annotations
+
+import base64
+
+import pytest
+
+from poarta_contabila.catalog import load_catalog
+from poarta_contabila.extract.statement import (
+    StatementError,
+    StatementMeta,
+    line_source_hash,
+    parse_statement,
+)
+from poarta_contabila.triage import decide_emit
+from tests.test_controls import CUI, PERIOD
+from tests.test_triage import _pack
+
+IBAN = "RO49AAAA1B31007593840000"  # the textbook example IBAN, not a client's
+META = {
+    "iban": IBAN,
+    "holder_cui": "RO1000009",
+    "currency": "RON",
+    "opening": "5000.00",
+    "closing": "4290.00",
+    "statement_date": "2026-09-30",
+}
+TABLES = [
+    {"headers": ["Extras de cont", "", ""], "rows": [["Sold initial", "", "5.000,00"]]},
+    {
+        "headers": ["Data", "Descriere", "Referinta", "Debit", "Credit"],
+        "rows": [
+            ["15.09.2026", "Plata FURNIZOR TEST SRL fact 1427", "OP-77", "1.210,00", ""],
+            ["", "  continuare descriere", "", "", ""],
+            ["20.09.2026", "Incasare CLIENT TEST SRL FX-101", "", "", "500,00"],
+            ["", "Total rulaje", "", "1.210,00", "500,00"],
+        ],
+    },
+]
+PDF = b"%PDF-1.4 synthetic statement"
+
+
+@pytest.fixture(scope="module")
+def cat():
+    return load_catalog()
+
+
+def _meta(**over):
+    return StatementMeta.model_validate({**META, **over})
+
+
+# ----- parsing -----
+
+
+def test_two_line_statement_parses_and_balances():
+    st = parse_statement(TABLES, _meta(), CUI)
+    assert [(ln.seq, ln.date, ln.side, ln.amount) for ln in st.lines] == [
+        (1, "2026-09-15", "debit", "1210.00"),
+        (2, "2026-09-20", "credit", "500.00"),
+    ]
+    assert st.lines[0].reference == "OP-77" and st.holder_cui == CUI
+    again = parse_statement(TABLES, _meta(), CUI)
+    assert again.statement_id == st.statement_id  # same statement, same id
+    assert line_source_hash(st.statement_id, 1) != line_source_hash(st.statement_id, 2)
+
+
+@pytest.mark.parametrize(
+    ("over", "tables", "match"),
+    [
+        ({"closing": "4290.01"}, TABLES, "≠ closing"),
+        ({"holder_cui": "RO20000005"}, TABLES, "not the tenant"),
+        ({"holder_cui": "ACME"}, TABLES, "no valid account-holder"),
+        ({"currency": "EUR"}, TABLES, "RON statements only"),
+        ({}, [{"headers": ["Data", "Suma"], "rows": [["15.09.2026", "1"]]}], "no movement table"),
+        (
+            {},
+            [
+                {
+                    "headers": ["Data", "Descriere", "Debit", "Credit"],
+                    "rows": [["15.09.2026", "x", "1,00", "2,00"]],
+                }
+            ],
+            "exactly one side",
+        ),
+        (
+            {},
+            [
+                {
+                    "headers": ["Data", "Descriere", "Debit", "Credit"],
+                    "rows": [["15.09.2026", "x", "1,005", ""]],
+                }
+            ],
+            "whole number of cents",
+        ),
+    ],
+)
+def test_a_statement_that_does_not_read_or_add_up_is_refused(over, tables, match):
+    with pytest.raises(StatementError, match=match):
+        parse_statement(tables, _meta(**over), CUI)
+
+
+def test_extras_without_tenant_identity_do_not_emit(cat):
+    pack = _pack(
+        source_doc_id="extras_statement_pdf", kinds=["pdf"], our_role="n/a", identity_ok=False
+    )
+    d = decide_emit(cat, pack)
+    assert not d.emit and "identity_gate" in d.failed
+
+
+# ----- runtime -----
+
+
+def _ops(cat):
+    from tests.test_runtime import Ops, _runtime
+
+    o = Ops(_runtime(cat))
+    o.tenant()
+    o.upload_rj()
+    return o
+
+
+def _post(o, meta=None, tables=TABLES, pdf=PDF):
+    return o.http.post(
+        f"/extras/{CUI}",
+        headers=o.op,
+        json={"meta": meta or META, "tables": tables, "pdf_b64": base64.b64encode(pdf).decode()},
+    )
+
+
+def test_a_two_line_statement_mints_two_movement_jobs(cat):
+    o = _ops(cat)
+    out = _post(o).json()
+    assert out["lines"] == 2 and [j["created"] for j in out["jobs"]] == [True, True]
+    kinds = {j["job"]["job_kind"] for j in out["jobs"]}
+    assert kinds == {"job_extras_line"}
+    pay, cash_in = out["jobs"]
+    # the payment is in the SAGA journal (Banca, 15.09, 1210.00): already in the books
+    assert pay["job"]["status"] == "already_in_sink"
+    # the receipt is not: a person approves, then the bank mouth is not rendered yet
+    assert cash_in["question"]["kind"] == "v3_approve"
+    view = o.resume(cash_in["job"]["job_id"], {"decision": "approve", "edit": None})
+    assert view["job"]["status"] == "needs_human" and "incasare_xml" in view["job"]["error"]
+    again = _post(o).json()
+    assert [j["created"] for j in again["jobs"]] == [False, False]
+
+
+def test_a_statement_of_another_holder_emits_nothing(cat):
+    o = _ops(cat)
+    bad = _post(o, meta={**META, "holder_cui": "RO20000005"})
+    assert bad.status_code == 422 and "not the tenant" in bad.json()["detail"]
+    assert o.rt.jobs.jobs == {}
+    assert _post(o, pdf=b"not a pdf").status_code == 422
+
+
+def test_statement_lines_are_the_source_of_bank_movements(cat):
+    o = _ops(cat)
+    _post(o)
+    out = o.http.get(
+        f"/periods/{CUI}/{PERIOD}/diff", params={"tva": "tva_platitor"}, headers=o.op
+    ).json()
+    by_number = {b["sink"]["number"]: b["kind"] for b in out["diff"]["inbound"]}
+    assert by_number["1"] == "expected"  # the SAGA bank entry matches the statement line
+    assert out["diff"]["synthetic_delta"]["5121:credit"]["delta"] == "0.00"
+    assert out["diff"]["synthetic_delta"]["5121:debit"]["delta"] == "-500.00"  # not in SAGA

@@ -23,7 +23,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-10 | done | WP-09 | monthly_close + V2 pack; material cannot be cleared by Jev |
 | WP-11 | done | WP-01 | CO.DiT seed from Pins + T* F* + additive axes; no silent `tva_platitor` |
 | WP-12 | done | WP-10 | Filing items + `filing_receipt`; V2 `file` ≠ ANAF submit |
-| WP-13 | todo | WP-05 | `extras_statement_pdf` extract path (document_ai); no MT940-first |
+| WP-13 | done | WP-05 | `extras_statement_pdf` extract path (document_ai); no MT940-first |
 | WP-14 | parked | — | ArticolBon / `bon_via_nota` |
 | WP-15 | parked | — | FDB SQL SagaEye |
 | WP-16 | parked | — | Agent Validare |
@@ -176,6 +176,17 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Only after WP-05. Follow `EXTRACT.md` and `catalog/60_harvest/ARTICOLE_EXTRAS_GRAIN_v1.yaml`.
 - Statement Pack + line Jobs. Do not match date+gross on one statement Job.
 - Tests: extras without tenant identity do not emit; a two-line fixture mints two movement Jobs.
+- Built: `extract/statement.py` — the extract contract's tables (`tables.json` from the backend) →
+  movement lines, checked (one side per line, whole cents, opening − debits + credits = closing,
+  holder CUI = tenant, RON only); `job_extras_line` (additive ArticoleJobs: one Job per line,
+  `source_hash = sha256(statement_id:seq)`); each line Job carries an `incasare` / `plata` document
+  with the bank side only (no counterparty guessed from text). SAGA / NextUp bank-journal entries
+  are witness documents, so PRE finds lines already booked (date + amount + side) and the period
+  diff matches them; expected lines count on 5121. A bank entry whose journal lines all fall under a
+  line rule is `explained_sink_only`. Operator `POST /extras/{cui}` (PDF + tables + header).
+- Open: no Document AI call is wired (the tables come from the extract backend); the bank mouths
+  (`incasare_xml` / `plata_xml`) are not rendered, so an unbooked line stops at `needs_human`; 5311
+  (cash) statements and foreign-currency accounts are not read.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

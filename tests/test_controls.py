@@ -145,9 +145,15 @@ def test_a_payment_with_no_source_is_a_difference_not_a_plug(cat):
         _exp(*SALE, doc_class="iesire", n=3),
     ]
     diff, runs = build_period_diff(cat, CUI, PERIOD, expected, eye, axes=PAYER)
-    assert {b.kind for b in diff.inbound} == {"expected"}
+    kinds = {b.sink.number: b.kind for b in diff.inbound}
+    assert kinds == {
+        "1427": "expected",
+        "AB0058": "expected",
+        "FX-101": "expected",
+        "1": "unexplained",
+    }  # the bank payment: in the books, no source here
     assert diff.synthetic_delta["401:credit"].delta == "0.00"
-    assert diff.synthetic_delta["401:debit"].delta == "1210.00"  # the bank payment
+    assert diff.synthetic_delta["401:debit"].delta == "1210.00"
     assert diff.synthetic_delta["5121:credit"].sink == "1210.00"
     assert _status(runs, "C0_synthetic_parity") == "FAIL" and not can_file(diff)
 

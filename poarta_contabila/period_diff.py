@@ -50,6 +50,7 @@ _IN = {"intrare", "storn_intrare"}
 _OUT = {"iesire", "storn_iesire"}
 _DONE = {"acked", "already_in_sink"}
 _NOT_EXPECTED = {"rejected"}
+_BANK = {"incasare", "plata"}
 
 
 def _m(d: Decimal) -> str:
@@ -93,6 +94,10 @@ def expected_turnover(items: list[ExpectedItem]) -> dict[str, dict[str, Decimal]
         elif it.doc_class in _OUT:
             add("4111", "debit", it.gross)
             add("4427", "credit", it.vat)
+        elif it.doc_class == "incasare":  # a statement line (WP-13): the bank side only
+            add("5121", "debit", it.gross)
+        elif it.doc_class == "plata":
+            add("5121", "credit", it.gross)
     return t
 
 
@@ -100,6 +105,15 @@ def _match(exp: list[ExpectedJob], sd: SinkDoc) -> ExpectedJob | None:
     for e in exp:
         if e.job.saga.get("saga_doc_key") == sd.saga_key:
             return e
+    if sd.doc_class in _BANK:  # statement lines carry no SAGA number: side + date + amount
+        hits = [
+            e
+            for e in exp
+            if e.doc.doc_class == sd.doc_class
+            and e.doc.date == sd.date
+            and Decimal(e.doc.totals.gross) == Decimal(sd.gross)
+        ]
+        return hits[0] if len(hits) == 1 else None
     hits = [
         e
         for e in exp
@@ -132,11 +146,25 @@ def build_period_diff(
 
     inbound: list[BucketRow] = []
     explained_docs: list[tuple[SinkDoc, str]] = []
+    counted: set[tuple[str | None, str]] = set()  # sink documents whose postings are counted
+    month_lines = eye.journal_lines(cui, period) if covered else []
+    line_rules = [r for r in rules if r.scope == "line"]
     for sd in sink_docs:
         e = _match(exp, sd)
         if e is None:
             rule = next((r for r in rules if r.scope == "document" and r.matches_doc(sd)), None)
-            if rule is not None:
+            by_lines = _line_rule_for(sd, month_lines, line_rules) if rule is None else None
+            if by_lines is not None:  # its lines are counted by the line rule below
+                inbound.append(
+                    BucketRow(
+                        kind="explained_sink_only",
+                        sink=sd,
+                        rule_id=by_lines,
+                        delta_gross="0.00",
+                    )
+                )
+            elif rule is not None:
+                counted.add((normalize(sd.number, "alnum"), sd.date))
                 explained_docs.append((sd, rule.rule_id))
                 inbound.append(
                     BucketRow(
@@ -149,6 +177,7 @@ def build_period_diff(
             else:
                 inbound.append(BucketRow(kind="unexplained", sink=sd, delta_gross=sd.gross))
         else:
+            counted.add((normalize(sd.number, "alnum"), sd.date))
             inbound.append(
                 BucketRow(
                     kind="expected",
@@ -163,12 +192,8 @@ def build_period_diff(
     watched = list(control.get("watched") or [])
     epsilon = Decimal(str(control.get("epsilon", "0.01")))
     implied = expected_turnover(items)
-    counted = {(normalize(i.number, "alnum"), i.date) for i in items} | {
-        (normalize(d.number, "alnum"), d.date) for d, _ in explained_docs
-    }
     explained_lines = []
-    line_rules = [r for r in rules if r.scope == "line"]
-    for ln in eye.journal_lines(cui, period) if covered and line_rules else []:
+    for ln in month_lines if line_rules else []:
         if (normalize(ln.doc_number, "alnum"), ln.date) in counted:
             continue
         if any(r.matches_line(ln) for r in line_rules):
@@ -260,6 +285,21 @@ def build_period_diff(
         hard_failures=hard,
     )
     return diff, runs
+
+
+def _line_rule_for(sd: SinkDoc, lines, line_rules) -> str | None:
+    """The line rule explaining every journal line of this sink document, if one does."""
+    mine = [
+        ln
+        for ln in lines
+        if normalize(ln.doc_number, "alnum") == normalize(sd.number, "alnum") and ln.date == sd.date
+    ]
+    if not mine:
+        return None
+    for rule in line_rules:
+        if all(rule.matches_line(ln) for ln in mine):
+            return rule.rule_id
+    return None
 
 
 def can_file(diff: PeriodDiff) -> bool:

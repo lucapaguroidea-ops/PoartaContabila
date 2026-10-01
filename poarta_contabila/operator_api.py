@@ -6,13 +6,17 @@ person answers questions. Unset, equal to the agent token, or no runtime → 503
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hmac
 from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from pydantic import BaseModel
 
 from poarta_contabila.codit import Codit, CoditError, CoditInput
+from poarta_contabila.extract.statement import StatementMeta
 from poarta_contabila.registry import ExportKind, Product, Tenant
 from poarta_contabila.rules import ExplainedRule, RuleBody
 from poarta_contabila.runtime import IngestRefused, Runtime
@@ -20,6 +24,14 @@ from poarta_contabila.sinks.exports import ExportError
 from poarta_contabila.types import Cui, Slug
 
 _RAW = Body(..., media_type="application/octet-stream")
+
+
+class StatementUpload(BaseModel):
+    """The bank's PDF plus what the extract backend read from it."""
+
+    meta: StatementMeta
+    tables: list[dict[str, Any]]
+    pdf_b64: str
 
 
 class RuleRequest(RuleBody):
@@ -104,6 +116,20 @@ def operator_router(
         if doc is None:
             raise HTTPException(404, "no CO.DiT for this period (it is never assumed)")
         return doc
+
+    @router.post("/extras/{cui}")
+    def post_statement(
+        cui: str, body: StatementUpload, rt: Runtime = Depends(operator)
+    ) -> dict[str, Any]:
+        """A PDF statement with its extract tables (EXTRACT.md) → one Job per movement line."""
+        try:
+            pdf = base64.b64decode(body.pdf_b64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise HTTPException(422, "pdf_b64 is not base64") from exc
+        try:
+            return rt.ingest_statement(cui, body.meta, body.tables, pdf)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     @router.post("/filings/{cui}/{period}")
     def open_filings(cui: str, period: str, rt: Runtime = Depends(operator)) -> list[dict]:

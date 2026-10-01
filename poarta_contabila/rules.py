@@ -120,6 +120,10 @@ def explained_turnover(
         elif d.doc_class in _OUT:
             add("4111", "debit", Decimal(d.gross))
             add("4427", "credit", Decimal(d.vat))
+        elif d.doc_class == "incasare":
+            add("5121", "debit", Decimal(d.gross))
+        elif d.doc_class == "plata":
+            add("5121", "credit", Decimal(d.gross))
     for ln in lines:
         add(synthetic(ln.debit), "debit", Decimal(ln.amount))
         add(synthetic(ln.credit), "credit", Decimal(ln.amount))

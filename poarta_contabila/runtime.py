@@ -22,6 +22,13 @@ from poarta_contabila.agent import AgentService
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.close import CloseDeps, InMemoryCloseStore, build_close_graph
 from poarta_contabila.codit import Codit, CoditInput, write_codit
+from poarta_contabila.extract.statement import (
+    StatementError,
+    StatementMeta,
+    line_source_hash,
+    parse_statement,
+    statement_line_document,
+)
 from poarta_contabila.extract.ubl import UblError, parse_ubl, read_spv_zip, to_canonical
 from poarta_contabila.filings import due_filings
 from poarta_contabila.filings import views as filing_views
@@ -177,6 +184,62 @@ class Runtime:
         doc = write_codit(self.catalog, cui, period, data, previous=previous, closed=closed)
         self.codits.put(doc)
         return doc
+
+    # -- bank statements (WP-13) --
+
+    def ingest_statement(
+        self, cui: str, meta: StatementMeta, tables: list[dict[str, Any]], pdf: bytes
+    ) -> dict[str, Any]:
+        """A PDF statement + its extract tables → a pack and one Job per movement line."""
+        tenant: Tenant | None = self.registry.tenant(cui)
+        if tenant is None:
+            raise IngestRefused(f"tenant {cui} is not registered")
+        if not pdf.startswith(b"%PDF"):
+            raise IngestRefused("the statement source must be the bank's PDF")
+        try:
+            statement = parse_statement(tables, meta, cui)
+        except StatementError as exc:
+            raise IngestRefused(str(exc)) from exc
+        period = meta.statement_date[:7]
+        base = f"tenants/{cui}/{tenant.punct}/{period}/extras/{statement.statement_id}"
+        pdf_key = f"{base}/statement.pdf"
+        self.blobs.put(pdf_key, pdf)
+        self.blobs.put(f"{base}/statement.json", statement.model_dump_json().encode())
+        jobs = []
+        for line in statement.lines:
+            source_hash = line_source_hash(statement.statement_id, line.seq)
+            pack = Pack(
+                tenant_cui=cui,
+                saga_firm_folder=tenant.saga_firm_folder,
+                punct=tenant.punct,
+                period=line.date[:7],
+                source_hash=source_hash,
+                source_doc_id="extras_statement_pdf",
+                kinds=["pdf"],
+                our_role="n/a",
+                identity_ok=True,  # the holder CUI was checked against the tenant
+            )
+            decision = decide_emit(self.catalog, pack)
+            if not decision.emit:
+                raise IngestRefused(f"line {line.seq}: emit gates failed: {decision.failed}")
+            result = self.jobs.emit(pack, decision)
+            if result.created:
+                doc = statement_line_document(
+                    statement, line, job=result.job, bucket_key=pdf_key, source_hash=source_hash
+                )
+                self.ingest.invoke(
+                    start_payload(
+                        result.job,
+                        doc,
+                        source_doc_id="extras_statement_pdf",
+                        axes=self.axes(cui, doc.period),
+                    ),
+                    self._cfg(result.job.job_id),
+                )
+            jobs.append(
+                {"seq": line.seq, "created": result.created, **self.view(result.job.job_id)}
+            )
+        return {"statement_id": statement.statement_id, "lines": len(statement.lines), "jobs": jobs}
 
     # -- filings --
 
