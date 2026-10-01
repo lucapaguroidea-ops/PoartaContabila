@@ -22,7 +22,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-09 | done | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
 | WP-10 | done | WP-09 | monthly_close + V2 pack; material cannot be cleared by Jev |
 | WP-11 | done | WP-01 | CO.DiT seed from Pins + T* F* + additive axes; no silent `tva_platitor` |
-| WP-12 | todo | WP-10 | Filing items + `filing_receipt`; V2 `file` ≠ ANAF submit |
+| WP-12 | done | WP-10 | Filing items + `filing_receipt`; V2 `file` ≠ ANAF submit |
 | WP-13 | todo | WP-05 | `extras_statement_pdf` extract path (document_ai); no MT940-first |
 | WP-14 | parked | — | ArticolBon / `bon_via_nota` |
 | WP-15 | parked | — | FDB SQL SagaEye |
@@ -164,6 +164,13 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 ### WP-12 Filings
 - Rows from `ARTICOLE_FILING_v1.yaml`. Receipt closes item.
 - Tests: calendar date passing does not close; receipt does.
+- Built: `filings.py` — due items from the ArticoleFiling rows that fit the period's CO.DiT (no
+  CO.DiT → nothing assumed due), each with its `books_gate` (named controls' latest status) and due
+  date `[de confirmat]` (legal.lock not pinned); `domain.filing_items` (+ `submitted_by`), filed only
+  with a receipt (CHECK). Operator: `POST /filings/{cui}/{period}` opens, `GET` lists,
+  `POST /filings/{cui}/{period}/{filing_id}/receipt` stores the receipt in the bucket and closes
+  that item. A period with any receipt gets no new package (ingest gate).
+- Open: due dates wait for `legal.lock`; nothing here submits to ANAF or builds a declaration.
 
 ### WP-13 Extras PDF
 - Only after WP-05. Follow `EXTRACT.md` and `catalog/60_harvest/ARTICOLE_EXTRAS_GRAIN_v1.yaml`.

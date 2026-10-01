@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS domain.filing_items (
     PRIMARY KEY (cui, period, filing_id),
     CONSTRAINT filed_needs_receipt CHECK (state = 'open' OR receipt_key IS NOT NULL)
 );
+ALTER TABLE domain.filing_items ADD COLUMN IF NOT EXISTS submitted_by text;
 
 CREATE TABLE IF NOT EXISTS domain.codit (
     cui     text NOT NULL,

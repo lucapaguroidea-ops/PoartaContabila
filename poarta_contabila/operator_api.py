@@ -105,6 +105,36 @@ def operator_router(
             raise HTTPException(404, "no CO.DiT for this period (it is never assumed)")
         return doc
 
+    @router.post("/filings/{cui}/{period}")
+    def open_filings(cui: str, period: str, rt: Runtime = Depends(operator)) -> list[dict]:
+        try:
+            return rt.open_filings(cui, period)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.get("/filings/{cui}/{period}")
+    def get_filings(cui: str, period: str, rt: Runtime = Depends(operator)) -> list[dict]:
+        try:
+            return rt.filings_view(cui, period)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.post("/filings/{cui}/{period}/{filing_id}/receipt")
+    def filing_receipt(
+        cui: str,
+        period: str,
+        filing_id: str,
+        filename: str = Query(...),
+        submitted_by: str = Query(..., min_length=1),
+        data: bytes = _RAW,
+        rt: Runtime = Depends(operator),
+    ) -> list[dict]:
+        """Attach the ANAF receipt this person got; it is the only thing that closes the item."""
+        try:
+            return rt.filing_receipt(cui, period, filing_id, data, filename, submitted_by)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
     @router.post("/close/{cui}/{period}")
     def start_close(
         cui: str,

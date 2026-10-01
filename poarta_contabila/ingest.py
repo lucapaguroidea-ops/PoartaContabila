@@ -76,6 +76,8 @@ class IngestDeps:
     allow_draft: bool = True
     snapshot_validated: Callable[[str, str], bool] = lambda cui, saga_doc_key: False
     """(tenant cui, saga_doc_key) → a stored agent snapshot shows it validated."""
+    period_filed: Callable[[str, str], bool] = lambda cui, period: False
+    """(cui, period) → a filing receipt exists: the period's packages are never regenerated."""
     posted_doc: Callable[[str, str], dict[str, Any] | None] = lambda cui, saga_doc_key: None
     """(tenant cui, saga_doc_key) → what SAGA shows for it (gross; net, vat, partner_cui,
     doc_class when known), or None."""
@@ -291,6 +293,8 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
             deps.jobs.update(job.job_id, status="needs_human", error="no single invoice mouth")
             return {"status": "needs_human", "error": "no single invoice mouth"}
         failed = prefile_failures(cat, pre_verdict=(state.get("pre") or {}).get("verdict"))
+        if deps.period_filed(job.tenant.cui, doc.period):
+            failed.append(f"{doc.period} has a filing receipt: no new package for it")
         if failed:  # ArticoleControls prefile layer: hard failures refuse the package
             error = "prefile controls: " + "; ".join(failed)
             deps.jobs.update(job.job_id, status="needs_human", error=error)

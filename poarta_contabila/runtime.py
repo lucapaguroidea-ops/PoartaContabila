@@ -13,6 +13,7 @@ import io
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from langgraph.types import Command
@@ -22,6 +23,8 @@ from poarta_contabila.catalog import Catalog
 from poarta_contabila.close import CloseDeps, InMemoryCloseStore, build_close_graph
 from poarta_contabila.codit import Codit, CoditInput, write_codit
 from poarta_contabila.extract.ubl import UblError, parse_ubl, read_spv_zip, to_canonical
+from poarta_contabila.filings import due_filings
+from poarta_contabila.filings import views as filing_views
 from poarta_contabila.ingest import IngestDeps, build_ingest_graph, start_payload
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
@@ -60,6 +63,7 @@ class Runtime:
     rules: Any = None  # InMemoryRuleStore | PostgresRuleStore
     closes: Any = None  # InMemoryCloseStore | PostgresCloseStore
     codits: Any = None  # InMemoryCoditStore | PostgresCoditStore
+    filings: Any = None  # InMemoryFilingStore | PostgresFilingStore
 
     def __post_init__(self) -> None:
         self.deps = IngestDeps(
@@ -84,6 +88,9 @@ class Runtime:
             canonical=self.canonical,
         )
         self.deps.snapshot_validated = self.agent.snapshot_validated
+        self.deps.period_filed = lambda cui, period: (
+            self.filings is not None and self.filings.has_receipt(cui, period)
+        )
         if self.closes is None:
             self.closes = InMemoryCloseStore()
         self.close = build_close_graph(
@@ -170,6 +177,50 @@ class Runtime:
         doc = write_codit(self.catalog, cui, period, data, previous=previous, closed=closed)
         self.codits.put(doc)
         return doc
+
+    # -- filings --
+
+    def open_filings(self, cui: str, period: str) -> list[dict[str, Any]]:
+        """Open the items the period's CO.DiT makes due (idempotent) and list them."""
+        if self.filings is None:
+            raise IngestRefused("filing store not wired")
+        doc = self.codits.get(cui, period) if self.codits is not None else None
+        if doc is None:
+            raise IngestRefused(f"no CO.DiT for {period}: nothing is assumed due")
+        for row in due_filings(self.catalog, doc.derive()):
+            self.filings.open(cui, period, row["filing_id"])
+        return self.filings_view(cui, period)
+
+    def filings_view(self, cui: str, period: str) -> list[dict[str, Any]]:
+        if self.filings is None:
+            raise IngestRefused("filing store not wired")
+        items = self.filings.items(cui, period)
+        controls = (
+            {c["control_id"]: c["status"] for c in self.period_diff(cui, period)["controls"]}
+            if items
+            else {}
+        )
+        return [v.model_dump() for v in filing_views(self.catalog, cui, period, items, controls)]
+
+    def filing_receipt(
+        self, cui: str, period: str, filing_id: str, data: bytes, filename: str, by: str
+    ) -> list[dict[str, Any]]:
+        """Store the receipt artefact (the only thing that closes an item)."""
+        if self.filings is None:
+            raise IngestRefused("filing store not wired")
+        if filing_id not in self.filings.items(cui, period):
+            raise IngestRefused(f"{filing_id} is not due for {period}; open the period's items")
+        if not data:
+            raise IngestRefused("a receipt is a file; an empty upload closes nothing")
+        tenant = self.registry.tenant(cui)
+        digest = hashlib.sha256(data).hexdigest()
+        key = (
+            f"tenants/{cui}/{tenant.punct if tenant else 'default'}/{period}/receipts/"
+            f"{filing_id}/{digest}{Path(filename).suffix.lower()}"
+        )
+        self.blobs.put(key, data)
+        self.filings.receipt(cui, period, filing_id, key, by)
+        return self.filings_view(cui, period)
 
     # -- close --
 
@@ -314,6 +365,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     from poarta_contabila.agent import PostgresAgentStore
     from poarta_contabila.close import PostgresCloseStore
     from poarta_contabila.codit import PostgresCoditStore
+    from poarta_contabila.filings import PostgresFilingStore
     from poarta_contabila.jobs import PostgresJobStore
     from poarta_contabila.packages import PostgresPackageStore
     from poarta_contabila.period_diff import PostgresPeriodStore
@@ -341,5 +393,6 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         rules=PostgresRuleStore(dsn),
         closes=PostgresCloseStore(dsn),
         codits=PostgresCoditStore(dsn),
+        filings=PostgresFilingStore(dsn),
     )
     return runtime, "ok"
