@@ -36,11 +36,39 @@ def _new_job(pack: Pack, decision: EmitDecision) -> JobRecord:
     )
 
 
+_PACKAGED_OR_LATER = ("packaged", "wait_validare", "acked")
+
+
 @dataclass
 class InMemoryJobStore:
     """Same contract as :class:`PostgresJobStore`, for tests."""
 
     jobs: dict[tuple[str, str], JobRecord] = field(default_factory=dict)
+
+    def get(self, job_id: str) -> JobRecord:
+        for job in self.jobs.values():
+            if job.job_id == job_id:
+                return job
+        raise KeyError(job_id)
+
+    def update(self, job_id: str, **fields) -> JobRecord:
+        """Set fields on a job (validated); returns the new record."""
+        for key, job in self.jobs.items():
+            if job.job_id == job_id:
+                new = JobRecord.model_validate({**job.model_dump(), **fields})
+                self.jobs[key] = new
+                return new
+        raise KeyError(job_id)
+
+    def packaged_count(self, cui: str, articol_id: str) -> int:
+        """Jobs of this tenant on this articol that already reached `packaged` or later."""
+        return sum(
+            1
+            for job in self.jobs.values()
+            if job.tenant.cui == cui
+            and job.articol_id == articol_id
+            and job.status in _PACKAGED_OR_LATER
+        )
 
     def emit(self, pack: Pack, decision: EmitDecision) -> EmitResult:
         job = _new_job(pack, decision)
@@ -89,3 +117,31 @@ class PostgresJobStore:
                 (pack.tenant_cui, pack.source_hash),
             ).fetchone()
         return EmitResult(JobRecord.model_validate(body, strict=False), created=False)
+
+    def get(self, job_id: str) -> JobRecord:
+        with self._psycopg.connect(self._dsn) as conn:
+            row = conn.execute(
+                "SELECT body FROM domain.jobs WHERE job_id = %s", (job_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(job_id)
+        return JobRecord.model_validate(row[0], strict=False)
+
+    def update(self, job_id: str, **fields) -> JobRecord:
+        new = JobRecord.model_validate({**self.get(job_id).model_dump(), **fields})
+        with self._psycopg.connect(self._dsn, autocommit=True) as conn:
+            conn.execute(
+                "UPDATE domain.jobs SET status = %s, body = %s, updated_at = now()"
+                " WHERE job_id = %s",
+                (new.status, new.model_dump_json(), job_id),
+            )
+        return new
+
+    def packaged_count(self, cui: str, articol_id: str) -> int:
+        with self._psycopg.connect(self._dsn) as conn:
+            (n,) = conn.execute(
+                "SELECT count(*) FROM domain.jobs WHERE tenant_cui = %s"
+                " AND body->>'articol_id' = %s AND status = ANY(%s)",
+                (cui, articol_id, list(_PACKAGED_OR_LATER)),
+            ).fetchone()
+        return int(n)

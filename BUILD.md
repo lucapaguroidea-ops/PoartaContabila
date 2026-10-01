@@ -13,7 +13,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-01 | done | WP-00 | Load Lane B YAML; fail closed on unknown articol / HITL kind |
 | WP-02 | done | WP-01 | folder_triage + SourceDoc emit gates + Job unique `(cui, source_hash)` |
 | WP-03 | in-progress | WP-02 | `iesire_factura_xml` + `intrare_factura_xml` fixtures; human import on copy firm |
-| WP-04 | todo | WP-03 | ingest graph through `packaged` + `v3_approve` interrupt (no SAGA before interrupt) |
+| WP-04 | done | WP-03 | ingest graph through `packaged` + `v3_approve` interrupt (no SAGA before interrupt) |
 | WP-05 | todo | WP-04 | PRE recon: RJ or SPV register already has the doc → `already_in_sink`, no package |
 | WP-06 | todo | WP-03 | Windows agent pull / backup label / Import / `wait_validare` human |
 | WP-07 | todo | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
