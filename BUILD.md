@@ -9,7 +9,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 
 | id | status | depends | title |
 |---|---|---|---|
-| WP-00 | todo | — | Scaffold `poarta_contabila` types + Postgres domain schema + fake SagaEye |
+| WP-00 | done | — | Scaffold `poarta_contabila` types + Postgres domain schema + fake SagaEye |
 | WP-01 | todo | WP-00 | Load Lane B YAML; fail closed on unknown articol / HITL kind |
 | WP-02 | todo | WP-01 | folder_triage + SourceDoc emit gates + Job unique `(cui, source_hash)` |
 | WP-03 | todo | WP-02 | `iesire_factura_xml` + `intrare_factura_xml` fixtures; human import on copy firm |
