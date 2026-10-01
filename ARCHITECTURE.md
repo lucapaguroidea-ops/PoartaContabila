@@ -33,6 +33,8 @@ sniff → aisle (SPV > foreign > bon CUI > extras > rest) → pair UBL+PDF → f
 
 PDF RO without UBL is not primary.
 
+A container row (`split`, e.g. `decont_cheltuieli`) never emits: once its identity and primary gates pass, `decont_split` names its parts and each part is a child Pack through the same gates (XML first: a part with the invoice XML is `ro_efactura_ubl`).
+
 ### ingest_source_doc
 
 ```

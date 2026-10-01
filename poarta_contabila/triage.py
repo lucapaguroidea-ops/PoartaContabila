@@ -5,6 +5,12 @@ Gates (HANDBOOK §4, ARCHITECTURE §2): class ∧ identity ∧ primary ∧ the p
 gate that cannot be evaluated is a failed gate. Jev is not consulted here; the
 caller supplies ``source_doc_id`` (sniff) and the graph asks a human when it is
 ``unknown`` or a receipt's CUI is unclear.
+
+A container (a SourceDoc row with ``split``, e.g. ``decont_cheltuieli``, A2) never
+emits. When its own identity and primary gates pass, the graph asks ``decont_split``
+for its parts; each part becomes a child Pack (same tenant, firm folder and period,
+its own hash) that passes or fails the same gates. XML first: a part that has the
+invoice XML is a ``ro_efactura_ubl`` part, never a PDF part.
 """
 
 from __future__ import annotations
@@ -18,6 +24,8 @@ from poarta_contabila import jsonlogic
 from poarta_contabila.catalog import Catalog, CatalogError
 from poarta_contabila.hitl import ask
 from poarta_contabila.types import Closed, Cui, Period, PrimaryKind, Slug, cui_is_valid
+
+_XML_KINDS = ("ubl_spv", "xml")
 
 GRAPH_ID = "folder_triage"
 THREAD_PREFIX = "batch:"
@@ -134,9 +142,60 @@ class BonCuiResume(Closed):
     fara_cui: bool
 
 
+class SplitPart(Closed):
+    part_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_doc_id: Slug
+    kinds: list[PrimaryKind] = Field(min_length=1)
+    bon_our_cui_on_doc: bool | None = None
+    counterparty_cui: Cui | None = None
+
+
+class DecontSplitResume(Closed):
+    parts: list[SplitPart] = Field(min_length=1)
+
+
+def check_split(cat: Catalog, container: Pack, answer: DecontSplitResume) -> str | None:
+    """Why a ``decont_split`` answer cannot be used, or None (the HITL ``cannot`` list)."""
+    split = cat.source_docs[container.source_doc_id]["split"]
+    hashes = [p.part_hash for p in answer.parts]
+    if len(set(hashes)) != len(hashes) or container.source_hash in hashes:
+        return "every part needs its own hash, different from the container's"
+    for i, part in enumerate(answer.parts, start=1):
+        if part.source_doc_id not in split["children"]:
+            return f"part {i}: {part.source_doc_id!r} is not one of {split['children']}"
+        if part.source_doc_id == "ro_efactura_pdf" and any(k in part.kinds for k in _XML_KINDS):
+            return f"part {i}: the invoice XML exists, so the part is ro_efactura_ubl, not a PDF"
+        row = cat.source_docs[part.source_doc_id]
+        if (row.get("identity") or {}).get("bon_cui_fork") and part.bon_our_cui_on_doc is None:
+            return f"part {i}: say whether our CUI is on the receipt (bon_our_cui_on_doc)"
+    return None
+
+
+def child_pack(cat: Catalog, container: Pack, part: SplitPart) -> Pack:
+    """A part of a container as a Pack of its own (inherits tenant, folder, period)."""
+    role = cat.source_docs[part.source_doc_id].get("our_role_default")
+    if role not in ("inbound", "outbound", "n/a"):
+        role = cat.source_docs[container.source_doc_id].get("our_role_default", "inbound")
+    return Pack(
+        tenant_cui=container.tenant_cui,
+        saga_firm_folder=container.saga_firm_folder,
+        punct=container.punct,
+        period=container.period,
+        source_hash=part.part_hash,
+        source_doc_id=part.source_doc_id,
+        kinds=part.kinds,
+        our_role=role,
+        counterparty_cui=part.counterparty_cui,
+        identity_ok=container.identity_ok,
+        bon_our_cui_on_doc=part.bon_our_cui_on_doc,
+    )
+
+
 class TriageState(TypedDict, total=False):
     pack: dict[str, Any]
     decision: dict[str, Any]
+    split: bool
+    children: list[dict[str, Any]]
     job_id: str | None
     created: bool
 
@@ -145,6 +204,9 @@ def build_triage_graph(cat: Catalog, store: Any, *, checkpointer: Any):
     """Compile the folder_triage graph. Edges read stored fields only."""
     cat.hitl_kind("define_class", graph_id=GRAPH_ID)
     cat.hitl_kind("bon_cui_unclear", graph_id=GRAPH_ID)
+    for row in cat.source_docs.values():
+        if row.get("split"):
+            cat.hitl_kind(row["split"]["hitl"], graph_id=GRAPH_ID)
 
     def gate(state: TriageState, config) -> TriageState:
         thread = config["configurable"]["thread_id"]
@@ -178,20 +240,58 @@ def build_triage_graph(cat: Catalog, store: Any, *, checkpointer: Any):
             pack = pack.model_copy(update={"bon_our_cui_on_doc": answer.cu_cui})
 
         decision = decide_emit(cat, pack)
-        return {"pack": pack.model_dump(), "decision": decision.model_dump()}
+        # a container is split only when it is the tenant's and its primary is there
+        split = bool(row.get("split")) and not (
+            {"identity_gate", "primary_gate"} & set(decision.failed)
+        )
+        return {"pack": pack.model_dump(), "decision": decision.model_dump(), "split": split}
+
+    def split(state: TriageState) -> TriageState:
+        container = Pack.model_validate(state["pack"])
+        row = cat.source_docs[container.source_doc_id]
+        answer = ask(
+            row["split"]["hitl"],
+            {"source_hash": container.source_hash, "children": row["split"]["children"]},
+            DecontSplitResume,
+            lambda a: check_split(cat, container, a),
+        )
+        children = []
+        for part in answer.parts:
+            child = child_pack(cat, container, part)
+            children.append(
+                {"pack": child.model_dump(), "decision": decide_emit(cat, child).model_dump()}
+            )
+        return {"children": children}
 
     def emit(state: TriageState) -> TriageState:
         pack = Pack.model_validate(state["pack"])
         result = store.emit(pack, EmitDecision.model_validate(state["decision"]))
         return {"job_id": result.job.job_id, "created": result.created}
 
+    def emit_children(state: TriageState) -> TriageState:
+        out = []
+        for child in state["children"]:
+            decision = EmitDecision.model_validate(child["decision"])
+            job_id, created = None, False
+            if decision.emit:
+                result = store.emit(Pack.model_validate(child["pack"]), decision)
+                job_id, created = result.job.job_id, result.created
+            out.append({**child, "job_id": job_id, "created": created})
+        return {"children": out}
+
     def route(state: TriageState) -> str:
+        if state.get("split"):
+            return "split"
         return "emit" if state["decision"]["emit"] else END
 
     g = StateGraph(TriageState)
     g.add_node("gate", gate)
+    g.add_node("split", split)
     g.add_node("emit", emit)
+    g.add_node("emit_children", emit_children)
     g.add_edge(START, "gate")
-    g.add_conditional_edges("gate", route, ["emit", END])
+    g.add_conditional_edges("gate", route, ["split", "emit", END])
+    g.add_edge("split", "emit_children")
     g.add_edge("emit", END)
+    g.add_edge("emit_children", END)
     return g.compile(checkpointer=checkpointer)
