@@ -43,4 +43,3 @@ copy_on_seed:
 amendment:
   bump: schema_version or new pins_id
   old_periods: untouched
-)

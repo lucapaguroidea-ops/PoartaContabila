@@ -121,4 +121,3 @@ prompt_binding:
   each decision_id has prompt_hash + model pinned on the Job/Batch
   annex change (allowed list) = bump annex schema_version
   old runs keep frozen allowed[] on the checkpoint
-)

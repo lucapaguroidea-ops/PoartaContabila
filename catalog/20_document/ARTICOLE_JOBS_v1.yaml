@@ -58,9 +58,9 @@ status_edges_default:
   - acked -> reopened              # after human Devalidare
   - wait_validare -> reopened      # after Anulează importul + retry
   - reopened -> packaged           # new package after compensation
-  - "*" -> rejected
-  - "*" -> failed
-  - "*" -> needs_human
+  - '* -> rejected'
+  - '* -> failed'
+  - '* -> needs_human'
 
 # ---------------------------------------------------------------------------
 jobs:
@@ -87,7 +87,7 @@ jobs:
       - client_type_hash
     optional_fields: [spv_stare, currency]
     reconcile: {pre: true, post: true}
-    hitl_kinds: [v3_approve, define_articol, wait_validare, request_devalidare, reconcile_pre]
+    hitl_kinds: [v3_approve, define_articol, wait_validare, request_devalidare, recon_ambiguous]
     unique_key: [tenant_cui, source_hash]
     note: "Primary hash is UBL. PDF additional does not mint a second job."
 
@@ -111,7 +111,7 @@ jobs:
       - client_type_hash
     optional_fields: [counterparty_id, currency]
     reconcile: {pre: true, post: true}
-    hitl_kinds: [v3_approve, define_articol, wait_validare, request_devalidare, reconcile_pre, no_counterparty]
+    hitl_kinds: [v3_approve, define_articol, wait_validare, request_devalidare, recon_ambiguous, no_counterparty]
     unique_key: [tenant_cui, source_hash]
 
   - job_kind: job_bon
@@ -136,7 +136,7 @@ jobs:
       - bon.articol_id
     matrix: ArticolBon
     reconcile: {pre: true, post: true}
-    hitl_kinds: [articol_bon, v3_approve, wait_validare, reconcile_pre]
+    hitl_kinds: [articol_bon, v3_approve, wait_validare, recon_ambiguous]
     unique_key: [tenant_cui, source_hash]
     note: "bon.articol_id is ArticolBon, not ArticoleFlux."
 
@@ -154,7 +154,7 @@ jobs:
       - client_type_hash
     optional_fields: [iban]
     reconcile: {pre: true, post: true}
-    hitl_kinds: [v3_approve, wait_validare, reconcile_pre]
+    hitl_kinds: [v3_approve, wait_validare, recon_ambiguous]
     unique_key: [tenant_cui, source_hash]
     note: "v1: one job per statement pack. Line-jobs later = new job_kind."
 
@@ -175,7 +175,7 @@ jobs:
       - reverses_job_id
     optional_fields: [counterparty_id]
     reconcile: {pre: true, post: true}
-    hitl_kinds: [v3_approve, wait_validare, request_devalidare, reconcile_pre]
+    hitl_kinds: [v3_approve, wait_validare, request_devalidare, recon_ambiguous]
     unique_key: [tenant_cui, source_hash]
     note: "is_storno=true on MatchContext. Prefer this kind when SPV stare=stornat or user flags storno."
 
@@ -192,4 +192,3 @@ emit_rule:
     job_bon if source_doc_id=bon_fiscal
     job_extras if source_doc_id in [extras, extras_pdf]
     else no_job
-)

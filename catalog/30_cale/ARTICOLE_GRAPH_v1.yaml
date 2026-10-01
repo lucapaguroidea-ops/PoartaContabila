@@ -55,6 +55,7 @@ graphs:
       - ro_efactura_outbound
       - foreign_invoice_inbound
       - foreign_invoice_outbound
+      - foreign_rc_neplatitor
       - bon_cu_cui
       - bon_fara_cui
       - extras_statement
@@ -127,6 +128,5 @@ thread_ids:
 
 forbidden:
   - compile ingest with reconcile as StateGraph.add_node(compiled)
-  - resume job: thread from recon: prefix
+  - "resume job: thread from recon: prefix"
   - LLM as primary SinkLine matcher
-)

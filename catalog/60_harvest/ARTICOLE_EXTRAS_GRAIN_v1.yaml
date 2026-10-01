@@ -12,7 +12,7 @@ grain:
   pack_key: [tenant_cui, statement_date, iban_or_label]
   job_unit: movement_line             # not the statement total
   job_key: [statement_id, seq]
-  match_keys: [date, amount, side]    # per line against 512x/5311
+  match_keys: [date, amount, side]    # per line against 5121/5311 (5124 not watched in v1)
   identity: tenant must be known before any line Job is emitted
 
 forbidden_v1:

@@ -38,7 +38,7 @@ modules:
     first_n: 5
     max_docs_per_run: 50
     fixture: fixtures/saga/parteneri.xml
-    used_by_flux: [ro_efactura_inbound, ro_efactura_outbound, foreign_invoice_inbound, foreign_invoice_outbound]
+    used_by_flux: [ro_efactura_inbound, ro_efactura_outbound, foreign_invoice_inbound, foreign_invoice_outbound, foreign_rc_neplatitor]
 
   - module_id: articole_xml
     schema_version: "1"
@@ -134,7 +134,7 @@ modules:
     first_n: null
     max_docs_per_run: 5
     fixture: fixtures/saga/NC_sample.dbf
-    used_by_flux: []
+    used_by_flux: [foreign_rc_neplatitor]
 
   - module_id: bon_via_nota
     schema_version: "1"
@@ -153,4 +153,3 @@ forbidden:
   - saga_path: fdb_insert
   - validare skip on posting modules
   - approve without copy-firm fixture green
-)

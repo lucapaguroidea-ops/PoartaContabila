@@ -12,10 +12,10 @@ valid_from: "2026-01-01"
 enums:
   source_doc_id: slug
   fiscal_class:
-    [ro_efactura, foreign_invoice, bon, extras, instructions, recon, workings, unknown]
+    [ro_efactura, foreign_invoice, bon, extras, instructions, recon, workings, decont, payroll, unknown]
   our_role: [inbound, outbound, n/a, either]
   primary_kind:
-    [ubl_spv, pdf, xml, jpeg, png, xlsx, csv, mt940, sta, eml, unknown]
+    [ubl_spv, pdf, xml, jpeg, png, xls, xlsx, csv, mt940, sta, eml, msg, unknown]
   extract_backend: [none, ubl, mt940, document_ai, docling]
   posting_eligible: bool
 
@@ -121,7 +121,7 @@ rows:
       needs_counterparty_cui: false
       bon_cui_fork: false
     flux_candidates: [foreign_invoice_inbound, foreign_invoice_outbound]
-    note: "SPV not required. XML EU is primary if present, else scan."
+    note: "SPV not required. XML first (A2): an XML e-invoice is primary if present, else the scan."
 
   - source_doc_id: bon_fiscal
     schema_version: "1"
@@ -280,7 +280,7 @@ rows:
     posting_eligible: false
     emit_on_incomplete: false
     primary:
-      required_kinds: [xlsx, csv, pdf]
+      required_kinds: [xls, xlsx, csv, pdf]
       companions_are: additional
       missing_aisle: null
     pairing:
@@ -323,4 +323,3 @@ rows:
 
 # class_gate(pack) := row.posting_eligible AND not (primary missing AND not emit_on_incomplete)
 # extract node := row.extract.backend (v1 default document_ai; later docling)
-)

@@ -126,4 +126,3 @@ never:
   - silent_remap_any_pair
   - encode F7 as ValidationError
   - duplicate F* inside ArticoleFlux.require
-)
