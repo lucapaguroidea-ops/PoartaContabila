@@ -143,7 +143,8 @@ CREATE TABLE IF NOT EXISTS domain.tenants (
 CREATE TABLE IF NOT EXISTS domain.sink_exports (
     export_id   text PRIMARY KEY,            -- {kind}:{sha256 of the file}
     tenant_cui  text NOT NULL,
-    kind        text NOT NULL CHECK (kind IN ('rj', 'balanta', 'spv_register')),
+    kind        text NOT NULL CHECK (kind IN ('rj', 'balanta', 'spv_register',
+                                       'jurnal_cumparari', 'jurnal_vanzari')),
     product     text,
     body        jsonb NOT NULL
 );

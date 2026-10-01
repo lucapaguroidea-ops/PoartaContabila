@@ -109,6 +109,9 @@ class SnapshotDoc(Closed):
     date: FiscalDate
     gross: Money
     validated: bool
+    net: Money | None = None  # from the report pack's purchase/sales journal, when read
+    vat: Money | None = None
+    partner_cui: Cui | None = None
 
 
 class Snapshot(Closed):
@@ -122,6 +125,7 @@ class Snapshot(Closed):
 class SnapshotResult(Closed):
     snapshot_id: str
     acked: list[str] = Field(default_factory=list)
+    intent_mismatch: list[str] = Field(default_factory=list)
     waiting: list[str] = Field(default_factory=list)
     unmatched: list[str] = Field(default_factory=list)
     acked_not_shown: list[str] = Field(default_factory=list)
@@ -235,6 +239,14 @@ class AgentService:
     store: AgentStore
     resume: Callable[[str, dict[str, Any]], None]
     canonical: Callable[[str], CanonicalDocument]
+
+    def posted_doc(self, cui: str, saga_doc_key: str) -> dict[str, Any] | None:
+        """For ``IngestDeps.posted_doc``: the latest snapshot's document for the key."""
+        snap = self.store.latest_snapshot(cui)
+        for d in snap.documents if snap else []:
+            if d.saga_doc_key == saga_doc_key:
+                return d.model_dump()
+        return None
 
     def snapshot_validated(self, cui: str, saga_doc_key: str) -> bool:
         """For ``IngestDeps.snapshot_validated``: the latest snapshot shows it validated."""
@@ -362,8 +374,13 @@ class AgentService:
                 continue
             self.resume(job.job_id, {"validated": True, "saga_doc_key": hits[0].saga_doc_key})
             # the thread re-checks against the latest snapshot; trust its outcome only
-            done = self.jobs.get(job.job_id).status == "acked"
-            (result.acked if done else result.waiting).append(job.job_id)
+            status = self.jobs.get(job.job_id).status
+            if status == "acked":
+                result.acked.append(job.job_id)
+            elif status == "needs_human":
+                result.intent_mismatch.append(job.job_id)
+            else:
+                result.waiting.append(job.job_id)
         shown = {d.saga_doc_key for d in snap.documents if d.validated}
         for job in self._jobs(snap, "acked"):
             if job.saga.get("saga_doc_key") not in shown and self._in_scope(job, snap):

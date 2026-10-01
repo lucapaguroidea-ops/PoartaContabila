@@ -17,7 +17,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-05 | done | WP-04 | PRE recon: RJ or SPV register already has the doc → `already_in_sink`, no package |
 | WP-06 | done | WP-03 | Windows agent pull / backup label / Import / `wait_validare` human |
 | WP-06R | done | WP-06 | Runtime: Postgres checkpointer, S3 bucket, tenants + witness uploads, operator API |
-| WP-07 | todo | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
+| WP-07 | done | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
 | WP-08 | todo | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
 | WP-09 | todo | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
 | WP-10 | todo | WP-09 | monthly_close + V2 pack; material cannot be cleared by Jev |
@@ -100,6 +100,15 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 ### WP-07 SagaEye v1
 - Parse SAGA report pack / RJ-CM **headers only** first (harvest C-11). Column map lives in `sinks/saga_eye.py`, not in graph code.
 - Tests: fixture export (synthetic) → SinkDoc list.
+- Built: `read_saga_tva_journal` (purchase/sales journal → SinkDoc with partner CUI, net, VAT; rows
+  must add up; column map `TVA_JOURNAL_COLUMNS` in `sinks/saga_eye.py`, `[de confirmat]` against a
+  real report-pack export) and `ReportPackEye`; uploads `jurnal_cumparari` / `jurnal_vanzari`, which
+  PRE prefers over the journal register. Ingest node `intent_check` after `wait_validare`: what SAGA
+  shows (side, gross; net, VAT, partner CUI when the snapshot carries them) must equal the package,
+  else `needs_human` with the differences (`acked` otherwise).
+- Open: the report pack's other sheets (ledger, supplier situation, aging, fixed assets) are not read
+  yet; the agent's snapshot must carry net/VAT/partner for the full intent check (gross is always
+  checked).
 
 ### WP-08 Controls
 - Implement `catalog/60_harvest/ARTICOLE_CONTROLS_v1.yaml`.

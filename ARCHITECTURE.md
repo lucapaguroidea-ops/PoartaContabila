@@ -140,6 +140,8 @@ analytic(cui, period, root) -> dict
 
 PRE may conclude `absent` only for covered months (`need_rj_export` otherwise).
 
+SAGA readers: the journal register and balance (`sinks/exports.py`) and the report pack's purchase/sales journals (`ReportPackEye`, `sinks/saga_eye.py`; preferred: they carry partner CUIs, net and VAT). `intent_check` compares the posted document with the package; a difference goes to a person.
+
 v1 reads SAGA report pack / RJ-CM export (practice takeover pack), or, for a tenant with `book_of_record = nextup`, NextUp's journal and balance exports (A2, eye only). FDB SQL later on a pinned SAGA C build. Core graphs depend only on the protocol.
 
 Watched v1: 401, 4111, 4426, 4427, 4428, 5121, 5311.
@@ -230,7 +232,7 @@ AGENT: import only. No Devalidare, no închidere lună, no admin.
 Pull hands out packages per `(cui, saga_firm_folder)` with the module's backup rule; an import
 under a module that needs a backup is accepted only with an acknowledged label of that firm and
 folder. A snapshot lists SAGA documents (`saga_doc_key`, class, number, date, gross,
-`validated`) and closed months; a closed month gets nothing. `acked` = a snapshot shows the
+`validated`, and net / VAT / partner CUI when read from the report pack) and closed months; a closed month gets nothing. `acked` = a snapshot shows the
 matching document validated. A snapshot never moves a job out of `acked`.
 
 ## 14. Env

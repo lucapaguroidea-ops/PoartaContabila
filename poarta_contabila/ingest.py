@@ -1,6 +1,6 @@
 """ingest_source_doc (WP-04): a Job walks its articol de cale up to `packaged`.
 
-    bind → reconcile_pre → approve (v3_approve) → package → wait_validare
+    bind → reconcile_pre → approve (v3_approve) → package → wait_validare → intent_check
 
 - **bind**: ArticoleFlux.matches on stored fields. One survivor binds; none or a tie asks
   ``define_articol`` (the answer must be a real articol on this graph).
@@ -14,9 +14,12 @@
   ``export_key``; a replay of the node writes nothing.
 - **wait_validare** (WP-06): waits for SAGA. The Windows agent imports the package
   (status ``wait_validare``), a person validates in SAGA, and the agent's snapshot
-  resumes the thread. ``acked`` needs ``validated`` with a ``saga_doc_key`` that a
-  stored snapshot shows validated; an answer without one is asked again.
-  ``validated: false`` (import cancelled) → ``reopened``.
+  resumes the thread with the ``saga_doc_key`` of a document a stored snapshot shows
+  validated; an answer without one is asked again. ``validated: false`` (import
+  cancelled) → ``reopened``.
+- **intent_check** (WP-07): what SAGA posted must be what was packaged — side,
+  gross, and net / VAT / partner CUI where the eye shows them. Same → ``acked``;
+  any difference → ``needs_human`` with the differences (Devalidare is a person's).
 
 Edges read ``state["status"]`` only. Runs on ``job:`` threads only.
 """
@@ -25,6 +28,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -71,6 +75,9 @@ class IngestDeps:
     allow_draft: bool = True
     snapshot_validated: Callable[[str, str], bool] = lambda cui, saga_doc_key: False
     """(tenant cui, saga_doc_key) → a stored agent snapshot shows it validated."""
+    posted_doc: Callable[[str, str], dict[str, Any] | None] = lambda cui, saga_doc_key: None
+    """(tenant cui, saga_doc_key) → what SAGA shows for it (gross; net, vat, partner_cui,
+    doc_class when known), or None."""
 
     def package(self, job: JobRecord, doc: CanonicalDocument, module: WriteModule) -> PackageRow:
         """Render and write once; set the job to `packaged`. Safe to replay."""
@@ -101,6 +108,7 @@ class IngestState(TypedDict, total=False):
     articol_id: str
     status: str
     export_key: str
+    saga_doc_key: str
     error: str
     pre: dict[str, Any]
 
@@ -121,6 +129,26 @@ def start_payload(
         "axes": dict(axes or {}),
         "canonical": doc.model_dump(),
     }
+
+
+_SIDE = {"intrare": "in", "storn_intrare": "in", "iesire": "out", "storn_iesire": "out"}
+
+
+def intent_diffs(doc: CanonicalDocument, posted: dict[str, Any]) -> list[str]:
+    """What SAGA shows against what was packaged; empty when they agree."""
+    out = []
+    side = posted.get("doc_class")
+    if side and _SIDE.get(side, side) != _SIDE.get(doc.doc_class, doc.doc_class):
+        out.append(f"posted as {side}, packaged as {doc.doc_class}")
+    for field in ("gross", "net", "vat"):
+        shown = posted.get(field)
+        want = getattr(doc.totals, field)
+        if shown is not None and Decimal(str(shown)) != Decimal(want):
+            out.append(f"{field} {shown} in SAGA, {want} packaged")
+    shown_cui = posted.get("partner_cui")
+    if shown_cui and doc.partner.cui and shown_cui != doc.partner.cui:
+        out.append(f"partner {shown_cui} in SAGA, {doc.partner.cui} packaged")
+    return out
 
 
 def _our_role(doc: CanonicalDocument) -> str | None:
@@ -290,10 +318,29 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
             check,
         )
         if answer.validated:
-            deps.jobs.update(job_id, status="acked", saga={"saga_doc_key": answer.saga_doc_key})
-            return {"status": "acked"}
+            return {"status": "validated", "saga_doc_key": answer.saga_doc_key}
         deps.jobs.update(job_id, status="reopened")
         return {"status": "reopened"}
+
+    def intent_check(state: IngestState) -> IngestState:
+        job = deps.jobs.get(state["job_id"])
+        key = state["saga_doc_key"]
+        doc = CanonicalDocument.model_validate(state["canonical"])
+        posted = deps.posted_doc(job.tenant.cui, key)
+        diffs = intent_diffs(doc, posted) if posted else ["SAGA shows no document for the key"]
+        if diffs:
+            deps.jobs.update(
+                job.job_id,
+                status="needs_human",
+                error="intent_check: " + "; ".join(diffs),
+                saga={"saga_doc_key": key},
+            )
+            return {"status": "needs_human"}
+        deps.jobs.update(job.job_id, status="acked", saga={"saga_doc_key": key})
+        return {"status": "acked"}
+
+    def after_wait(state: IngestState) -> str:
+        return "intent_check" if state["status"] == "validated" else END
 
     def after_package(state: IngestState) -> str:
         return "wait_validare" if state["status"] == "packaged" else END
@@ -310,10 +357,12 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
     g.add_node("approve", approve)
     g.add_node("package", package)
     g.add_node("wait_validare", wait_validare)
+    g.add_node("intent_check", intent_check)
     g.add_edge(START, "bind")
     g.add_edge("bind", "reconcile_pre")
     g.add_conditional_edges("reconcile_pre", after_pre, ["approve", END])
     g.add_conditional_edges("approve", after_approve, ["package", END])
     g.add_conditional_edges("package", after_package, ["wait_validare", END])
-    g.add_edge("wait_validare", END)
+    g.add_conditional_edges("wait_validare", after_wait, ["intent_check", END])
+    g.add_edge("intent_check", END)
     return g.compile(checkpointer=checkpointer)

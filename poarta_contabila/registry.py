@@ -28,12 +28,12 @@ from poarta_contabila.sinks.exports import (
     read_saga_balanta,
     read_saga_rj,
 )
-from poarta_contabila.sinks.saga_eye import FakeSagaEye
+from poarta_contabila.sinks.saga_eye import FakeSagaEye, ReportPackEye, read_saga_tva_journal
 from poarta_contabila.sinks.spv_register import read_spv_register, register_invoices
 from poarta_contabila.types import Closed, Cui, JobRecord, Period, TenantRef
 
 Product = Literal["saga", "nextup"]
-ExportKind = Literal["rj", "balanta", "spv_register"]
+ExportKind = Literal["rj", "balanta", "spv_register", "jurnal_cumparari", "jurnal_vanzari"]
 
 
 class Tenant(Closed):
@@ -65,6 +65,12 @@ _READERS = {
 }
 
 
+_JOURNALS = {
+    "jurnal_cumparari": lambda path: read_saga_tva_journal(path, "cumparari"),
+    "jurnal_vanzari": lambda path: read_saga_tva_journal(path, "vanzari"),
+}
+
+
 def _with_file(data: bytes, filename: str, fn):
     suffix = Path(filename).suffix.lower()
     with tempfile.TemporaryDirectory() as tmp:
@@ -85,6 +91,14 @@ def check_export(
     if kind == "spv_register":
         _with_file(data, filename, read_spv_register)
         return sorted(set(periods or []))
+    if kind in _JOURNALS:
+        if product != "saga":
+            raise ExportError("purchase/sales journals are read from SAGA's report pack only")
+        docs = _with_file(data, filename, _JOURNALS[kind])
+        firm = _with_file(data, filename, read_firm_cui)
+        if firm != cui:
+            raise ExportError(f"the export header names firm {firm}, not {cui}")
+        return sorted(set(periods) if periods else {d.date[:7] for d in docs})
     if product is None or (product, kind) not in _READERS:
         raise ExportError(f"unknown export {product}/{kind}")
     parsed = _with_file(data, filename, _READERS[(product, kind)])
@@ -190,7 +204,23 @@ def witnesses_provider(registry, blobs: BlobStore):
     def witnesses(job: JobRecord) -> Witnesses:
         cui = job.tenant.cui
         rj = registry.latest_export(cui, "rj")
-        if rj is None:
+        journals = [registry.latest_export(cui, k, "saga") for k in _JOURNALS]
+        if all(journals):
+            # the report pack's journals carry partner CUIs, net and VAT: preferred
+            docs = [
+                d
+                for row in journals
+                for d in _with_file(blobs.get(row.bucket_key), row.bucket_key, _JOURNALS[row.kind])
+            ]
+            covered = set(journals[0].periods) & set(journals[1].periods)
+            bal = registry.latest_export(cui, "balanta", "saga")
+            balance = (
+                _with_file(blobs.get(bal.bucket_key), bal.bucket_key, read_saga_balanta)
+                if bal
+                else None
+            )
+            eye = ReportPackEye(documents=docs, cui=cui, periods=covered, balance=balance)
+        elif rj is None:
             eye = FakeSagaEye()
         else:
             reader = _READERS[(rj.product, "rj")]

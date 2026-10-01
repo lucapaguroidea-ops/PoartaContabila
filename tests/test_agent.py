@@ -62,6 +62,7 @@ class World:
             ),
         )
         self.deps.snapshot_validated = self.agent.snapshot_validated
+        self.deps.posted_doc = self.agent.posted_doc
         self.http = TestClient(create_app(None, agent=self.agent, agent_token=TOKEN))
         self.auth = {"Authorization": f"Bearer {TOKEN}"}
 

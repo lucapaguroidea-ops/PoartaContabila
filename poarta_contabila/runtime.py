@@ -77,6 +77,7 @@ class Runtime:
             canonical=self.canonical,
         )
         self.deps.snapshot_validated = self.agent.snapshot_validated
+        self.deps.posted_doc = self.agent.posted_doc
 
     # -- helpers --
 
