@@ -30,3 +30,4 @@ Rules:
 - Graph state stores field strings, not raw model JSON.
 - Swap Docling later without changing node names. Same three files.
 - extras PDF uses `document_ai` until WP-13. It does not emit a Job per statement total. See `catalog/60_harvest/ARTICOLE_EXTRAS_GRAIN_v1.yaml`.
+  Code (WP-21): `poarta_contabila/extract/document_ai.py` (the reader, from the API's Discovery document) and `extract/contract.py` (the three files, once per `(source_hash, backend)` in `domain.extracts`).

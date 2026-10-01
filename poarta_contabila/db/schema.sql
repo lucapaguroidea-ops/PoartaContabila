@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS domain.extracts (
     meta         jsonb NOT NULL,
     PRIMARY KEY (source_hash, backend)
 );
+-- WP-21: the bucket prefix holding {prefix}/normalized/ (EXTRACT.md) for that source.
+ALTER TABLE domain.extracts ADD COLUMN IF NOT EXISTS prefix text;
 
 CREATE TABLE IF NOT EXISTS domain.packages (
     export_key  text PRIMARY KEY,           -- {module_id}:{job_id}:{schema_version}

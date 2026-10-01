@@ -32,7 +32,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-D3 | decision | WP-11 | Non-payer RC books: 4423 vs 446x on copy-firm note |
 | WP-19 | todo | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (blocked: R1 unread) |
 | WP-20 | in-progress | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; wire waits on R2 |
-| WP-21 | decision | WP-13 | PDF reading backend for bank statements (which service) |
+| WP-21 | done | WP-13 | Statement PDFs read by Google Document AI into the extract contract |
 
 ## WP details
 
@@ -188,7 +188,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   are witness documents, so PRE finds lines already booked (date + amount + side) and the period
   diff matches them; expected lines count on 5121. A bank entry whose journal lines all fall under a
   line rule is `explained_sink_only`. Operator `POST /extras/{cui}` (PDF + tables + header).
-- Open: no Document AI call is wired (the tables come from the extract backend); the bank mouths
+- Open: Document AI reads the PDF since WP-21 (else the tables come with the upload); the bank mouths
   (`incasare_xml` / `plata_xml`) are not rendered, so an unbooked line stops at `needs_human`; 5311
   (cash) statements and foreign-currency accounts are not read.
 
@@ -224,10 +224,29 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   policy (R2), so `http_transport` refuses every call and a person is asked. `JEV_*` are not
   set on Railway (the owner adds them). Layer 2 does not yet see the period's due filings.
 
-### WP-21 Statement PDF reading backend (`decision`)
-- Ask the owner which service reads statement PDFs (EXTRACT.md names `document_ai`). Then
-  write the extract contract (`normalized/tables.json` + `extract_meta.json`) and feed
-  `parse_statement`. No code before the answer.
+### WP-21 Statement PDF reading backend
+- Decided by the owner on 2026-10-01: Google Document AI. Write the extract contract
+  (`normalized/tables.json` + `extract_meta.json`) and feed `parse_statement`.
+- Built from the API's official Discovery document (RESEARCH_LOG.md R3):
+  `extract/document_ai.py` — `DocumentAiReader` (`POST v1/{name}:process` on the processor's
+  documented regional endpoint, `rawDocument` + `skipHumanReview`, bearer token for the
+  `cloud-platform` scope from a service-account key or Application Default Credentials, built
+  on first use and never echoed); `document.error`, a shard, an HTTP failure or an unknown
+  location refuse. `tables_from_document`: cell text from `textAnchor` (content, else segments
+  into `text`), spans laid out as an HTML table, multi-row headers labelled per column, a
+  headerless table of the same width on the next page continues the previous one.
+  `extract/contract.py` — `ExtractMeta`, the three `normalized/` files under
+  `tenants/{cui}/{punct}/{period}/extras/source/{sha256}/`, written once per
+  `(source_hash, backend)` (`domain.extracts`, + `prefix`), reused after (another tenant's
+  extract is refused). `POST /extras/{cui}` without `tables` reads the PDF; the statement must
+  show the tenant's CUI after `RO` or a fiscal-code label (`identity_ok`) and the header's
+  IBAN; `parse_statement` then ties the lines to the typed header, so a misread cell refuses
+  the statement. Tests mock the HTTP client.
+- Open: no processor exists yet and `DOCUMENT_AI_PROCESSOR` /
+  `DOCUMENT_AI_CREDENTIALS_JSON` are not set on Railway (the owner creates and adds them; an
+  EU location keeps statements in the EU). Which processor type returns `pages[].tables` for
+  these banks, and the CUI-label rule, are to be checked on real statements. The header (IBAN,
+  holder, balances, date) is still typed by a person; reading it from the PDF is not built.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

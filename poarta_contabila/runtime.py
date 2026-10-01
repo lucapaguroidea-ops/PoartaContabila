@@ -23,6 +23,13 @@ from poarta_contabila.agent import AgentService
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.close import CloseDeps, InMemoryCloseStore, build_close_graph
 from poarta_contabila.codit import Codit, CoditInput, write_codit
+from poarta_contabila.extract.contract import (
+    Extraction,
+    InMemoryExtractStore,
+    read_extraction,
+    write_extraction,
+)
+from poarta_contabila.extract.document_ai import DocumentAiError, shows_iban
 from poarta_contabila.extract.statement import (
     StatementError,
     StatementMeta,
@@ -70,6 +77,8 @@ class Runtime:
     codits: Any = None  # InMemoryCoditStore | PostgresCoditStore
     filings: Any = None  # InMemoryFilingStore | PostgresFilingStore
     jev: Any = None  # jev.Jev; None = not wired (fail closed)
+    statement_reader: Any = None  # (pdf, *, tenant_cui) -> Extraction; DocumentAiReader
+    extracts: Any = None  # InMemoryExtractStore | PostgresExtractStore
 
     def __post_init__(self) -> None:
         self.deps = IngestDeps(
@@ -99,6 +108,8 @@ class Runtime:
         )
         if self.closes is None:
             self.closes = InMemoryCloseStore()
+        if self.extracts is None:
+            self.extracts = InMemoryExtractStore()
         self.close = build_close_graph(
             CloseDeps(
                 catalog=self.catalog,
@@ -187,23 +198,64 @@ class Runtime:
 
     # -- bank statements (WP-13) --
 
+    def read_statement(self, tenant: Tenant, period: str, pdf: bytes) -> tuple[Extraction, str]:
+        """The extract contract for a statement PDF (WP-21): read once per
+        ``(source_hash, document_ai)``, reused after; returns it with the PDF's bucket key."""
+        cui = tenant.cui
+        source_hash = hashlib.sha256(pdf).hexdigest()
+        row = self.extracts.get(source_hash, "document_ai")
+        if row is not None:
+            if not str(row["prefix"]).startswith(f"tenants/{cui}/"):
+                raise IngestRefused("this PDF was read for another tenant")
+            return read_extraction(self.blobs, row["prefix"]), f"{row['prefix']}/statement.pdf"
+        if self.statement_reader is None:
+            raise IngestRefused(
+                "no statement reader is wired (DOCUMENT_AI_PROCESSOR): send the extract tables"
+            )
+        try:
+            extraction = self.statement_reader(pdf, tenant_cui=cui)
+        except DocumentAiError as exc:
+            raise IngestRefused(str(exc)) from exc
+        prefix = f"tenants/{cui}/{tenant.punct}/{period}/extras/source/{source_hash}"
+        self.blobs.put(f"{prefix}/statement.pdf", pdf)
+        write_extraction(self.blobs, prefix, extraction)
+        self.extracts.put(extraction.meta, prefix)  # the row after the files it proves
+        return extraction, f"{prefix}/statement.pdf"
+
     def ingest_statement(
-        self, cui: str, meta: StatementMeta, tables: list[dict[str, Any]], pdf: bytes
+        self,
+        cui: str,
+        meta: StatementMeta,
+        tables: list[dict[str, Any]] | None,
+        pdf: bytes,
     ) -> dict[str, Any]:
-        """A PDF statement + its extract tables → a pack and one Job per movement line."""
+        """A PDF statement → a pack and one Job per movement line.
+
+        The movement tables come with the upload or, when none are sent, from the statement
+        reader (Document AI), which must also show the tenant's CUI and the header's IBAN.
+        """
         tenant: Tenant | None = self.registry.tenant(cui)
         if tenant is None:
             raise IngestRefused(f"tenant {cui} is not registered")
         if not pdf.startswith(b"%PDF"):
             raise IngestRefused("the statement source must be the bank's PDF")
+        period = meta.statement_date[:7]
+        pdf_key = None
+        if tables is None:
+            extraction, pdf_key = self.read_statement(tenant, period, pdf)
+            if not extraction.meta.identity_ok:
+                raise IngestRefused(f"stmt_no_identity: the statement does not show CUI {cui}")
+            if not shows_iban(extraction.markdown, meta.iban):
+                raise IngestRefused(f"the statement does not show the IBAN {meta.iban}")
+            tables = extraction.tables
         try:
             statement = parse_statement(tables, meta, cui)
         except StatementError as exc:
             raise IngestRefused(str(exc)) from exc
-        period = meta.statement_date[:7]
         base = f"tenants/{cui}/{tenant.punct}/{period}/extras/{statement.statement_id}"
-        pdf_key = f"{base}/statement.pdf"
-        self.blobs.put(pdf_key, pdf)
+        if pdf_key is None:
+            pdf_key = f"{base}/statement.pdf"
+            self.blobs.put(pdf_key, pdf)
         self.blobs.put(f"{base}/statement.json", statement.model_dump_json().encode())
         jobs = []
         for line in statement.lines:
@@ -428,6 +480,8 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     from poarta_contabila.agent import PostgresAgentStore
     from poarta_contabila.close import PostgresCloseStore
     from poarta_contabila.codit import PostgresCoditStore
+    from poarta_contabila.extract.contract import PostgresExtractStore
+    from poarta_contabila.extract.document_ai import document_ai_from_env
     from poarta_contabila.filings import PostgresFilingStore
     from poarta_contabila.jev import PostgresJevCache, jev_from_env
     from poarta_contabila.jobs import PostgresJobStore
@@ -459,5 +513,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         codits=PostgresCoditStore(dsn),
         filings=PostgresFilingStore(dsn),
         jev=jev_from_env(PostgresJevCache(dsn)),
+        statement_reader=document_ai_from_env(),
+        extracts=PostgresExtractStore(dsn),
     )
     return runtime, "ok"

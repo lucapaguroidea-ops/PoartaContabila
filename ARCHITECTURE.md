@@ -245,6 +245,8 @@ S3_ENDPOINT= S3_ACCESS_KEY= S3_SECRET_KEY= S3_BUCKET=
 JEV_BASE_URL= JEV_API_KEY=
 GROK_API_KEY=
 RUNPOD_API_KEY=
+DOCUMENT_AI_PROCESSOR=          # projects/{p}/locations/{eu}/processors/{id} (WP-21)
+DOCUMENT_AI_CREDENTIALS_JSON=   # service-account key; else Application Default Credentials
 AGENT_SHARED_TOKEN=
 OPERATOR_TOKEN=        # people: tenants, uploads, ingest, answers (≠ agent token)
 ANAF_SPV_CLIENT_ID= ANAF_SPV_CLIENT_SECRET=   # SPV register / e-Factura pull (WP-05)

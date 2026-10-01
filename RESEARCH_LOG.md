@@ -30,3 +30,44 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
   map onto `V3Judge` (`accounts_ok`, `risk` low/medium/high, `needs_human`) and `V2Gate`.
 - Instruct: allow `docs.typesafe.ai` in the environment's network access, then finish WP-20.
   `JEV_BASE_URL` / `JEV_API_KEY` are not set on Railway; the owner adds them.
+
+## R3 · Google Document AI (statement PDFs, backend `document_ai`) — WP-21
+
+- Question: how to send a PDF to a processor and where the tables come back.
+- The human docs (`cloud.google.com` → `docs.cloud.google.com`) were denied by the build
+  session's network policy on 2026-10-01. Read instead, the same day: Google's official
+  machine-readable description of the API, the Discovery document
+  `https://documentai.googleapis.com/$discovery/rest?version=v1` ("Cloud Document AI API",
+  `v1`, revision `20260915`).
+- Quotes:
+  - `documentai.projects.locations.processors.process`: `POST` `v1/{+name}:process`,
+    "Processes a single document." `name`: "Format:
+    `projects/{project}/locations/{location}/processors/{processor}`, or
+    `…/processors/{processor}/processorVersions/{processorVersion}`". Scope
+    `https://www.googleapis.com/auth/cloud-platform`.
+  - `ProcessRequest`: `rawDocument` "A raw document content (bytes)"; `skipHumanReview`
+    "Whether human review should be skipped for this request. Default to `false`."
+    `RawDocument`: `content` (format `byte`) "Inline document content", `mimeType` "An IANA
+    MIME type".
+  - `ProcessResponse.document`; `Document.text` "UTF-8 encoded text in reading order";
+    `Document.pages[].tables[]` "A table representation similar to HTML table structure"
+    with `headerRows` / `bodyRows` → `cells`; `TableCell.colSpan` "How many columns this cell
+    spans", `rowSpan` "How many rows this cell spans", `layout.textAnchor`.
+  - `TextAnchor.content` "Contains the content of the text span so that users do not have to
+    look it up in the text_segments"; `TextSegment.startIndex` / `endIndex` "TextSegment
+    start / half open end UTF-8 char index in the Document.text".
+  - `Document.error` "Any error that occurred while processing this document";
+    `shardInfo.shardCount` "Total number of shards"; `revisions[].processor` "identify the
+    processor by its resource name".
+  - `endpoints`: regional, e.g. location `eu` → `https://documentai.eu.rep.googleapis.com/`
+    (also `us`, `europe-west2`, `europe-west3`, `asia-south1`, `asia-southeast1`,
+    `northamerica-northeast1`, `australia-southeast1`).
+- Read as: a "char index" is a character (code point) index into `text`; the code prefers
+  `textAnchor.content` when present. A misread offset shows as cells that do not parse or
+  lines that do not tie to the header balances; both refuse the statement.
+- Auth: `google-auth` 2.59.1, read from the installed source:
+  `service_account.Credentials.from_service_account_info(info, scopes=…)`, `.refresh(request)`
+  with `google.auth.transport.urllib3.Request`, `.valid`, `.token`; `google.auth.default()`
+  reads `GOOGLE_APPLICATION_CREDENTIALS` first.
+- Not read (owner's choice, recorded open in BUILD): which processor type returns
+  `pages[].tables` for these statements; the processor's location (EU recommended).
