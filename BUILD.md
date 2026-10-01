@@ -21,7 +21,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-08 | done | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
 | WP-09 | done | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
 | WP-10 | done | WP-09 | monthly_close + V2 pack; material cannot be cleared by Jev |
-| WP-11 | todo | WP-01 | CO.DiT seed from Pins + T* F* + additive axes; no silent `tva_platitor` |
+| WP-11 | done | WP-01 | CO.DiT seed from Pins + T* F* + additive axes; no silent `tva_platitor` |
 | WP-12 | todo | WP-10 | Filing items + `filing_receipt`; V2 `file` ≠ ANAF submit |
 | WP-13 | todo | WP-05 | `extras_statement_pdf` extract path (document_ai); no MT940-first |
 | WP-14 | parked | — | ArticolBon / `bon_via_nota` |
@@ -151,6 +151,15 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 ### WP-11 CO.DiT
 - Seed copies Pins. T1–T3 hard. New axes default null. Certainty required on write.
 - Tests: neplătitor + exig încasare → ValidationError; empty profile is not platitor.
+- Built: `codit.py` — `write_codit` (closed axis values; certainty on every axis written; exig
+  default fills an omitted exig, and a defaulted one follows a new tva; hard T1–T3 then F5 F6 F1 F2
+  F4 F3 raise `CoditError` and nothing is saved; soft F7.* / A* + `A_FLIP` / `A_CONTESTED` flags,
+  `blocks_file` ones block the close), pins copied at seed, `derive()` (unset axes absent),
+  `domain.codit`. The period diff, close and ingest take their axes from the period's CO.DiT
+  (operator query axes only where no CO.DiT exists). `PUT/GET /codit/{cui}/{period}`; a filed
+  period's CO.DiT is not rewritten.
+- Open: V4 records the answer but does not patch CO.DiT yet (`may_patch: auto, saf_t, exig`;
+  `seed_next_period_on`); R1 (identity join) is enforced at triage, not here.
 
 ### WP-12 Filings
 - Rows from `ARTICOLE_FILING_v1.yaml`. Receipt closes item.

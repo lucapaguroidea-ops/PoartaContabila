@@ -12,6 +12,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 
+from poarta_contabila.codit import Codit, CoditError, CoditInput
 from poarta_contabila.registry import ExportKind, Product, Tenant
 from poarta_contabila.rules import ExplainedRule, RuleBody
 from poarta_contabila.runtime import IngestRefused, Runtime
@@ -87,6 +88,22 @@ def operator_router(
     ) -> dict[str, Any]:
         axes = {k: v for k, v in (("tva", tva), ("exig", exig)) if v}
         return rt.period_diff(cui, period, axes)
+
+    @router.put("/codit/{cui}/{period}")
+    def put_codit(
+        cui: str, period: str, body: CoditInput, rt: Runtime = Depends(operator)
+    ) -> Codit:
+        try:
+            return rt.put_codit(cui, period, body)
+        except (CoditError, IngestRefused, ValueError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.get("/codit/{cui}/{period}")
+    def get_codit(cui: str, period: str, rt: Runtime = Depends(operator)) -> Codit:
+        doc = rt.codits.get(cui, period) if rt.codits is not None else None
+        if doc is None:
+            raise HTTPException(404, "no CO.DiT for this period (it is never assumed)")
+        return doc
 
     @router.post("/close/{cui}/{period}")
     def start_close(

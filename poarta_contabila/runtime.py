@@ -20,6 +20,7 @@ from langgraph.types import Command
 from poarta_contabila.agent import AgentService
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.close import CloseDeps, InMemoryCloseStore, build_close_graph
+from poarta_contabila.codit import Codit, CoditInput, write_codit
 from poarta_contabila.extract.ubl import UblError, parse_ubl, read_spv_zip, to_canonical
 from poarta_contabila.ingest import IngestDeps, build_ingest_graph, start_payload
 from poarta_contabila.packages import BlobStore, PackageStore
@@ -58,6 +59,7 @@ class Runtime:
     periods: Any = None  # InMemoryPeriodStore | PostgresPeriodStore
     rules: Any = None  # InMemoryRuleStore | PostgresRuleStore
     closes: Any = None  # InMemoryCloseStore | PostgresCloseStore
+    codits: Any = None  # InMemoryCoditStore | PostgresCoditStore
 
     def __post_init__(self) -> None:
         self.deps = IngestDeps(
@@ -92,6 +94,9 @@ class Runtime:
                 eye=self._eye,
                 rules=self.rules,
                 period_store=self.periods,
+                codit=lambda cui, period: (
+                    self.codits.get(cui, period) if self.codits is not None else None
+                ),
             ),
             checkpointer=self.checkpointer,
         )
@@ -145,6 +150,27 @@ class Runtime:
         )
         return witnesses_provider(self.registry, self.blobs)(probe).eye
 
+    # -- CO.DiT --
+
+    def axes(self, cui: str, period: str, fallback: dict[str, str] | None = None) -> dict:
+        """The period's CO.DiT axes; *fallback* (explicit operator input) only without one."""
+        doc = self.codits.get(cui, period) if self.codits is not None else None
+        return doc.derive() if doc is not None else dict(fallback or {})
+
+    def put_codit(self, cui: str, period: str, data: CoditInput) -> Codit:
+        if self.codits is None:
+            raise IngestRefused("CO.DiT store not wired")
+        if self.registry.tenant(cui) is None:
+            raise IngestRefused(f"tenant {cui} is not registered")
+        previous = self.codits.get(cui, period)
+        run = self.closes.get(cui, period) if self.closes is not None else None
+        closed = run is not None and run.status in ("filed", "v4_done")
+        if closed and previous is not None:
+            raise IngestRefused(f"{period} is filed; a filed period's CO.DiT is not rewritten")
+        doc = write_codit(self.catalog, cui, period, data, previous=previous, closed=closed)
+        self.codits.put(doc)
+        return doc
+
     # -- close --
 
     @staticmethod
@@ -174,6 +200,7 @@ class Runtime:
         """Layer 1 for one firm-month: PeriodDiff, control runs, and whether V2 may file."""
         expected = self.expected(cui, period)
         eye = self._eye(cui, period)
+        axes = self.axes(cui, period, axes)
         rules = self.rules.active(cui) if self.rules is not None else []
         diff, runs = build_period_diff(
             self.catalog, cui, period, expected, eye, axes=axes, rules=rules
@@ -256,7 +283,12 @@ class Runtime:
         self.blobs.put(source.bucket_key, data)
         doc = doc.model_copy(update={"job_id": result.job.job_id})
         self.ingest.invoke(
-            start_payload(result.job, doc, source_doc_id="ro_efactura_ubl"),
+            start_payload(
+                result.job,
+                doc,
+                source_doc_id="ro_efactura_ubl",
+                axes=self.axes(cui, doc.period),
+            ),
             self._cfg(result.job.job_id),
         )
         return {"created": True, **self.view(result.job.job_id)}
@@ -281,6 +313,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
 
     from poarta_contabila.agent import PostgresAgentStore
     from poarta_contabila.close import PostgresCloseStore
+    from poarta_contabila.codit import PostgresCoditStore
     from poarta_contabila.jobs import PostgresJobStore
     from poarta_contabila.packages import PostgresPackageStore
     from poarta_contabila.period_diff import PostgresPeriodStore
@@ -307,5 +340,6 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         periods=PostgresPeriodStore(dsn),
         rules=PostgresRuleStore(dsn),
         closes=PostgresCloseStore(dsn),
+        codits=PostgresCoditStore(dsn),
     )
     return runtime, "ok"

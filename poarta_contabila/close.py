@@ -126,6 +126,7 @@ class CloseDeps:
     rules: Any = None  # rule store (WP-09)
     period_store: Any = None
     jev_v2: Callable[[PeriodDiff], Any] = lambda diff: None  # Layer 2; not wired yet
+    codit: Callable[[str, str], Any] = lambda cui, period: None  # CO.DiT (WP-11)
 
 
 class CloseState(TypedDict, total=False):
@@ -178,9 +179,13 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
         blockers = []
         if run.expected_set_hash and run.expected_set_hash != current:
             blockers.append("lock mismatch: the month's jobs changed since the lock; reopen first")
-        kind = close_kind(cat, state.get("axes") or {})
+        doc = deps.codit(state["cui"], state["period"])
+        axes = doc.derive() if doc is not None else (state.get("axes") or {})
+        kind = close_kind(cat, axes)
         if kind is None:
-            blockers.append("no close kind fits the tenant's axes (CO.DiT tva/exig, WP-11)")
+            blockers.append("no close kind fits the period's CO.DiT (tva/exig)")
+        if doc is not None:
+            blockers += [f"CO.DiT {flag} blocks filing" for flag in doc.blocks_file]
         run = run.model_copy(
             update={
                 "status": "locked",
@@ -190,7 +195,7 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
             }
         )
         deps.store.put(run)
-        return {"status": "locked"}
+        return {"status": "locked", "axes": axes}
 
     def period_diff(state: CloseState) -> CloseState:
         cui, period = state["cui"], state["period"]
