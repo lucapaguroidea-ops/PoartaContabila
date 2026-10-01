@@ -87,8 +87,14 @@
       "30_bon/fara_cui/",
       {"in": [{"var": "source_doc_id"}, ["extras", "extras_pdf"]]},
       "40_extras/{period}/",
-      {"==": [{"var": "source_doc_id"}, "sink_rj"]},
+      {"in": [{"var": "source_doc_id"}, ["sink_rj", "sink_balanta_saga"]]},
       "80_sink/",
+      {"in": [{"var": "source_doc_id"}, ["sink_rj_nextup", "sink_balanta_nextup"]]},
+      "80_sink/nextup/",
+      {"==": [{"var": "source_doc_id"}, "decont_cheltuieli"]},
+      "50_decont/{period}/",
+      {"==": [{"var": "source_doc_id"}, "stat_salarii"]},
+      "55_salarii/{period}/",
       "90_unknown/"
     ]
   }

@@ -131,3 +131,17 @@ Decided by the owner on 2026-10-01.
 6. **Deploy target** = a dedicated Railway project (`faithful-mercy`), region `europe-west4`, separate from the previous deployment's project (amended 2026-10-01 from "replaced in place": clean logs and variables). The previous project is not migrated; its code and setup are recorded outside this repo.
 
 Not changed by A1: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` of catalogs is unchanged.
+
+### A2 · 2026-10-01 — XML first; NextUp as a read-only witness; expense reports and payroll as sources
+
+Decided by the owner on 2026-10-01.
+
+1. **XML first.** Where a document exists as XML, the XML is the document primar and the only extract source; a PDF or scan of the same document is a companion and is not parsed. This covers RO e-Factura (UBL CIUS-RO from SPV) and EU/foreign e-invoices that arrive as XML. In an SPV download, `<id>.xml` is the invoice and `semnatura_<id>.xml` is its signature (a companion, never a second invoice); they are told apart by the XML root element, not by file name alone.
+2. **NextUp witness.** For a tenant whose books are kept in NextUp, NextUp's journal (registru jurnal) and trial balance (balanță) exports are an accepted *eye*: read-only inputs to reconciliation and close, through the same witness protocol as SAGA's report pack. CO.DiT axis `book_of_record` gains the value `nextup`.
+3. **No NextUp mouth.** Nothing is written to NextUp. A tenant with `book_of_record = nextup` gets gating (reconcile, controls, close) but no PreFile: WriteModules apply only where `book_of_record = saga_c`. One firm-period still has exactly one book of record.
+4. **New source documents** (Lane B, `draft`): `sink_rj_nextup`, `sink_balanta_saga`, `sink_balanta_nextup` (witness exports), `decont_cheltuieli` (expense report) and `stat_salarii` (payroll statement). New `fiscal_class` values `decont` and `payroll`; new `primary_kind` values `xls` and `msg`.
+5. **Split before emit.** An expense report is a container: folder_triage splits it into child packs (receipts, invoices, the report itself as evidence) before any emit, confirmed by a person through the new HITL kind `decont_split` on `folder_triage`. The container never becomes a Job. An invoice inside the report that implies SPV (company to company) is taken from its SPV `.xml` (rule 1); with only a PDF or scan, the child is `ro_efactura_pdf` in `_incomplete_spv` and waits for the XML. The 542 settlement note for the report is not built in v1 (`[de confirmat]`).
+6. **Payroll is evidence.** `stat_salarii` never emits a Job: payroll is posted in the book of record and arrives as `explained_sink_only`; the statement supports the payroll explained rule and the D112 filing item.
+7. **Reading exports:** account codes are read through the cell's display format, never from the stored number (SAGA stores analytic `401.00010` as the number 401.0001). Matching invoice numbers between documents and the book's journal uses a normalisation rule recorded on the reconcile profile and stays `[de confirmat]` until checked on a real book.
+
+Changed by A2: sink product (adds NextUp as a read-only eye), interrupt kinds (adds `decont_split`). Not changed: FDB write policy, graph topology, watched accounts. Catalog `schema_version` is unchanged; every new row is `draft`.

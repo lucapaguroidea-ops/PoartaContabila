@@ -58,3 +58,133 @@ rows:
       bon_cui_fork: false
     flux_candidates: []
     note: "Feeds expected set and PRE recon. Not a WriteModule source."
+
+  # ----- A2 · witness exports (read-only eye) -----
+  - source_doc_id: sink_rj_nextup
+    schema_version: "1"
+    status: draft
+    fiscal_class: recon
+    aisle: "80_sink/nextup/"
+    our_role_default: n/a
+    posting_eligible: false
+    emit_on_incomplete: false
+    primary:
+      required_kinds: [xlsx, csv]
+      companions_are: additional
+      missing_aisle: null
+    pairing:
+      with: []
+      key: [period]
+    extract:
+      backend: none
+      skip_if: []
+    identity:
+      needs_tenant_on_doc: true
+      needs_counterparty_cui: false
+      bon_cui_fork: false
+    flux_candidates: []
+    note: "NextUp registru jurnal export -> SinkLine[]. Eye only (A2). Not a Job."
+
+  - source_doc_id: sink_balanta_saga
+    schema_version: "1"
+    status: draft
+    fiscal_class: recon
+    aisle: "80_sink/"
+    our_role_default: n/a
+    posting_eligible: false
+    emit_on_incomplete: false
+    primary:
+      required_kinds: [xls, xlsx]
+      companions_are: additional
+      missing_aisle: null
+    pairing:
+      with: [sink_rj]
+      key: [period]
+    extract:
+      backend: none
+      skip_if: []
+    identity:
+      needs_tenant_on_doc: true
+      needs_counterparty_cui: false
+      bon_cui_fork: false
+    flux_candidates: []
+    note: "SAGA balanta de verificare -> solduri. Account codes via cell format (A2)."
+
+  - source_doc_id: sink_balanta_nextup
+    schema_version: "1"
+    status: draft
+    fiscal_class: recon
+    aisle: "80_sink/nextup/"
+    our_role_default: n/a
+    posting_eligible: false
+    emit_on_incomplete: false
+    primary:
+      required_kinds: [xlsx, csv]
+      companions_are: additional
+      missing_aisle: null
+    pairing:
+      with: [sink_rj_nextup]
+      key: [period]
+    extract:
+      backend: none
+      skip_if: []
+    identity:
+      needs_tenant_on_doc: true
+      needs_counterparty_cui: false
+      bon_cui_fork: false
+    flux_candidates: []
+    note: "NextUp balanta -> solduri, plus analytic -> partner CIF map (Lane A seed)."
+
+  # ----- A2 · containers and evidence -----
+  - source_doc_id: decont_cheltuieli
+    schema_version: "1"
+    status: draft
+    fiscal_class: decont
+    aisle: "50_decont/{period}/"
+    our_role_default: inbound
+    posting_eligible: false
+    emit_on_incomplete: false
+    primary:
+      required_kinds: [xls, xlsx, pdf, msg, eml]
+      companions_are: split
+      missing_aisle: null
+    pairing:
+      with: []
+      key: []
+    extract:
+      backend: document_ai
+      skip_if: [has_text_layer]
+    identity:
+      needs_tenant_on_doc: true
+      needs_counterparty_cui: false
+      bon_cui_fork: false
+    split:
+      children: [bon_fiscal, foreign_invoice, ro_efactura_ubl, ro_efactura_pdf, workings]
+      hitl: decont_split
+    flux_candidates: []
+    note: "Container (A2): split into child packs before emit; the report itself is evidence. Implied SPV invoices come from their .xml; a PDF-only child waits in _incomplete_spv. 542 settlement not built in v1 [de confirmat]."
+
+  - source_doc_id: stat_salarii
+    schema_version: "1"
+    status: draft
+    fiscal_class: payroll
+    aisle: "55_salarii/{period}/"
+    our_role_default: n/a
+    posting_eligible: false
+    emit_on_incomplete: false
+    primary:
+      required_kinds: [pdf, xls, xlsx]
+      companions_are: additional
+      missing_aisle: null
+    pairing:
+      with: []
+      key: [period]
+    extract:
+      backend: document_ai
+      skip_if: [has_text_layer]
+    identity:
+      needs_tenant_on_doc: true
+      needs_counterparty_cui: false
+      bon_cui_fork: false
+    flux_candidates: []
+    note: "Evidence only (A2): payroll is explained_sink_only in the book; supports the payroll rule and d112_payroll."

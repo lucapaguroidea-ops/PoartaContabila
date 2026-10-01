@@ -19,9 +19,9 @@ existing_axes:
 # New axes. All optional in v1. Seed null.
 new_axes:
   book_of_record:
-    values: [saga_c]
+    values: [saga_c, nextup]
     default: saga_c
-    note: "Locked. No second book."
+    note: "One book per firm-period. nextup = eye only, no PreFile (A2)."
   fx_currencies:
     values: [none, EUR, USD, mixed]
     default: none

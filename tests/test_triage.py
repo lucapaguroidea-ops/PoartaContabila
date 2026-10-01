@@ -201,3 +201,14 @@ def test_graph_thread_prefix_is_batch(cat):
     graph = build_triage_graph(cat, InMemoryJobStore(), checkpointer=MemorySaver())
     with pytest.raises(ValueError, match="batch:"):
         _run(graph, "job:t4", {"pack": _pack().model_dump()})
+
+
+def test_a2_aisles(cat):
+    payroll = decide_emit(
+        cat, _pack(source_doc_id="stat_salarii", kinds=["pdf"], our_role="n/a", identity_ok=True)
+    )
+    assert not payroll.emit and payroll.aisle == "55_salarii/2026-09/"
+    nextup = decide_emit(
+        cat, _pack(source_doc_id="sink_rj_nextup", kinds=["xlsx"], our_role="n/a", identity_ok=True)
+    )
+    assert not nextup.emit and nextup.aisle == "80_sink/nextup/"

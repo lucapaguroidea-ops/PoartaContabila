@@ -57,3 +57,13 @@ kinds:
       rule_id: slug|null
     effects: [tag_sink_lines, set_v2_action]
     cannot: [clear_blocking_without_rule]
+
+  # A2 · split an expense report into child packs before emit
+  - kind: decont_split
+    schema_version: "1"
+    graph_ids: [folder_triage]
+    actor: accountant
+    resume_schema:
+      parts: "[{part_hash: sha256, source_doc_id: slug in split.children, kinds: [primary_kind], bon_our_cui_on_doc: bool|null, counterparty_cui: cui|null}]"
+    effects: [mint_child_packs]
+    cannot: [emit_container, child_outside_split_children, emit_pdf_when_xml_exists, write_saga]

@@ -268,6 +268,13 @@ def _check_references(cat: Catalog) -> None:
         need(j.get("hitl_kinds"), cat.hitl, f"ArticoleJobs.{jk}.hitl_kinds")
     for sid, s in cat.source_docs.items():
         need(s.get("flux_candidates"), cat.articole, f"ArticoleSourceDoc.{sid}.flux_candidates")
+        if s.get("split"):
+            need(s["split"].get("children"), cat.source_docs, f"ArticoleSourceDoc.{sid}.split")
+            need([s["split"].get("hitl")], cat.hitl, f"ArticoleSourceDoc.{sid}.split.hitl")
+            if s.get("posting_eligible"):
+                errors.append(
+                    f"ArticoleSourceDoc.{sid}: a split container cannot be posting_eligible"
+                )
     for bid, b in cat.bon.items():
         need([b.get("write_module")], cat.write_modules, f"ArticolBon.{bid}.write_module")
     for ck, c in cat.close_kinds.items():

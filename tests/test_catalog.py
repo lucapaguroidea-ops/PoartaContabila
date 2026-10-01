@@ -139,3 +139,41 @@ def test_unparseable_yaml_is_an_error(pack_copy):
     (pack_copy / "30_cale/ARTICOLE_GRAPH_v1.yaml").write_text("graphs: [\n)\n")
     with pytest.raises(CatalogError, match="ARTICOLE_GRAPH_v1.yaml"):
         load_catalog(pack_copy)
+
+
+# ----- A2 -----
+
+
+def test_a2_sources_exist_and_never_post(cat):
+    for sid in (
+        "sink_rj_nextup",
+        "sink_balanta_saga",
+        "sink_balanta_nextup",
+        "decont_cheltuieli",
+        "stat_salarii",
+    ):
+        assert sid in cat.source_docs, sid
+        assert cat.source_docs[sid]["posting_eligible"] is False, sid
+
+
+def test_decont_is_a_split_container(cat):
+    split = cat.source_docs["decont_cheltuieli"]["split"]
+    assert split["hitl"] == "decont_split"
+    assert "decont_split" in cat.allowed_hitl("folder_triage")
+    assert set(split["children"]) <= set(cat.source_docs)
+
+
+def test_split_child_must_exist(pack_copy):
+    def bad(d):
+        for row in d["rows"]:
+            if row["source_doc_id"] == "decont_cheltuieli":
+                row["split"]["children"].append("invented_child")
+
+    _edit(pack_copy / "60_harvest/ARTICOLE_SOURCE_DOC_ADD_v1.yaml", bad)
+    with pytest.raises(CatalogError, match="invented_child"):
+        load_catalog(pack_copy)
+
+
+def test_book_of_record_allows_nextup_as_eye(cat):
+    axes = cat.docs["ArticoleCoDitAxes"]["new_axes"]
+    assert axes["book_of_record"]["values"] == ["saga_c", "nextup"]

@@ -24,7 +24,7 @@ normalized/extract_meta.json
 
 Rules:
 
-- UBL CIUS-RO does not go through OCR. Parse XML → CanonicalDocument fields.
+- XML first (A2): when a document exists as XML (UBL CIUS-RO, EU e-invoice), parse the XML → CanonicalDocument fields; never OCR or parse a PDF of the same document. In SPV zips, `semnatura_*.xml` is the signature companion.
 - `skip_if: [has_text_layer, is_ubl]` is on the SourceDoc row.
 - Graph state stores field strings, not raw model JSON.
 - Swap Docling later without changing node names. Same three files.

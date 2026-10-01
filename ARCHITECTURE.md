@@ -135,7 +135,7 @@ solduri(cui, period) -> dict
 analytic(cui, period, root) -> dict
 ```
 
-v1 reads SAGA report pack / RJ-CM export (practice takeover pack). FDB SQL later on a pinned SAGA C build. Core graphs depend only on the protocol.
+v1 reads SAGA report pack / RJ-CM export (practice takeover pack), or, for a tenant with `book_of_record = nextup`, NextUp's journal and balance exports (A2, eye only). FDB SQL later on a pinned SAGA C build. Core graphs depend only on the protocol.
 
 Watched v1: 401, 4111, 4426, 4427, 4428, 5121, 5311.
 

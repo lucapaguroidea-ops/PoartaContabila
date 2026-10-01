@@ -10,7 +10,19 @@ from pydantic import Field
 from poarta_contabila.types.base import Closed, Cui, FiscalDate, Money, Period, Rate, Slug
 
 PrimaryKind = Literal[
-    "ubl_spv", "pdf", "xml", "jpeg", "png", "xlsx", "csv", "mt940", "sta", "eml", "unknown"
+    "ubl_spv",
+    "pdf",
+    "xml",
+    "jpeg",
+    "png",
+    "xls",
+    "xlsx",
+    "csv",
+    "mt940",
+    "sta",
+    "eml",
+    "msg",
+    "unknown",
 ]
 
 DocClass = Literal[
