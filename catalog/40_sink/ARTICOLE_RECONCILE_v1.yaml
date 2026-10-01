@@ -175,7 +175,7 @@ subgraphs:
     output: {verdict_det, hit_idxs, expect_accounts}
     llm: false
   llm_review:
-    input: [verdict_det, hits[≤20], canonical_excerpt, profile]
+    input: [verdict_det, "hits[≤20]", canonical_excerpt, profile]
     output: {verdict_review, reason}
     llm: true
     independent_of: jev_extract
@@ -204,4 +204,3 @@ final:
   pre + absent → ingest may package
   post + how_mismatch → HITL recon_how_mismatch
   extras PDF is not keyed by date+gross on one Job — see catalog/60_harvest/ARTICOLE_EXTRAS_GRAIN_v1.yaml
-)

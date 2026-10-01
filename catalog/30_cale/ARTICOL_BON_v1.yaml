@@ -40,7 +40,7 @@ row_schema:
   status: draft|active|deprecated|yanked
   valid_from: date
   valid_to: date|null
-  filters: {nature_code?, A_band?}
+  filters: "{nature_code?, A_band?}"
   extra_filters: {our_cui_on_doc: bool}
   require: {axis: [values]}
   forbid: {axis: [values]}
@@ -398,4 +398,3 @@ rows:
 
 # After matrix bind, reconcile_pre.expect_accounts :=
 #   [cont_cheltuiala] + ([tva_cont] if tva_deducere in [full, partial_50])
-)

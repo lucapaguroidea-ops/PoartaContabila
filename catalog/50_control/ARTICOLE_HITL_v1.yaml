@@ -176,4 +176,3 @@ kinds:
     resume_schema: {forma: slug|null, impozit: slug|null, tva: slug|null, exig: slug|null}
     effects: [codit_axes]
     cannot: [silent_remap_F_star]
-)

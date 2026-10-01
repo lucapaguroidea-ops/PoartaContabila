@@ -12,6 +12,7 @@ model: "jev-classifier-v1"
 # ---------------------------------------------------------------------------
 # Attached to ArticoleSourceDoc — node folder_triage.sniff
 # ---------------------------------------------------------------------------
+decisions:
 - parent: ArticoleSourceDoc
   decision_id: jev_source_doc
   node: folder_triage.sniff
@@ -103,4 +104,3 @@ model: "jev-classifier-v1"
     - id: altele
       when: "none of the above"
   then: "graph runs ArticolBon.matches() — Jev does not pick bon_combustibil_50"
-)

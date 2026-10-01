@@ -323,4 +323,3 @@ rows:
 
 # class_gate(pack) := row.posting_eligible AND not (primary missing AND not emit_on_incomplete)
 # extract node := row.extract.backend (v1 default document_ai; later docling)
-)

@@ -25,8 +25,8 @@ row_schema:
   graph_id: enum
   valid_from: date
   valid_to: date|null
-  filters: {fiscal_class?, our_role?}
-  extra_filters: {our_cui_on_doc?, is_storno?}
+  filters: "{fiscal_class?, our_role?}"
+  extra_filters: "{our_cui_on_doc?, is_storno?}"
   require: {axis: [values]}
   forbid: {axis: [values]}
   route_key: enum
@@ -377,4 +377,3 @@ flux:
       expect_accounts: ["4428"]
       tolerance: "0.00"
       require_all_accounts: false
-)

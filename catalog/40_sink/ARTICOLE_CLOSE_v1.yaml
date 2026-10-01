@@ -91,4 +91,3 @@ v4:
   never_rewrite_acked_jobs: true
 
 not_a_job: true
-)

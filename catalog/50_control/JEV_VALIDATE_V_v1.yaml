@@ -91,4 +91,3 @@ never:
   - auto_bind_on_v8_fail
   - use_threshold_as_matches
   - run_v8_on_source_doc_or_nature
-)
