@@ -25,6 +25,10 @@ the answer and the session records it.
 - [ ] **Railway domain**: the `PoartaContabila` service has no public domain (checked
       2026-10-02), so the operator API cannot be reached from outside. Generate one (service →
       Settings → Networking) before testing on Railway; it runs PR #5's code until PR #6 merges.
+- [ ] **Smoke run on Railway**, once the domain exists and `MODEL_CALLS=dry` is set:
+      `OPERATOR_TOKEN=… uv run python -m poarta_contabila.smoke --base-url https://<domain>`.
+      It writes only the invented firm `1000009`, and prints each step and what every model
+      role would have been sent, by graph and node. `--local` shows the same without a server.
 - [ ] **Test tenants** carry `"data_class": "synthetic"` (`PUT /tenants/{cui}`); any other tenant
       is client data and no model is called for it until the EU route exists.
 - [ ] **Scaleway (EU)**: which Scaleway-hosted models serve which role, once we leave synthetic

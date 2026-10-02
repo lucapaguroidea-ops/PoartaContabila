@@ -40,6 +40,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-26 | done | WP-25 | Shadow roles: every model role observed at its place in the flow (dry) |
 | WP-27 | done | WP-23 | `reconcile_sink` POST stage: how SAGA posted an acked document (`recon_how_mismatch`) |
 | WP-28 | done | WP-06R | Expense reports over HTTP: `folder_triage` splits the container, a person names the parts |
+| WP-29 | done | WP-28 | Synthetic smoke run: one invented firm through every graph over HTTP, model calls by place |
 
 ## WP details
 
@@ -427,6 +428,21 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   `ocr_decont_split` is a shadow role: `MODEL_CALLS=dry` records what Gemini would be given.
 - Open: parts are named by a person; the Gemini proposal waits on the live sender and model ids;
   receipts and workings parts are evidence only (no mouth).
+
+### WP-29 Synthetic smoke run
+- Asked by the owner 2026-10-02: test each role's place in the flow on Railway.
+- Built: `python -m poarta_contabila.smoke` (`--local`: an in-memory runtime, `MODEL_CALLS=dry`;
+  `--base-url …` with `OPERATOR_TOKEN` in the environment: the deployed service). One invented
+  firm (`1000009`, `data_class: synthetic`, one bank account) through every graph with
+  scripted answers: the registru jurnal; an SPV invoice → `v3_approve` approve; a statement
+  (header + tables) → the receipt bound to its partner and invoice; an expense report →
+  `decont_split` → one workings part; `reconcile_sink` (`need_rj_export` answered with the
+  uploaded journal, any other question left); `monthly_close` → `v2_close` → `hold`. Then
+  `GET /model-calls` for the firm, grouped by graph and node, with each refusal's reason. An
+  answer is given only when that question is waiting, so a rerun changes nothing. It refuses a
+  server whose `MODEL_CALLS` is neither `off` nor `dry`; it never uses the agent token.
+- Open: the service needs a public domain first (`docs/OWNER_CHECKLIST.md`); packaged documents
+  stay on `/agent/pull` while no agent is connected.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
