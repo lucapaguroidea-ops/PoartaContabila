@@ -17,8 +17,8 @@ Nothing is minted or stored except the model-call records. ``--model`` reads wit
 Google AI Studio model for comparison (e.g. a Pro model on the hard cases); production keeps
 the catalog's one pinned model (00_LAW §3 invariant 5).
 
-    OPERATOR_TOKEN=… uv run python -m poarta_contabila.ocr_eval --base-url https://…
-    OPERATOR_TOKEN=… uv run python -m poarta_contabila.ocr_eval --base-url https://… \\
+    GRAPHUSERTOKEN_OPERATOR=… uv run python -m poarta_contabila.ocr_eval --base-url https://…
+    GRAPHUSERTOKEN_OPERATOR=… uv run python -m poarta_contabila.ocr_eval --base-url https://… \\
         --model gemini-…-pro --case two_pages
     uv run python -m poarta_contabila.ocr_eval --write-pdfs ./eval-pdfs   # look at them
 """
@@ -26,7 +26,6 @@ the catalog's one pinned model (00_LAW §3 invariant 5).
 from __future__ import annotations
 
 import argparse
-import os
 import random
 import sys
 import time
@@ -401,7 +400,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="poarta_contabila.ocr_eval", description=__doc__.split("\n")[0]
     )
-    ap.add_argument("--base-url", help="the operator API (OPERATOR_TOKEN in the environment)")
+    ap.add_argument("--base-url", help="the operator API (GRAPHUSERTOKEN_OPERATOR in the env)")
     ap.add_argument("--model", help="read with this Google AI Studio model instead of the pin")
     ap.add_argument("--case", action="append", help="only this case (repeatable)")
     ap.add_argument("--write-pdfs", metavar="DIR", help="write the cases' PDFs here and stop")
@@ -417,9 +416,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not args.base_url:
         ap.error("--base-url or --write-pdfs")
-    token = os.environ.get("OPERATOR_TOKEN")
+    from poarta_contabila.smoke import CALLER_ENV, caller_token
+
+    token = caller_token()
     if not token:
-        print("set OPERATOR_TOKEN (the service's operator token) in the environment")
+        print(f"set {' or '.join(CALLER_ENV[:2])} in the environment")
         return 2
     import httpx
 

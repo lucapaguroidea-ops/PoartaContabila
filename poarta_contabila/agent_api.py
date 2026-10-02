@@ -1,4 +1,5 @@
-"""Agent routes (ARCHITECTURE §10). Bearer ``AGENT_SHARED_TOKEN``; no other token opens them.
+"""Agent routes (ARCHITECTURE §10). Bearer ``GRAPHUSERTOKEN_AGENT_SHARED`` (old name
+``AGENT_SHARED_TOKEN``); no other token opens them.
 
 No token configured, or no agent runtime wired → 503: the gate stays shut.
 """

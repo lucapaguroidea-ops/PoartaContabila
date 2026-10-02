@@ -284,8 +284,10 @@ MODEL_CALLS=off                # off | dry (record only) | live (synthetic docum
 MAX_UPLOAD_MB=32               # request-body cap; over it → 413 (WP-34)
 DOCUMENT_AI_PROCESSOR=          # projects/{p}/locations/{eu}/processors/{id} (WP-21)
 DOCUMENT_AI_CREDENTIALS_JSON=   # service-account key; else Application Default Credentials
-AGENT_SHARED_TOKEN=
-OPERATOR_TOKEN=        # people: tenants, uploads, ingest, answers (≠ agent token)
+GRAPHUSERTOKEN_AGENT_SHARED=       # the Windows agent (old name AGENT_SHARED_TOKEN)
+GRAPHUSERTOKEN_OPERATOR=           # people: tenants, uploads, ingest, answers (≠ agent token;
+                                   #   old name OPERATOR_TOKEN)
+GRAPHUSERTOKEN_CLAUDE_SYSBUILDER=  # the build agent: operator routes, synthetic tenants only (WP-38)
 ANAF_SPV_CLIENT_ID= ANAF_SPV_CLIENT_SECRET=   # SPV register / e-Factura pull (WP-05)
 ```
 
