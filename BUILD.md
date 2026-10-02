@@ -44,6 +44,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-30 | done | WP-22 | Settlement proposals for partial payments, part-paid invoices and one payment for several |
 | WP-31 | done | WP-27 | POST stage compares the amounts on the partner and VAT accounts with the document |
 | WP-32 | done | WP-26 | `sys2_draft_rule` in shadow at `monthly_close.v2_gate`: every model role has a call site |
+| WP-33 | done | WP-06R | Answer log: every answer a person submits, its outcome and its author, append-only |
 
 ## WP details
 
@@ -486,6 +487,22 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   call site.
 - Open: nothing is sent (no sender, no model ids); a draft would be shown with the `v2_close`
   question, never written as a rule by itself.
+
+### WP-33 Answer log
+- Built: `answers.py` and `domain.answers`, an insert-only table. Every answer submitted on
+  `/jobs/…/resume`, `/recon/…/resume`, `/close/…/resume` and `/triage/…/resume` is logged:
+  - graph, thread, tenant, the question's kind and sha256 (without its `error`), the answer
+    as sent, UTC time;
+  - the author from the optional `X-Operator-Name` header (1–64 printable characters, else
+    422 before anything runs), since one shared token names nobody;
+  - the outcome: `accepted` (with the next question's kind), `asked_again` (the same question
+    came back with its `error`) or `no_question`.
+
+  With nothing waiting, the graph is no longer run at all. Before, resuming a recon or close
+  thread that never started failed with a 500. `GET /answers?cui=&thread=&limit=` reads the
+  log, newest first.
+- Open: one token per person instead of a self-declared name; the log keeps answers whole, so
+  a client tenant's answers hold client data and fall under the same retention as its jobs.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

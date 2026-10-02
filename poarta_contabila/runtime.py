@@ -22,6 +22,8 @@ from typing import Any
 from langgraph.types import Command
 
 from poarta_contabila.agent import AgentService
+from poarta_contabila.answers import InMemoryAnswerLog
+from poarta_contabila.answers import record as record_answer
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.close import CloseDeps, InMemoryCloseStore, build_close_graph
 from poarta_contabila.codit import Codit, CoditInput, write_codit
@@ -114,10 +116,13 @@ class Runtime:
     extracts: Any = None  # InMemoryExtractStore | PostgresExtractStore
     model_calls: Any = None  # InMemoryModelCallStore | PostgresModelCallStore
     model_mode: str = "off"  # MODEL_CALLS: off | dry (record, send nothing)
+    answers: Any = None  # InMemoryAnswerLog | PostgresAnswerLog (WP-33)
 
     def __post_init__(self) -> None:
         if self.model_calls is None:
             self.model_calls = InMemoryModelCallStore()
+        if self.answers is None:
+            self.answers = InMemoryAnswerLog()
         if self.model_mode not in ("off", "dry"):
             self.model_mode = "off"  # an unknown mode calls nothing
         if self.jev is None and self.model_mode == "dry":
@@ -264,10 +269,48 @@ class Runtime:
         question = next((i.value for t in tasks for i in t.interrupts), None)
         return {"job": job.model_dump(), "question": question}
 
-    def resume(self, job_id: str, payload: Any) -> dict[str, Any]:
-        self.jobs.get(job_id)  # KeyError for an unknown job
-        self.ingest.invoke(Command(resume=payload), self._cfg(job_id))
+    def resume(self, job_id: str, payload: Any, operator: str | None = None) -> dict[str, Any]:
+        job = self.jobs.get(job_id)  # KeyError for an unknown job
+        self._answer(
+            self.ingest, self._cfg(job_id), "ingest_source_doc", job.tenant.cui, payload, operator
+        )
         return self.view(job_id)
+
+    # -- the answer log (WP-33) --
+
+    @staticmethod
+    def _waiting(graph: Any, cfg: dict) -> dict[str, Any] | None:
+        tasks = graph.get_state(cfg).tasks
+        return next((i.value for t in tasks for i in t.interrupts), None)
+
+    def _answer(
+        self,
+        graph: Any,
+        cfg: dict,
+        graph_id: str,
+        cui: str | None,
+        payload: Any,
+        operator: str | None,
+    ) -> None:
+        """Resume *graph* with a person's answer and log it, whatever became of it.
+
+        With no question waiting the graph is not touched: an answer to nothing changes
+        nothing (it is logged as ``no_question``).
+        """
+        before = self._waiting(graph, cfg)
+        if before is not None:
+            graph.invoke(Command(resume=payload), cfg)
+        self.answers.add(
+            record_answer(
+                graph_id=graph_id,
+                thread_id=cfg["configurable"]["thread_id"],
+                tenant_cui=cui,
+                before=before,
+                after=self._waiting(graph, cfg),
+                answer=payload,
+                operator=operator,
+            )
+        )
 
     # -- reconcile_sink (WP-23) --
 
@@ -401,8 +444,11 @@ class Runtime:
         self.reconcile.invoke({"cui": cui, "period": period, "settled": []}, cfg)
         return self.recon_view(cui, period)
 
-    def resume_recon(self, cui: str, period: str, payload: Any) -> dict[str, Any]:
-        self.reconcile.invoke(Command(resume=payload), self._recon_cfg(cui, period))
+    def resume_recon(
+        self, cui: str, period: str, payload: Any, operator: str | None = None
+    ) -> dict[str, Any]:
+        cfg = self._recon_cfg(cui, period)
+        self._answer(self.reconcile, cfg, "reconcile_sink", cui, payload, operator)
         return self.recon_view(cui, period)
 
     # -- period --
@@ -652,8 +698,11 @@ class Runtime:
         self.close.invoke({"cui": cui, "period": period, "axes": axes}, cfg)
         return self.close_view(cui, period)
 
-    def resume_close(self, cui: str, period: str, payload: Any) -> dict[str, Any]:
-        self.close.invoke(Command(resume=payload), self._close_cfg(cui, period))
+    def resume_close(
+        self, cui: str, period: str, payload: Any, operator: str | None = None
+    ) -> dict[str, Any]:
+        cfg = self._close_cfg(cui, period)
+        self._answer(self.close, cfg, "monthly_close", cui, payload, operator)
         return self.close_view(cui, period)
 
     def period_diff(
@@ -775,9 +824,13 @@ class Runtime:
         self.triage.invoke({"pack": pack.model_dump()}, cfg)
         return {"created": True, **self.batch_view(batch_id)}
 
-    def resume_batch(self, batch_id: str, payload: Any) -> dict[str, Any]:
+    def resume_batch(
+        self, batch_id: str, payload: Any, operator: str | None = None
+    ) -> dict[str, Any]:
         self.batch_view(batch_id)  # KeyError for an unknown batch
-        self.triage.invoke(Command(resume=payload), self._batch_cfg(batch_id))
+        cfg = self._batch_cfg(batch_id)
+        cui = (self.triage.get_state(cfg).values.get("pack") or {}).get("tenant_cui")
+        self._answer(self.triage, cfg, "folder_triage", cui, payload, operator)
         return self.batch_view(batch_id)
 
     def ingest_upload(self, cui: str, data: bytes, filename: str) -> dict[str, Any]:
@@ -881,6 +934,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     from psycopg_pool import ConnectionPool
 
     from poarta_contabila.agent import PostgresAgentStore
+    from poarta_contabila.answers import PostgresAnswerLog
     from poarta_contabila.close import PostgresCloseStore
     from poarta_contabila.codit import PostgresCoditStore
     from poarta_contabila.extract.contract import PostgresExtractStore
@@ -922,5 +976,6 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         model_mode=model_mode,
         statement_reader=document_ai_from_env(),
         extracts=PostgresExtractStore(dsn),
+        answers=PostgresAnswerLog(dsn),
     )
     return runtime, "ok"

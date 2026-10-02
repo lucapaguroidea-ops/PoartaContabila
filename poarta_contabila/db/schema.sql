@@ -162,6 +162,18 @@ CREATE TABLE IF NOT EXISTS domain.model_calls (
 );
 CREATE INDEX IF NOT EXISTS model_calls_role_at ON domain.model_calls (role_id, at);
 
+-- WP-33: every answer a person submits; insert-only (no code path updates or deletes a row)
+CREATE TABLE IF NOT EXISTS domain.answers (
+    seq         bigserial PRIMARY KEY,
+    answer_id   text NOT NULL UNIQUE,
+    at          text NOT NULL,               -- UTC, microseconds
+    tenant_cui  text,
+    thread_id   text NOT NULL,
+    body        jsonb NOT NULL
+);
+CREATE INDEX IF NOT EXISTS answers_tenant ON domain.answers (tenant_cui, seq);
+CREATE INDEX IF NOT EXISTS answers_thread ON domain.answers (thread_id, seq);
+
 CREATE TABLE IF NOT EXISTS domain.sink_exports (
     export_id   text PRIMARY KEY,            -- {kind}:{sha256 of the file}
     tenant_cui  text NOT NULL,
