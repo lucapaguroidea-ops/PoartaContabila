@@ -136,6 +136,12 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   WP-11; 4428 open documents for TVA-la-încasare; a bank/cash movement with no source until WP-13).
   Expected postings other than invoices (reverse charge, 404/408, bank, cash) are not modelled yet,
   so they show as differences for a person, never as plugs.
+- 2026-10-02 (R1: SAGA books TVA la încasare on `4428.TP` / `4428.TI`): the journal export's
+  invoice VAT is read through the synthetic account, so VAT on `4428.TP` / `4428.TI` (or any
+  `4426.x` / `4427.x`) counts. Open: the expected set still books invoice VAT on 4426 / 4427;
+  under `exig = tva_la_incasare` SAGA books it on 4428 and moves it at payment, so parity shows
+  those as differences for a person, and `M1_8_4428_open` fails closed (it needs the journals'
+  neexigible VAT, whose export columns are `[de confirmat]`). Both wait on the copy-firm notes.
 
 ### WP-09 Explained rules
 - `POST /rules` versioned. HITL `explained_rule` and `control_disposition`.

@@ -193,3 +193,33 @@ def test_nextup_eye_uses_balance_cifs(nextup_lines):
     analytic = eye.analytic("1000009", "2026-09", "401")
     assert set(analytic) == {"401_ALTFURNIZOR", "401XVENDOR"}
     assert "4111_CLIENTTEST" not in analytic
+
+
+def test_vat_on_analytics_counts_4428_tp_ti():
+    """R1: SAGA books TVA la încasare on 4428.TP / 4428.TI; the VAT of such an invoice is read."""
+    from poarta_contabila.sinks.exports import ExportEye, SinkLine
+
+    def ln(row, journal, number, debit, credit, amount):
+        return SinkLine(
+            product="saga",
+            row=row,
+            seq=None,
+            date="2026-09-10",
+            journal=journal,
+            doc_number=number,
+            explanation="",
+            debit=debit,
+            credit=credit,
+            amount=amount,
+        )
+
+    lines = [
+        ln(1, "Intrari", "AB 7", "628", "401.00001", "100.00"),
+        ln(2, "Intrari", "AB 7", "4428.TP", "401.00001", "21.00"),
+        ln(3, "Iesiri", "FX 8", "4111.00002", "704", "200.00"),
+        ln(4, "Iesiri", "FX 8", "4111.00002", "4428.TI", "42.00"),
+    ]
+    eye = ExportEye(product="saga", lines=lines, cui="1000009", periods=["2026-09"])
+    docs = {d.number: d for d in eye.documents("1000009", "2026-09")}
+    assert (docs["AB 7"].gross, docs["AB 7"].net, docs["AB 7"].vat) == ("121.00", "100.00", "21.00")
+    assert (docs["FX 8"].gross, docs["FX 8"].net, docs["FX 8"].vat) == ("242.00", "200.00", "42.00")
