@@ -56,6 +56,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-42 | done | WP-41 | Lite first always; a statement no model can read waits and is read later; reading budget |
 | WP-43 | done | WP-42 | The operator's choice when every tier is spent: wait, reserve models until midnight, or set aside |
 | WP-44 | done | WP-37 | The reading evaluation says why a read does not tie, and how many rows the model returned |
+| WP-45 | done | WP-44 | A balance or total row is not a line, whatever column its label is in; the brief keeps balances out of tables |
 
 ## WP details
 
@@ -731,6 +732,17 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - `CaseScore` gains `tie_error` (`parse_statement`'s reason, at most 300 characters) and
   `rows_read` (every row the model returned); `render` prints
   `does not tie (N rows read): <reason>` under the case.
+
+### WP-45 Balance rows are not lines
+- Found 2026-10-02 by WP-44 on the live evaluation: `two_pages` with `gemini-3.5-flash-lite`
+  returned 61 rows for 60 lines; `table 2 row 21: a line moves on exactly one side`. The
+  extra row is the closing balance (`Sold final: …`) with its label outside the description
+  column, so the existing skip (description starting Total / Sold) missed it.
+- `parse_statement` skips a row when any cell starts with Total / Sold (accents and case
+  ignored, so Soldul too). Safe because of the tie: a real line skipped this way leaves
+  opening − debits + credits ≠ closing, and the statement is refused.
+- `ocr_extract`'s card task now says the tables hold movement lines only; the opening and
+  closing balances go in the header, never as a table row (the card hash changes).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
