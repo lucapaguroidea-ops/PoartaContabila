@@ -57,6 +57,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-43 | done | WP-42 | The operator's choice when every tier is spent: wait, reserve models until midnight, or set aside |
 | WP-44 | done | WP-37 | The reading evaluation says why a read does not tie, and how many rows the model returned |
 | WP-45 | done | WP-44 | A balance or total row is not a line, whatever column its label is in; the brief keeps balances out of tables |
+| WP-46 | done | WP-08, WP-13 | C0 counts a statement line's counterpart: from its binding, or one matching posting in the books |
 
 ## WP details
 
@@ -743,6 +744,21 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   opening − debits + credits ≠ closing, and the statement is refused.
 - `ocr_extract`'s card task now says the tables hold movement lines only; the opening and
   closing balances go in the header, never as a table row (the card hash changes).
+
+### WP-46 A statement line's counterpart in C0
+- Found 2026-10-02 while tracing the synthetic firm's held September close: C0 implied only
+  the bank side (5121) of a statement line, so a supplier payment (401 Dr) or a customer
+  receipt (4111 Cr) in the books was always a difference, and no month with bank activity
+  could be filed.
+- Decided by the owner 2026-10-02: a line bound to a customer implies 4111, to a supplier
+  401, on the side opposite 5121 (what `incasare_xml` / `plata_xml` post); a line never bound
+  (already in the books when it arrived) implies the books' own counterpart only when its bank
+  document there is one journal line, 401 Dr for a payment or 4111 Cr for a receipt, of
+  exactly the line's amount. Anything else (another account, a split posting, a `%` entry, a
+  role of `both` / `unknown` with no such posting) stays a difference. A payment with no
+  statement line here is still a difference (the fixture test keeps it).
+- `period_diff.bank_counterparts`; the books' documents are matched as before (bank: side +
+  date + amount), and the counterpart is added to the implied turnover. Catalog: C0 note.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

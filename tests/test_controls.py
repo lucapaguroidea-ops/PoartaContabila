@@ -258,3 +258,119 @@ def test_postgres_period_store(cat):
         (n,) = conn.execute("SELECT count(*) FROM domain.control_runs").fetchone()
         (m,) = conn.execute("SELECT count(*) FROM domain.close_snapshots").fetchone()
     assert (n, m) == (len(runs), 1)
+
+
+# ----- WP-46: a statement line's counterpart (owner, 2026-10-02) -----
+
+from poarta_contabila.period_diff import bank_counterparts  # noqa: E402
+from poarta_contabila.sinks.exports import SinkLine  # noqa: E402
+
+
+def _ln(row, day, journal, doc, debit, credit, amount):
+    return SinkLine(
+        product="saga",
+        row=row,
+        seq=str(row),
+        date=day,
+        journal=journal,
+        doc_number=doc,
+        explanation="",
+        debit=debit,
+        credit=credit,
+        amount=amount,
+    )
+
+
+INVOICES = [  # 1427 bought for 1 210,00; FX-101 sold for 182,11
+    _ln(1, "2026-09-03", "Intrari", "1427", "628", "401.00010", "1000.00"),
+    _ln(2, "2026-09-03", "Intrari", "1427", "4426", "401.00010", "210.00"),
+    _ln(3, "2026-09-10", "Iesiri", "FX-101", "4111.00001", "704", "150.50"),
+    _ln(4, "2026-09-10", "Iesiri", "FX-101", "4111.00001", "4427", "31.61"),
+]
+PAYMENT = _ln(5, "2026-09-15", "Banca", "OP-77", "401.00010", "5121.01", "1210.00")
+RECEIPT = _ln(6, "2026-09-20", "Banca", "IN-1", "5121.01", "4111.00001", "182.11")
+
+
+def _books(*lines):
+    return ExportEye(product="saga", lines=[*INVOICES, *lines], cui=CUI)
+
+
+def _line(doc_class, day, gross, *, role, n, status="already_in_sink"):
+    e = _exp(f"EXT-{n}", day, gross, "0.00", doc_class=doc_class, status=status, n=n)
+    partner = e.doc.partner.model_copy(update={"role": role})
+    return ExpectedJob(job=e.job, doc=e.doc.model_copy(update={"partner": partner}))
+
+
+def _month(*bank):
+    return [_exp(*PURCHASE, n=1), _exp(*SALE, doc_class="iesire", n=2), *bank]
+
+
+@pytest.mark.parametrize("role", ["supplier", "unknown"])
+def test_a_payment_and_a_receipt_tie_by_binding_or_by_their_posting(cat, role):
+    receipt_role = "customer" if role == "supplier" else "unknown"
+    expected = _month(
+        _line("plata", "2026-09-15", "1210.00", role=role, n=3),
+        _line("incasare", "2026-09-20", "182.11", role=receipt_role, n=4),
+    )
+    diff, runs = build_period_diff(cat, CUI, PERIOD, expected, _books(PAYMENT, RECEIPT), axes=PAYER)
+    assert diff.synthetic_delta["401:debit"].model_dump() == {
+        "expected": "1210.00",
+        "sink": "1210.00",
+        "delta": "0.00",
+    }
+    assert diff.synthetic_delta["4111:credit"].delta == "0.00"
+    assert diff.synthetic_delta["5121:debit"].delta == "0.00"
+    assert _status(runs, "C0_synthetic_parity") == "PASS"
+    assert can_file(diff) and diff.blockers == []
+
+
+def test_a_bound_line_is_checked_against_where_the_books_put_it(cat):
+    """Bound to a supplier, posted against a customer: both accounts show the difference."""
+    wrong = _ln(5, "2026-09-15", "Banca", "OP-77", "4111.00001", "5121.01", "1210.00")
+    expected = _month(_line("plata", "2026-09-15", "1210.00", role="supplier", n=3))
+    diff, runs = build_period_diff(cat, CUI, PERIOD, expected, _books(wrong), axes=PAYER)
+    assert diff.synthetic_delta["401:debit"].delta == "-1210.00"
+    assert diff.synthetic_delta["4111:debit"].delta == "1210.00"
+    assert _status(runs, "C0_synthetic_parity") == "FAIL" and not can_file(diff)
+
+
+@pytest.mark.parametrize(
+    "posting",
+    [
+        # never bound, posted against a customer: not the payment account, not taken
+        [_ln(5, "2026-09-15", "Banca", "OP-77", "4111.00001", "5121.01", "1210.00")],
+        # split over two lines: only one line of the whole amount is taken
+        [
+            _ln(5, "2026-09-15", "Banca", "OP-77", "401.00010", "5121.01", "1000.00"),
+            _ln(6, "2026-09-15", "Banca", "OP-77", "401.00010", "5121.01", "210.00"),
+        ],
+    ],
+)
+def test_an_unbound_line_takes_only_one_posting_of_its_account_and_amount(cat, posting):
+    expected = _month(_line("plata", "2026-09-15", "1210.00", role="unknown", n=3))
+    diff, runs = build_period_diff(cat, CUI, PERIOD, expected, _books(*posting), axes=PAYER)
+    assert {b.kind for b in diff.inbound} == {"expected"}  # the bank document is matched
+    assert _status(runs, "C0_synthetic_parity") == "FAIL" and not can_file(diff)
+
+
+def test_a_line_not_in_the_books_implies_nothing_from_them(cat):
+    line = _line("plata", "2026-09-15", "1210.00", role="unknown", n=3)
+    assert bank_counterparts([line], {}, [PAYMENT]) == []
+    bound = _line("plata", "2026-09-15", "1210.00", role="supplier", n=3, status="packaged")
+    assert bank_counterparts([bound], {}, []) == [("401", "debit", Decimal("1210.00"))]
+
+
+def test_the_fixture_payment_with_its_statement_line_ties_401(cat):
+    """The September books (fixtures/sink/saga_rj.xls): its payment, once a statement line
+    here matches it, no longer leaves 401 debit as a difference."""
+    eye = ExportEye(product="saga", lines=read_saga_rj(SINK / "saga_rj.xls"), cui=CUI)
+    expected = [
+        _exp(*PURCHASE, n=1),
+        _exp("AB0058", "2026-09-10", "167.06", "16.56", n=2),
+        _exp(*SALE, doc_class="iesire", n=3),
+        _line("plata", "2026-09-15", "1210.00", role="unknown", n=4),
+    ]
+    diff, runs = build_period_diff(cat, CUI, PERIOD, expected, eye, axes=PAYER)
+    assert diff.synthetic_delta["401:debit"].delta == "0.00"
+    assert diff.synthetic_delta["5121:credit"].delta == "0.00"
+    assert _status(runs, "C0_synthetic_parity") == "PASS"

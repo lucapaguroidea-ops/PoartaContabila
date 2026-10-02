@@ -34,7 +34,7 @@ controls:
     watched: ["401", "4111", "4426", "4427", "4428", "5121", "5311"]
     epsilon: "0.01"
     on_fail: [no_file]
-    note: "Never plug. Unexplained remainder is a bucket row, not an adjusting post."
+    note: "Never plug. Unexplained remainder is a bucket row, not an adjusting post. A statement line's counterpart (WP-46, owner 2026-10-02): bound to a customer → 4111, to a supplier → 401, opposite 5121; never bound → the books' own counterpart only when its bank document is one line, 401 Dr (payment) or 4111 Cr (receipt), of exactly the line's amount."
 
   - control_id: C1_outbound_complete
     schema_version: "1"
