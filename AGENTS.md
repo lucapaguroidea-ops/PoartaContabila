@@ -26,7 +26,8 @@ mark the WP done in BUILD.md in the same change
 - Do not add `Journal.post`, `journal_entries`, `journal_lines`, or a 5-column trial balance as books.
 - Do not INSERT/UPDATE/DELETE `CONT_BAZA.FDB`.
 - Do not put an LLM on a graph edge.
-- Do not let Grok or a chat agent choose mouth, TVA treatment, or file vs hold.
+- Do not let a System Two model or a chat agent choose mouth, TVA treatment, or file vs hold.
+- Do not call a model outside a role row of `ARTICOLE_MODEL_ROLES_v1.yaml`, or with a model id the row does not pin.
 - Do not emit XML/DBF except through a `WriteModule` row.
 - Do not set `status: active` on a WriteModule without a copy-firm fixture path that is green.
 - Do not Validare as agent in v1.

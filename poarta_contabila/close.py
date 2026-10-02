@@ -12,7 +12,12 @@
   asks, so a resume shows and records the same one without asking Jev again.
 - **v2_gate**: a person answers ``v2_close``; ``file`` is refused while Layer 1 is material
   (00_LAW 13).
-- **v4_codit**: only after ``file``; the CO.DiT answer is recorded (CO.DiT itself, WP-11).
+- A month with documents still waiting on a ``reconcile_sink`` PRE answer is material
+  (blocker at lock): it is answered on ``recon:{cui}:{period}``, never closed around.
+- **v4_codit**: only after ``file``. ``skip`` writes nothing; ``accept`` may patch the filed
+  period's CO.DiT on ``v4.may_patch`` only (``edit``) and seed the next period's on
+  ``v4.seed_next_period_on`` (``seed_next``; an existing next CO.DiT is never overwritten).
+  Hard pairs refuse the answer; it is asked again with the reason.
   ``reopen`` releases the lock so the next run takes the month's jobs afresh.
 
 Runs on ``close:{cui}:{period}`` threads only.
@@ -30,6 +35,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import Field, ValidationError
 
 from poarta_contabila.catalog import Catalog
+from poarta_contabila.codit import CoditError, next_period, v4_patch, v4_rules, v4_seed
 from poarta_contabila.hitl import ask
 from poarta_contabila.jev import V2Gate
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
@@ -41,6 +47,9 @@ GRAPH_ID = "monthly_close"
 THREAD_PREFIX = "close:"
 
 CloseStatus = Literal["opened", "locked", "sink_pulled", "v2_ready", "hold", "filed", "v4_done"]
+
+
+MAX_DRAFT = 20  # book documents shown to the rule drafter at once (WP-32)
 
 
 class V2CloseResume(Closed):
@@ -123,6 +132,13 @@ class CloseDeps:
     period_store: Any = None
     jev_v2: Callable[[PeriodDiff], Any] = lambda diff: None  # Layer 2 (jev.make_v2)
     codit: Callable[[str, str], Any] = lambda cui, period: None  # CO.DiT (WP-11)
+    codit_put: Callable[[Any], None] | None = None  # V4 writes CO.DiT through this
+    observe_question: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: (
+        None
+    )
+    """(HITL kind, question, tenant cui): the System Two roles that would explain it."""
+    recon_open: Callable[[str, str], list[str]] = lambda cui, period: []
+    """(cui, period) → jobs still waiting on a reconcile_sink PRE answer (WP-23)."""
 
 
 class CloseState(TypedDict, total=False):
@@ -183,6 +199,12 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
             blockers.append("no close kind fits the period's CO.DiT (tva/exig)")
         if doc is not None:
             blockers += [f"CO.DiT {flag} blocks filing" for flag in doc.blocks_file]
+        waiting = deps.recon_open(state["cui"], state["period"])
+        if waiting:
+            blockers.append(
+                f"reconcile_sink: {len(waiting)} document(s) wait on a PRE answer"
+                f" (POST /recon/{state['cui']}/{state['period']})"
+            )
         run = run.model_copy(
             update={
                 "status": "locked",
@@ -249,21 +271,31 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
                 return "no rule store wired"
             return None
 
-        answer = ask(
-            "v2_close",
-            {
-                "cui": cui,
-                "period": state["period"],
-                "material": material,
-                "hard_failures": diff.hard_failures,
-                "blockers": run.blockers,
-                "outbound_holes": diff.outbound_holes,
-                "unexplained": [b.sink.saga_key for b in diff.inbound if b.kind == "unexplained"],
-                "jev": jev,
-            },
-            V2CloseResume,
-            check,
-        )
+        question = {
+            "cui": cui,
+            "period": state["period"],
+            "material": material,
+            "hard_failures": diff.hard_failures,
+            "blockers": run.blockers,
+            "outbound_holes": diff.outbound_holes,
+            "unexplained": [b.sink.saga_key for b in diff.inbound if b.kind == "unexplained"],
+            "jev": jev,
+        }
+        deps.observe_question("v2_close", question, cui)
+        unexplained = [b.sink for b in diff.inbound if b.kind == "unexplained"]
+        if unexplained:  # shadow (WP-32): what the rule drafter would be given
+            rules = deps.rules.active(cui) if deps.rules is not None else []
+            deps.observe_question(
+                "explained_rule",
+                {
+                    "cui": cui,
+                    "period": state["period"],
+                    "documents": [d.model_dump(mode="json") for d in unexplained[:MAX_DRAFT]],
+                    "rules": [{"rule_id": r.rule_id, "description": r.description} for r in rules],
+                },
+                cui,
+            )
+        answer = ask("v2_close", question, V2CloseResume, check)
         status: CloseStatus = {"file": "filed", "reopen": "opened"}.get(answer.action, "hold")
         update: dict[str, Any] = {
             "status": status,
@@ -277,14 +309,62 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
         return {"status": status}
 
     def v4_codit(state: CloseState) -> CloseState:
+        cui, period = state["cui"], state["period"]
+        may_patch, seed_on = v4_rules(cat)
+        doc = deps.codit(cui, period)
+
+        def effects(a: V4CoditResume):
+            """(patched CO.DiT | None, seeded next CO.DiT | None); raises on a bad answer."""
+            if a.accept == a.skip:
+                raise ValueError("choose accept or skip")
+            if a.skip:
+                if a.edit or a.seed_next is not None:
+                    raise ValueError("skip writes nothing: leave edit and seed_next empty")
+                return None, None
+            if (a.edit or a.seed_next is not None) and (doc is None or deps.codit_put is None):
+                raise ValueError(f"{period} has no CO.DiT to patch or seed from")
+            patched = v4_patch(cat, doc, a.edit) if a.edit else None
+            seeded = None
+            if a.seed_next is not None:
+                base = patched or doc
+                seeded = v4_seed(cat, base, a.seed_next, deps.codit(cui, next_period(period)))
+            return patched, seeded
+
+        def check(a: V4CoditResume) -> str | None:
+            try:
+                effects(a)
+            except (ValueError, CoditError, ValidationError) as exc:
+                return str(exc)
+            return None
+
         answer = ask(
             "v4_codit",
-            {"cui": state["cui"], "period": state["period"], "proposal": None},
+            {
+                "cui": cui,
+                "period": period,
+                "proposal": None
+                if doc is None
+                else {
+                    "may_patch": may_patch,
+                    "seed_next_period_on": seed_on,
+                    "seed_next": {a: doc.axes[a].model_dump() for a in seed_on if a in doc.axes},
+                },
+            },
             V4CoditResume,
-            lambda a: "choose accept or skip, not both" if a.accept and a.skip else None,
+            check,
         )
+        patched, seeded = effects(answer)  # after the answer: writes are replay-safe
+        if patched is not None:
+            deps.codit_put(patched)
+        if seeded is not None:
+            deps.codit_put(seeded)
+        v4 = {
+            **answer.model_dump(),
+            "patched_hash": patched.hash if patched else None,
+            "seeded_period": seeded.period if seeded else None,
+        }
         run = _run(state)
-        deps.store.put(run.model_copy(update={"status": "v4_done", "v4": answer.model_dump()}))
+        deps.store.put(run.model_copy(update={"status": "v4_done", "v4": v4}))
         return {"status": "v4_done"}
 
     def after_v2(state: CloseState) -> str:

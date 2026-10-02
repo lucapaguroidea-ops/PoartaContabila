@@ -7,7 +7,8 @@ Self-contained. Catalogs in `catalog/` are the row-level law. This file is the m
 ```
 sources (SPV UBL, S3 dump, Telegram, email, photo, SPV register, SAGA report pack)
     → Railway  four compiled LangGraph graphs
-         Jev in nodes · Grok HITL text · RunPod if needs_ocr
+         model roles in nodes (catalog ArticoleModelRoles): Jev classify ·
+         DeepSeek/GLM explain · Gemini read scans — via OpenRouter, pinned models
          Postgres domain + checkpointer · Bucket blobs
     → XML/DBF packages
     → Windows VPS  SAGA C as AGENT (Import; Validare human in v1)
@@ -161,6 +162,7 @@ Kind ∈ ArticoleHITL ∪ HITL_ADD ∩ graph.allowed_hitl. Unknown kind = bug. R
 Core kinds:
 
 - `v3_approve` resume `{decision: approve|reject|edit, edit?}` — XOR, not three bools
+  (on an unbound bank line the question carries `proposal`: the invoices it could settle and, when one leads, a ready `edit`; WP-22)
 - `v2_close` resume `{action: file|hold|patch_maps|reopen, explained_rule?}`
 - `wait_validare`, `request_devalidare`, `define_articol`, `define_module`, `explained_rule`, `need_rj_export`
 - additive: `decision_menu` (client sends `option` only; server stamps confirmer/at), `codit_premise`, `filing_receipt`, `control_disposition`
@@ -182,8 +184,12 @@ Agent never devalidates. Agent never auto-restores. Archive metadata must includ
 PUT  /tenants/{cui}                 # name, firm folder, book of record, bank_accounts (IBAN → 5121.x)
 POST /tenants/{cui}/exports/{rj|balanta|spv_register}
 POST /ingest
+POST /decont/{cui}                  # an expense report → folder_triage (WP-28); a person names the parts
+GET  /triage/{batch_id}             # …/resume answers decont_split
+GET  /answers                       # every submitted answer (WP-33); X-Operator-Name names its author
 GET  /jobs/{id}
 POST /jobs/{id}/resume
+POST /recon/{cui}/{period}          # one reconcile_sink pass (WP-23); GET shows; …/resume answers
 GET  /close/{cui}/{period}
 POST /close/{cui}/{period}/resume
 GET  /agent/pull
@@ -195,7 +201,7 @@ POST /rules
 POST /filings/{id}/receipt
 ```
 
-Agent token ≠ operator token ≠ Grok token. No `SAGA_SYSDBA` in Railway env.
+Agent token ≠ operator token ≠ model keys. No `SAGA_SYSDBA` in Railway env.
 
 ## 11. Package
 
@@ -221,6 +227,10 @@ No ReAct supervisor. No `Journal.post`.
 JSON only. Cache `{pack, input_hash}`. Layer 2 cannot clear `material`.
 Code: `poarta_contabila/jev.py`. The answer is stored on the thread in its own node (`judge`,
 `layer2`) before the node that asks a person, so a resume never asks Jev again.
+Each pack is a role in `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (one pinned model,
+provider pin, synthetic-only until the EU route) with a role card (Jev's questions and criteria,
+Gemini's extraction rules, the System Two brief; no persona); `MODEL_CALLS=dry` records what a
+role would be sent (`GET /model-calls`, with the card hash) and sends nothing.
 
 ## 13. Windows agent
 
@@ -264,9 +274,13 @@ matching document validated. A snapshot never moves a job out of `acked`.
 ```
 DATABASE_URL=          # one Postgres: schema `domain` + LangGraph checkpointer tables
 S3_ENDPOINT= S3_ACCESS_KEY= S3_SECRET_KEY= S3_BUCKET=
-JEV_BASE_URL= JEV_API_KEY=
-GROK_API_KEY=
-RUNPOD_API_KEY=
+JEV_BASE_URL= JEV_API_KEY=     # only if Jev is not on OpenRouter: direct route (RESEARCH_LOG R2)
+OPENROUTER_BASE_URL=           # https://openrouter.ai/api/v1
+OPENROUTER_JEV_API_KEY=        # Jev roles only (own credit limit on OpenRouter)
+OPENROUTER_SYS2_API_KEY=       # System Two roles (DeepSeek / GLM)
+OPENROUTER_OCR_API_KEY=        # document reading (Gemini; AI Studio key via OpenRouter BYOK)
+MODEL_CALLS=off                # off | dry (record what would be sent, send nothing)
+MAX_UPLOAD_MB=32               # request-body cap; over it → 413 (WP-34)
 DOCUMENT_AI_PROCESSOR=          # projects/{p}/locations/{eu}/processors/{id} (WP-21)
 DOCUMENT_AI_CREDENTIALS_JSON=   # service-account key; else Application Default Credentials
 AGENT_SHARED_TOKEN=

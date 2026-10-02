@@ -281,3 +281,84 @@ class PostgresCoditStore:
                 " hash = EXCLUDED.hash",
                 (doc.cui, doc.period, doc.model_dump_json(), doc.hash),
             )
+
+
+# ----- V4 after file (WP-11 open, closed here) -----
+
+
+class V4Edit(Closed):
+    """What V4 may patch on a filed period (ArticoleClose ``v4.may_patch``)."""
+
+    auto: str | None = None
+    saf_t: bool | None = None
+    exig: AxisValue | None = None
+
+
+def next_period(period: str) -> str:
+    year, month = int(period[:4]), int(period[5:])
+    return f"{year + month // 12:04d}-{month % 12 + 1:02d}"
+
+
+def v4_rules(cat: Catalog) -> tuple[list[str], list[str]]:
+    v4 = cat.docs["ArticoleClose"]["v4"]
+    return list(v4["may_patch"]), list(v4["seed_next_period_on"])
+
+
+def v4_patch(cat: Catalog, doc: Codit, edit: dict[str, Any]) -> Codit:
+    """The filed period's CO.DiT with V4's patch: only ``may_patch`` fields, hard pairs run.
+
+    Raises:
+        ValueError: a field V4 may not patch; :class:`CoditError` for a hard pair.
+    """
+    may_patch, _ = v4_rules(cat)
+    extra = sorted(set(edit) - set(may_patch))
+    if extra:
+        raise ValueError(f"V4 may patch only {may_patch}, not {extra}")
+    patch = V4Edit.model_validate(edit)
+    data = CoditInput(
+        axes={"exig": patch.exig} if patch.exig is not None else {},
+        saf_t=patch.saf_t,
+        auto=patch.auto,
+    )
+    return write_codit(cat, doc.cui, doc.period, data, previous=doc, closed=True)
+
+
+def v4_seed(cat: Catalog, doc: Codit, seed: dict[str, Any], existing: Codit | None) -> Codit | None:
+    """Next period's CO.DiT, seeded from *doc*.
+
+    The firm's profile carries forward whole (axes, ``parent_cui``, ``saf_t``, ``auto``,
+    ``vehicle_count``; pins are the next period's year's). *seed* may change only the
+    ``seed_next_period_on`` axes (``{axis: AxisValue}``, ``{}`` = no change); an ``exig`` that
+    was itself a default follows a changed ``tva``. Every carried axis is marked
+    ``seeded by V4 from <period>``. Returns None when *existing* is already this seed (a
+    replay); an existing CO.DiT that is not is never overwritten.
+
+    Raises:
+        ValueError: an axis outside ``seed_next_period_on``, or a next period already
+            written otherwise; :class:`CoditError` for a hard pair.
+    """
+    _, seed_on = v4_rules(cat)
+    extra = sorted(set(seed) - set(seed_on))
+    if extra:
+        raise ValueError(f"V4 seeds only {seed_on}, not {extra}")
+    source = f"seeded by V4 from {doc.period}"
+    axes = {name: av.model_copy(update={"source": source}) for name, av in doc.axes.items()}
+    for name, given in seed.items():
+        axes[name] = AxisValue.model_validate(given).model_copy(update={"source": source})
+    exig = doc.axes.get("exig")
+    if "tva" in seed and exig is not None and exig.source == _DEFAULT_SOURCE:
+        del axes["exig"]  # write_codit derives it again from the new tva
+    nxt = next_period(doc.period)
+    data = CoditInput(
+        axes=axes,
+        parent_cui=doc.parent_cui,
+        saf_t=doc.saf_t,
+        auto=doc.auto,
+        vehicle_count=doc.vehicle_count,
+    )
+    seeded = write_codit(cat, doc.cui, nxt, data)
+    if existing is not None:
+        if existing.hash == seeded.hash:
+            return None
+        raise ValueError(f"{nxt} already has a CO.DiT: V4 does not overwrite it")
+    return seeded

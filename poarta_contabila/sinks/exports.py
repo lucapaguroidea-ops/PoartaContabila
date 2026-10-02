@@ -507,7 +507,7 @@ class ExportEye:
                 party = [ln for ln in lines if _under(ln.credit, _SUPPLIER_ROOTS)]
                 gross = sum((Decimal(ln.amount) for ln in party), Decimal(0))
                 vat = sum(
-                    (Decimal(ln.amount) for ln in lines if ln.debit in ("4426", "4428")),
+                    (Decimal(ln.amount) for ln in lines if synthetic(ln.debit) in ("4426", "4428")),
                     Decimal(0),
                 )
                 analytic = party[0].credit if party else None
@@ -515,7 +515,11 @@ class ExportEye:
                 party = [ln for ln in lines if _under(ln.debit, _CUSTOMER_ROOTS)]
                 gross = sum((Decimal(ln.amount) for ln in party), Decimal(0))
                 vat = sum(
-                    (Decimal(ln.amount) for ln in lines if ln.credit in ("4427", "4428")),
+                    (
+                        Decimal(ln.amount)
+                        for ln in lines
+                        if synthetic(ln.credit) in ("4427", "4428")
+                    ),
                     Decimal(0),
                 )
                 analytic = party[0].debit if party else None

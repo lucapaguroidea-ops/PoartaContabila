@@ -48,6 +48,9 @@ class Tenant(Closed):
     saga_firm_folder: str = Field(min_length=1)
     punct: str = "default"
     book_of_record: Product = "saga"
+    data_class: Literal["synthetic", "client"] = "client"
+    """``synthetic`` = invented test data; only such a tenant may reach a model route that is
+    not the EU host (00_LAW §3.5). Unset means client data: fail closed."""
     bank_accounts: dict[str, str] = Field(default_factory=dict)
     """IBAN → the SAGA treasury account its lines post to (``5121.01``), for the bank mouths."""
 
@@ -220,6 +223,16 @@ def export_row(
         periods=periods,
         uploaded_at=uploaded_at,
     )
+
+
+def rj_eye(registry, blobs: BlobStore, cui: str) -> ExportEye | None:
+    """The tenant's latest registru jurnal as an eye with its account lines (POST reads
+    which accounts SAGA used; the report pack's journals carry none). None without one."""
+    rj = registry.latest_export(cui, "rj")
+    if rj is None or rj.product is None:
+        return None
+    lines = _with_file(blobs.get(rj.bucket_key), rj.bucket_key, _READERS[(rj.product, "rj")])
+    return ExportEye(product=rj.product, lines=lines, cui=cui, periods=rj.periods)
 
 
 def witnesses_provider(registry, blobs: BlobStore):

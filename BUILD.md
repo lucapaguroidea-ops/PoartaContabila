@@ -31,8 +31,22 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-18 | parked | — | Take-on / year-end / D406 producer / FX engine |
 | WP-D3 | decision | WP-11 | Non-payer RC books: 4423 vs 446x on copy-firm note |
 | WP-19 | done | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (R1) |
-| WP-20 | in-progress | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; wire waits on R2 |
+| WP-20 | in-progress | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; R2 read, live sender not built |
 | WP-21 | done | WP-13 | Statement PDFs read by Google Document AI into the extract contract |
+| WP-22 | done | WP-19 | Bank line → the invoice it settles: a proposal on `v3_approve`, a person decides |
+| WP-23 | done | WP-05 | `reconcile_sink` graph, PRE stage: `need_rj_export`, `recon_ambiguous`, review contest |
+| WP-24 | done | WP-20 | Model roles: one pinned model per role, synthetic-only guard, dry-run trace |
+| WP-25 | done | WP-24 | Role cards: what each role is told, checked, hashed into the cache key |
+| WP-26 | done | WP-25 | Shadow roles: every model role observed at its place in the flow (dry) |
+| WP-27 | done | WP-23 | `reconcile_sink` POST stage: how SAGA posted an acked document (`recon_how_mismatch`) |
+| WP-28 | done | WP-06R | Expense reports over HTTP: `folder_triage` splits the container, a person names the parts |
+| WP-29 | done | WP-28 | Synthetic smoke run: one invented firm through every graph over HTTP, model calls by place |
+| WP-30 | done | WP-22 | Settlement proposals for partial payments, part-paid invoices and one payment for several |
+| WP-31 | done | WP-27 | POST stage compares the amounts on the partner and VAT accounts with the document |
+| WP-32 | done | WP-26 | `sys2_draft_rule` in shadow at `monthly_close.v2_gate`: every model role has a call site |
+| WP-33 | done | WP-06R | Answer log: every answer a person submits, its outcome and its author, append-only |
+| WP-34 | done | WP-06R | Request bodies capped (413, `MAX_UPLOAD_MB`); `/ready` reports weak or shared tokens |
+| WP-35 | done | WP-24 | `eu_route` is a checked structure: provider, EU region, exact model, credential variables |
 
 ## WP details
 
@@ -77,9 +91,9 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   verdict stored once per `(job_id, pre, sink_snapshot_id)`), `recon/numbers.py` (`number_match`
   ladder exact → alnum → digits_core, `[de confirmat]` on the profile), `sinks/spv_register.py`
   (C-F12 register, checked), `SagaEye.covers` (absent only for months whose books were read).
-- Open: `recon_ambiguous` / `need_rj_export` answers live on the `reconcile_sink` graph (not built);
-  until then such jobs stop at `needs_human` with the reason. Storno has no PRE row in the catalog,
-  so every storno asks. Register partners match by name only (it carries no CUI).
+- Open: `recon_ambiguous` / `need_rj_export` are answered on the `reconcile_sink` graph (WP-23).
+  Storno has no PRE row in the catalog, so every storno asks. Register partners match by name only
+  (it carries no CUI).
 
 ### WP-06 Agent
 - HTTP as ARCHITECTURE.md §10. AGENT user cannot devalidate.
@@ -90,9 +104,8 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   document; closed months held), `agent_api.py` (bearer `AGENT_SHARED_TOKEN`, 503 when unset),
   ingest node `wait_validare` (`acked` only with a key a stored snapshot shows validated;
   `validated: false` → `reopened`), `domain.agent_backups` / `domain.agent_snapshots`.
-- Open: the production runtime (Postgres checkpointer, S3 blob store, ingest runner) is not wired,
-  so the deployed agent routes answer 503 until it is. The Windows agent program itself is not in
-  this repo. A snapshot that stops showing an acked document is reported (`acked_not_shown`),
+- Open: the agent routes answer 503 only while the runtime's variables are unset (`/ready` says
+  which; the runtime itself is WP-06R). The Windows agent program itself is not in this repo. A snapshot that stops showing an acked document is reported (`acked_not_shown`),
   never acted on; `request_devalidare` stays a person's step.
 
 ### WP-06R Runtime
@@ -105,9 +118,9 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - `operator_api.py` (bearer `OPERATOR_TOKEN`, must differ from the agent token):
   `PUT /tenants/{cui}`, `POST /tenants/{cui}/exports/{kind}`, `POST /ingest` (SPV zip or UBL XML
   only, XML first), `GET /jobs/{id}`, `POST /jobs/{id}/resume`.
-- Open: Jev is wired only once its wire is read (WP-20); until then every document asks
-  `v3_approve`. No triage of other sources over HTTP yet (PDF, receipts, statements, expense
-  reports).
+- Open: Jev sends nothing until its live sender exists (WP-20, WP-24), so every document asks
+  `v3_approve`; `MODEL_CALLS=dry` records what it would be sent. Over HTTP: SPV / UBL invoices,
+  bank statements (WP-13), expense reports as containers (WP-28); not receipts or other PDFs.
 
 ### WP-07 SagaEye v1
 - Parse SAGA report pack / RJ-CM **headers only** first (harvest C-11). Column map lives in `sinks/saga_eye.py`, not in graph code.
@@ -135,6 +148,12 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   WP-11; 4428 open documents for TVA-la-încasare; a bank/cash movement with no source until WP-13).
   Expected postings other than invoices (reverse charge, 404/408, bank, cash) are not modelled yet,
   so they show as differences for a person, never as plugs.
+- 2026-10-02 (R1: SAGA books TVA la încasare on `4428.TP` / `4428.TI`): the journal export's
+  invoice VAT is read through the synthetic account, so VAT on `4428.TP` / `4428.TI` (or any
+  `4426.x` / `4427.x`) counts. Open: the expected set still books invoice VAT on 4426 / 4427;
+  under `exig = tva_la_incasare` SAGA books it on 4428 and moves it at payment, so parity shows
+  those as differences for a person, and `M1_8_4428_open` fails closed (it needs the journals'
+  neexigible VAT, whose export columns are `[de confirmat]`). Both wait on the copy-firm notes.
 
 ### WP-09 Explained rules
 - `POST /rules` versioned. HITL `explained_rule` and `control_disposition`.
@@ -156,9 +175,10 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   `v2_close` cannot `file` while material, and an `explained_rule` named must exist), `v4_codit`
   after `file` (answer recorded). Close kind from the axes (unknown → material).
   Operator: `POST /close/{cui}/{period}`, `GET /close/{cui}/{period}`, `POST …/resume`.
-- Open: Layer 2 is wired in WP-20 but sends nothing until its wire is read; the POST recon and Cartea Mare pull nodes are not
-  separate yet (the period diff reads the latest uploaded books); V4 records the answer, CO.DiT
-  itself is WP-11.
+- Open: Layer 2 sends nothing until Jev's live sender exists (WP-20, WP-24). The POST recon runs
+  on `reconcile_sink` (WP-27) and the close is material while it is open; there is no separate
+  Cartea Mare pull node (the period diff reads the latest uploaded books). V4 writes CO.DiT
+  (WP-11).
 
 ### WP-11 CO.DiT
 - Seed copies Pins. T1–T3 hard. New axes default null. Certainty required on write.
@@ -170,8 +190,14 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   `domain.codit`. The period diff, close and ingest take their axes from the period's CO.DiT
   (operator query axes only where no CO.DiT exists). `PUT/GET /codit/{cui}/{period}`; a filed
   period's CO.DiT is not rewritten.
-- Open: V4 records the answer but does not patch CO.DiT yet (`may_patch: auto, saf_t, exig`;
-  `seed_next_period_on`); R1 (identity join) is enforced at triage, not here.
+- V4 (2026-10-02): after `file`, `skip` writes nothing; `accept` may patch the filed period's
+  CO.DiT on `v4.may_patch` only (`edit`: `auto`, `saf_t`, `exig`; hard pairs run, nothing is saved
+  on a refusal and the question is asked again) and seed the next period (`seed_next`): the
+  profile carries forward whole, marked `seeded by V4 from <period>`, and only
+  `v4.seed_next_period_on` (`impozit`, `tva`) may change at the boundary (a default `exig`
+  follows a changed `tva`). An existing next CO.DiT is never overwritten; a replay of the
+  same seed is a no-op. The CloseRun records `patched_hash` / `seeded_period`.
+- Open: R1 (identity join) is enforced at triage, not here.
 
 ### WP-12 Filings
 - Rows from `ARTICOLE_FILING_v1.yaml`. Receipt closes item.
@@ -225,8 +251,8 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - `Numar` is the bank's reference (`maps.referinta`, from the statement's reference column) when
   no other line of the statement shares it, else the line's own number (`EXT-…`): with sync
   "Nr.+data" SAGA would skip a second document of the same number and date.
-- Open: both modules `draft` until the owner's copy-firm import (`docs/COPY_FIRM_TEST.md`);
-  nothing proposes the partner or the invoice (a person binds both).
+- Open: both modules `draft` until the owner's copy-firm import (`docs/COPY_FIRM_TEST.md`); the
+  partner and invoice are proposed on `v3_approve` (WP-22) but a person binds them.
 
 ### WP-20 Jev Layer 1 + Layer 2
 - `v3_judge` → `IngestDeps.judge`; `v2_declaration_gate` → `CloseDeps.jev_v2`. JSON only,
@@ -245,10 +271,13 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   answer (test: a reject became `packaged`). On a material month Layer 2's `file`, a
   `gap_materiality` below material and `books_support_declaration: true` are dropped.
   `runtime_from_env` wires Jev when both env vars are set.
-- Open: the HTTP wire (endpoint, auth, request/response, mapping of Jev's primitives onto the
-  closed models) is not built: `docs.typesafe.ai` was denied by the build session's network
-  policy (R2), so `http_transport` refuses every call and a person is asked. `JEV_*` are not
-  set on Railway (the owner adds them). Layer 2 does not yet see the period's due filings.
+- Open: the HTTP wire is documented since 2026-10-02 (R2, read from the vendor's own SDK
+  `typesafe-sdk` 0.7.2: `POST /v1/systemone`, bearer key, Noul / Choice questions, the mapping
+  onto `V3Judge` / `V2Gate` with fail-closed thresholds) but **not built**: the build session was
+  not permitted to write the outbound call, so `http_transport` still refuses every call and a
+  person is asked. The owner chose to build it outside that session. `JEV_*` are not set on
+  Railway (the owner adds them). Layer 2 sees the period's due filings (`filings_due`: id +
+  books_gate, from the CO.DiT axes) since 2026-10-02.
 
 ### WP-21 Statement PDF reading backend
 - Decided by the owner on 2026-10-01: Google Document AI. Write the extract contract
@@ -273,6 +302,241 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   EU location keeps statements in the EU). Which processor type returns `pages[].tables` for
   these banks, and the CUI-label rule, are to be checked on real statements. The header (IBAN,
   holder, balances, date) is still typed by a person; reading it from the PDF is not built.
+
+### WP-22 Settlement proposals for bank lines
+- Asked by the owner 2026-10-02: a statement line names no partner, so WP-19 waits for a person
+  to bind partner and invoice; propose them instead of leaving the person to search.
+- Built: `recon/settle.py` `propose_settlement` — deterministic, no model. Candidates from the
+  tenant's invoice Jobs (not rejected / failed) and the books' journals (covered months only), in
+  the line's month and the two before (`runtime.SETTLE_MONTHS`): the settled side (receipt →
+  sale, payment → purchase; no storno), the same gross to the cent, dated on or before the
+  line, not already named by another bound bank line (`FacturaID`, or partner + number). Ranked
+  by the bank description: invoice number as whole tokens (≥ 3 characters), then the partner's
+  name without legal forms, then the amount alone; a Job outranks the books for one invoice
+  (it carries `FacturaID`). `edit` (a ready `v3_approve` edit) only when one candidate leads
+  alone, else a list of ≤ 5 and why. The `v3_approve` question of an unbound bank line carries
+  it as `proposal`; a proposal that fails is left out, the question is asked all the same.
+- Open: partial payments and one payment for several invoices: WP-30. The books' candidates
+  carry no partner name (the journals' CUI only); the proposal is recomputed when the node
+  re-enters on resume (reads the books again).
+
+### WP-23 reconcile_sink, PRE stage
+- Asked by the owner 2026-10-02: the fourth graph (ARCHITECTURE §2), so a person can answer the
+  PRE checks ingest cannot decide.
+- Built: `reconcile.py` — `build_reconcile_graph` on `recon:{cui}:{period}` (other threads
+  refused): `load_window` → `ask` → `apply` → `load_window` …, one question per pass of the loop.
+  `load_window` takes the period's jobs whose ingest thread ended at an `ambiguous` PRE
+  (`Runtime.recon_waiting`) and runs `det_match` again on the books as they are now; a
+  decisive verdict goes back to its job by itself unless the review contests it. The question
+  is stored on the thread before it is asked: `need_rj_export` (all missing months at once;
+  the answer is the `export_id` of the tenant's latest journal upload covering one of them)
+  before `recon_review_contest` before `recon_ambiguous` (oldest document first; the sink
+  documents shown by index; `already_posted` names at least one, `override_absent` none).
+  `apply` stores the person's verdict beside the det one (`{snapshot}:person`) and hands it
+  back by job id (`Runtime._settle_pre`): `already_posted` → `already_in_sink`; `absent` → the
+  ingest thread goes on from `reconcile_pre` to `judge` / `v3_approve`. `absent` is never
+  concluded for an uncovered month. `llm_review` is the `ReconDeps.review` hook, `abstain`
+  until a reviewer is wired; a contest only asks (it cannot flip to posted). `PreResult.missing`
+  names the uncovered months. Operator: `POST /recon/{cui}/{period}`, `GET`, `POST …/resume`.
+- 2026-10-02: `monthly_close` locks a month with documents still waiting on a PRE answer as
+  material (blocker `reconcile_sink: n document(s) wait on a PRE answer`, `CloseDeps.recon_open`):
+  answered on the recon thread, never closed around.
+- Open: the review goes through the `jev_recon_review` role (WP-24), which sends nothing until
+  the live sender exists. POST stage: WP-27.
+
+### WP-24 Model roles (00_LAW §3.5, changed by the owner 2026-10-02)
+- Decided by the owner 2026-10-02: Jev = System One (routing, classification of JSON /
+  normalized data); DeepSeek / GLM = System Two (explain, draft); Gemini = document reading; all
+  through OpenRouter with an exact model per role; synthetic tenants only until the EU host
+  (Scaleway). Grok and RunPod are gone from the law.
+- Built: `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (13 roles over the four graphs: node,
+  system, family, pack or annex decision, HITL kinds, output, `wired` / `not_wired`, `model`,
+  provider pin `{only, allow_fallbacks: false, data_collection: deny}`, `eu_route`), loaded and
+  checked by `catalog.py` (`model_roles.load_roles`: exact ids only — no alias / `openrouter/auto`
+  / `:free`, no fallback list, family fits the system, a wired role names its pack; graph, HITL
+  kinds and JevAnnex decisions resolve). `model_roles.py`: `route_check` (calls off, no model, a
+  client tenant off the EU route → `RouteRefused`), `ModelCall` records, `domain.model_calls`.
+  `Tenant.data_class` (`synthetic` | `client`, default client). `jev.role_transport`:
+  `MODEL_CALLS=dry` records exactly what a role would be sent and sends nothing, then fails
+  closed (a person is asked); refusals are recorded with the reason. Pack `recon_review` and
+  `make_recon_review` wire `reconcile_sink`'s review hook through the `jev_recon_review` role.
+  Operator `GET /model-roles` (roles, pinned model, key set or not — never the value),
+  `GET /model-calls?role=`.
+- Open: every `model:` is null until the owner sends the ids (`docs/OWNER_CHECKLIST.md`); the
+  live sender is not built (this session was not permitted to write the outbound call); the
+  `shadow` roles (WP-26) record at their place but none has a sender either.
+  EU route: `docs/EU_VERTEX_SETUP.md` (Gemini on Vertex AI EU, a draft blocked on the owner's
+  EU-route decision: `00_LAW.md` names Scaleway only).
+
+### WP-25 Role cards
+- Asked by the owner 2026-10-02: a card per role instead of a persona — who reads, what to do,
+  what never to do, in which shape.
+- Built: `card` on every row of `ARTICOLE_MODEL_ROLES_v1.yaml`, merged over its system's base
+  card. System One (Jev): `questions` (noul / choice / score with criteria, or `criteria_from` a
+  catalog list), `fields` (closed field ← question, or a choice's `.confidence`), `thresholds`
+  (`noul_yes` 0.90, `choice` 0.80, `human` 0.10, `[de confirmat]`). Document reading (Gemini):
+  `instructions` (copy what is printed, never compute or guess, strings only) + `output` (the
+  extract contract). System Two (DeepSeek / GLM): audience, task, limits (no decision, only
+  input facts, list what is missing), Romanian, the lexicon's terms, `output_fields` exactly
+  `explanation, facts_cited, missing`; `model_roles.brief` renders it as text. `check_card`
+  refuses: a choice without criteria, a field reading an unasked question, a wired card that
+  does not fill exactly its pack's closed model, a non-text key (YAML `yes` / `no` read as
+  booleans — the first draft's `thresholds: {yes: …}` was one), a persona ("you are a …"), a
+  System Two decision field. `ModelRole.card_hash` is recorded on every call (with the System One
+  question set) and is part of Jev's cache key with the role's model (`jev.role_pin`).
+  `GET /model-roles` shows `card_hash` and the System Two `brief`.
+- Open: the wording is a first draft, to be compared on synthetic dry / live runs; the System Two
+  and document-reading cards are recorded at their shadow call sites (WP-26), never sent yet.
+
+### WP-26 Shadow roles at their place in the flow
+- Asked by the owner 2026-10-02: test each role's placement in the flow on Railway before any
+  model decides anything.
+- Built: role status `shadow` (observed, decides nothing) on 8 roles; `model_roles.ModelGateway`
+  (`observe`, `observe_question`) records, under `MODEL_CALLS=dry`, what each would be sent —
+  never blocks the flow (failures are logged), a re-entered node records the same input once
+  (`seen`). Places: `jev_source_doc` and `jev_our_role` at the SPV / UBL upload (the invoice's
+  root, type code, both parties); `jev_v3_classify` at `bind`, `jev_flux` at `bind` only when
+  more than one articol matched; `ocr_extract` at the statement upload (the PDF by sha256 and
+  size, never its bytes, + the typed header); System Two explainers on the questions their
+  HITL kinds name: `v3_approve` (ingest), `recon_ambiguous` / `need_rj_export` /
+  `recon_review_contest` (reconcile_sink), `v2_close` (monthly_close).
+- Open: `ocr_decont_split` became the 9th shadow role with WP-28 (the expense-report upload),
+  `sys2_draft_rule` the 10th with WP-32.
+
+### WP-27 reconcile_sink, POST stage
+- Built: `recon/post.py` `how_check` — for an `acked` Job, its posting's lines in the registru
+  jurnal (invoice journal, same date, number at an accepted level other than `digits_core`)
+  and the synthetic accounts they use, against the articol's `reconcile.expect_accounts` (else
+  the POST profile's `fallback_accounts`), matched by prefix: `require_all_accounts: true` =
+  every one, `false` = at least one (`[de confirmat]`). `how_ok`; `how_mismatch` (no posting in a
+  covered month, accounts off, none expected, no single POST profile); `need_rj_export` (month
+  not covered, or no journal lines — the report pack's journals carry no accounts;
+  `registry.rj_eye` reads the latest journal upload). The snapshot is the profile + the
+  posting's own lines, so a verdict and a person's answer hold until that posting changes.
+  On `recon:{cui}:{period}` (`reconcile.PostDeps`): each pass checks the period's acked jobs;
+  `how_ok` is stored silently (stage `post`); missing months join `need_rj_export`; a mismatch
+  asks `recon_how_mismatch` after the PRE questions: `ack_mismatch` (the posting stands:
+  settled) or `open_storno` (correct it in SAGA: stays open, re-checked every pass, not asked
+  again for the same posting). `Runtime.post_open` → `monthly_close` is material while a
+  posting is unchecked, unanswered or waiting on its storno. `GET /recon/…` shows `post_open`.
+  `ReconStore.get`; Postgres `put_once` returns the stored verdict as its own type.
+- Open: the storno itself is the person's in SAGA (the storno mouths wait on the copy firm);
+  amounts per account: WP-31.
+
+### WP-28 Expense reports over HTTP
+- Built: `POST /decont/{cui}` (`filename`, `period`, `file_b64`, `tenant_on_doc`; `.pdf`,
+  `.xls`, `.xlsx`, `.msg`, `.eml`) → `folder_triage` on `batch:decont-{cui}-{hash}`. The report
+  is a container (A2): it never becomes a Job. Its identity gate is the operator's
+  `tenant_on_doc` (nothing reads the file yet); once the gates pass a person names the parts
+  (`decont_split`, `POST /triage/{batch_id}/resume` with `parts`), each a child Pack through
+  the same gates; a part that breaks the rules is asked again. `GET /triage/{batch_id}` shows
+  the question and the children (`emit`, `failed`, `job_id`). An emitted invoice part is a Job
+  with no thread until its SPV zip / UBL arrives on `POST /ingest` (same tenant + hash → the
+  same Job; its thread starts then). Re-uploading the report returns the same batch.
+  `ocr_decont_split` is a shadow role: `MODEL_CALLS=dry` records what Gemini would be given.
+- Open: parts are named by a person; the Gemini proposal waits on the live sender and model ids;
+  receipts and workings parts are evidence only (no mouth).
+
+### WP-29 Synthetic smoke run
+- Asked by the owner 2026-10-02: test each role's place in the flow on Railway.
+- Built: `python -m poarta_contabila.smoke` (`--local`: an in-memory runtime, `MODEL_CALLS=dry`;
+  `--base-url …` with `OPERATOR_TOKEN` in the environment: the deployed service). One invented
+  firm (`1000009`, `data_class: synthetic`, one bank account) through every graph with
+  scripted answers: the registru jurnal; an SPV invoice → `v3_approve` approve; a statement
+  (header + tables) → the receipt bound to its partner and invoice; an expense report →
+  `decont_split` → one workings part; `reconcile_sink` (`need_rj_export` answered with the
+  uploaded journal, any other question left); `monthly_close` → `v2_close` → `hold`. Then
+  `GET /model-calls` for the firm, grouped by graph and node, with each refusal's reason. An
+  answer is given only when that question is waiting, so a rerun changes nothing. It refuses a
+  server whose `MODEL_CALLS` is neither `off` nor `dry`; it never uses the agent token.
+- Open: the service needs a public domain first (`docs/OWNER_CHECKLIST.md`); packaged documents
+  stay on `/agent/pull` while no agent is connected.
+
+### WP-30 Partial and combined payments
+- Built: `recon/settle.py` — an invoice is open for its gross less what other bound bank lines
+  already paid on it (`paid`, by partner + number; the runtime sums the bound lines), so a
+  second payment sees the rest and a fully paid invoice drops out. `cover: full` = the open
+  amount equals the line; `cover: partial` = it is larger and the description names the
+  invoice or its partner (an amount alone never proposes a partial payment), with
+  `open_after`. Ranking: the text first, then full over partial. `groups`: with no full
+  candidate, two to four open invoices of one partner (the newest 12 searched) adding up to
+  the line, ranked by the text; a group is never an `edit` (a bank mouth names one invoice per
+  line), and when a group fits as well as the leading invoice no `edit` is given either.
+- Open: what was paid is read from this system's bound lines only — a payment SAGA holds that
+  never came through here (or an earlier partial payment in the books) is not subtracted, so
+  the person still checks the open amount; a group is posted by a person in SAGA.
+
+### WP-31 POST amounts per account
+- Built: POST profiles carry `account_amounts` (`ARTICOLE_RECONCILE_v1.yaml`, enum
+  `account_amount: [gross, vat]`): `401` / `4111` → the document's gross, `4426` / `4427` /
+  `4428` → its VAT. Once the accounts fit, `recon/post.py` `account_amounts` sums what the
+  posting moves on each expected account that was used and is listed (each journal line once,
+  either side) and compares it with the document within the articol's `tolerance` (else the
+  profile's). A difference is `how_mismatch` naming each account, posted vs document, and asks
+  `recon_how_mismatch` as before; `PostResult.amounts` carries every comparison. The snapshot
+  includes the map and the tolerance, so a catalog change re-checks (a stored `how_ok` from
+  before WP-31 is checked again on the next pass).
+- Open: class 6 / 7 (net, may be split across accounts) and reverse-charge postings (4426 and
+  4427 on one line, WP-D3) are not compared; the map is `[de confirmat]` on the copy firm.
+
+### WP-32 The rule drafter's place
+- Built: `sys2_draft_rule` is `shadow` at `monthly_close.v2_gate`, where the catalog puts it:
+  when the close finds book documents with no source here (`unexplained`), the drafter's input
+  is recorded under `MODEL_CALLS=dry` as the `explained_rule` kind — those documents (the first
+  20) and the firm's active rules (id + description), so a draft would not repeat one. Its card
+  now says so: wording only, one draft per kind of document; scope, matcher and accounts stay
+  the person's, who writes the rule through `POST /rules`. Every role in the catalog now has a
+  call site.
+- Open: nothing is sent (no sender, no model ids); a draft would be shown with the `v2_close`
+  question, never written as a rule by itself.
+
+### WP-33 Answer log
+- Built: `answers.py` and `domain.answers`, an insert-only table. Every answer submitted on
+  `/jobs/…/resume`, `/recon/…/resume`, `/close/…/resume` and `/triage/…/resume` is logged:
+  - graph, thread, tenant, the question's kind and sha256 (without its `error`), the answer
+    as sent, UTC time;
+  - the author from the optional `X-Operator-Name` header (1–64 printable characters, else
+    422 before anything runs), since one shared token names nobody;
+  - the outcome: `accepted` (with the next question's kind), `asked_again` (the same question
+    came back with its `error`) or `no_question`.
+
+  With nothing waiting, the graph is no longer run at all. Before, resuming a recon or close
+  thread that never started failed with a 500. `GET /answers?cui=&thread=&limit=` reads the
+  log, newest first.
+- Open: one token per person instead of a self-declared name; the log keeps answers whole, so
+  a client tenant's answers hold client data and fall under the same retention as its jobs.
+
+### WP-34 Before the operator API is public
+- Built: `app.BodyLimit` caps every request body at `MAX_UPLOAD_MB` (default 32 MB; base64
+  adds a third, so about 24 MB files). A declared Content-Length over the cap gets 413 at once.
+  Otherwise the body is read in full before any route runs and refused as soon as it passes the
+  cap, so no route sees part of a body. `/ready` adds `operator_token` and `agent_token`:
+  `ok`, `unset`, `shorter than 32 characters` or `same as the other token`. These are reported,
+  never the values, and do not gate readiness.
+- Open: no rate limit; per-person tokens (see WP-33).
+
+### WP-35 The EU route's shape
+- Built: `model_roles.EuRoute` fixes the shape of `eu_route` without deciding it:
+  - `provider` is `vertex` or `scaleway`;
+  - `location` must be on that provider's explicit EU list (`EU_LOCATIONS`). Google's London
+    (`europe-west2`) and Zurich (`europe-west6`) regions and `global` are refused;
+  - `model` is an exact id (the same alias rules as `model`);
+  - `key_env` and `project_env` name the variables that hold the credential and the project
+    (Vertex needs both). The catalog holds names, never values.
+
+  Routing:
+  - a client tenant goes by `eu_route` alone and needs no OpenRouter `model`;
+  - a synthetic tenant goes by OpenRouter alone;
+  - recorded calls carry `route: eu/<provider>/<location>` and the EU model, or `eu/none` when
+    refused.
+
+  `GET /model-roles` adds `eu_route_set` and `eu_keys_set`, which say whether the variables
+  are set, never their values. The smoke run reports how many roles have one.
+- Also fixed: the smoke run built its SPV zip with the current time inside, so a rerun across a
+  2-second boundary minted a second Job for the same invoice. The zip now has a fixed
+  timestamp.
+- Open: every `eu_route` stays null until the owner's EU-route decision; no EU transport is
+  built (WP-20 / WP-24).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

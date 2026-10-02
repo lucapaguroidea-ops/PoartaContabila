@@ -74,5 +74,24 @@ storno mouths need before they are built.
 5. The rights the import needed: which user ran it (Admin?), and, if you try, whether an
    "Operare" user with validare/devalidare/modificare/ștergere off can run Import date.
 
+## 5. Optional — TVA la încasare (settles the 4428 bookings)
+
+In a **second** test firm (cod fiscal `2000007`, invented, valid check digit) set up as in §1
+but **TVA la încasare**:
+
+1. Ieșiri: invoice `INC-1`, client `Client Test SRL` (`20000005`), one line 100.00 + 21% TVA,
+   validate.
+2. Intrări: invoice `INC-2` from `Furnizor Test SRL` (`20000005`), one line 50.00 + 21%,
+   validate.
+3. Jurnal de bancă: collect **half** of `INC-1` (60.50) and pay all of `INC-2` (60.50), each
+   associated to its invoice.
+4. Send the notes of all four (accounts on each side, analytics as shown: `4428.TI` / `4428.TP`
+   or otherwise), the balance of 4426 / 4427 / 4428 and their analytics, and the purchase and
+   sales journals exported the way you export them for clients (Excel), with their column
+   headers.
+
+This tells the code where SAGA books VAT at invoice and at payment under TVA la încasare, and
+which columns carry the neexigible VAT (control `M1_8_4428_open`).
+
 Each green answer goes on the module row (`fixture`, `approved_at`) in
 `catalog/30_cale/ARTICOLE_WRITE_MODULE_v1.yaml`; a module becomes `active` only then.

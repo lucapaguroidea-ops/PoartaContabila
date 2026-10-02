@@ -19,6 +19,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
+from poarta_contabila.model_roles import ModelRole, load_roles
 from poarta_contabila.types import WriteModule
 
 DEFAULT_CATALOG_DIR = Path(__file__).resolve().parents[1] / "catalog"
@@ -43,6 +44,7 @@ _ROWS: dict[str, list[tuple[str, str]]] = {
     "ArticoleControls": [("controls", "control_id")],
     "ArticoleFiling": [("filings", "filing_id")],
     "ArticoleExtrasGrain": [],
+    "ArticoleModelRoles": [("roles", "role_id")],
 }
 
 # Illustrations, not law (they carry no ``catalog:`` key).
@@ -81,6 +83,7 @@ class Catalog:
     close_kinds: dict[str, Row]
     recon_profiles: dict[str, Row]
     pins: dict[str, Row]
+    model_roles: dict[str, ModelRole] = field(default_factory=dict)
     sources: dict[str, list[str]] = field(default_factory=dict)
 
     def enums(self, catalog: str) -> dict[str, Any]:
@@ -212,6 +215,11 @@ def _index(docs: dict[str, Row], sources: dict[str, list[str]]) -> Catalog:
         except ValidationError as exc:
             raise CatalogError(f"WriteModule {mid!r}: {exc}") from None
 
+    try:
+        roles = load_roles(docs.get("ArticoleModelRoles") or {})
+    except (ValueError, ValidationError) as exc:
+        raise CatalogError(f"ArticoleModelRoles: {exc}") from None
+
     return Catalog(
         docs=docs,
         articole={**flux, **recon},
@@ -226,6 +234,7 @@ def _index(docs: dict[str, Row], sources: dict[str, list[str]]) -> Catalog:
         close_kinds=_rows(docs, "ArticoleClose", "kinds", "close_kind"),
         recon_profiles=_rows(docs, "ArticoleReconcile", "profiles", "profile_id"),
         pins=_rows(docs, "ArticolePins", "pins", "pins_id"),
+        model_roles=roles,
         sources=sources,
     )
 
@@ -284,6 +293,13 @@ def _check_references(cat: Catalog) -> None:
         need(h.get("graph_ids"), cat.graphs, f"ArticoleHITL.{kind}.graph_ids")
     for fid, f in cat.filings.items():
         need(f.get("books_gate"), cat.controls, f"ArticoleFiling.{fid}.books_gate")
+    decisions = {d["decision_id"] for d in (cat.docs.get("JevAnnex") or {}).get("decisions") or []}
+    for rid, r in cat.model_roles.items():
+        if r.graph_id not in cat.graphs:
+            errors.append(f"ArticoleModelRoles.{rid}: unknown graph_id {r.graph_id!r}")
+        need(r.hitl_kinds, cat.hitl, f"ArticoleModelRoles.{rid}.hitl_kinds")
+        if r.decision_id is not None:
+            need([r.decision_id], decisions, f"ArticoleModelRoles.{rid}.decision_id")
 
     if errors:
         raise CatalogError("catalog references do not resolve:\n  " + "\n  ".join(errors))

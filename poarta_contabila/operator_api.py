@@ -15,15 +15,23 @@ from typing import Any
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 
+from poarta_contabila.answers import OPERATOR_NAME_MAX
 from poarta_contabila.codit import Codit, CoditError, CoditInput
 from poarta_contabila.extract.statement import StatementMeta
 from poarta_contabila.registry import ExportKind, Product, Tenant
 from poarta_contabila.rules import ExplainedRule, RuleBody
 from poarta_contabila.runtime import IngestRefused, Runtime
 from poarta_contabila.sinks.exports import ExportError
-from poarta_contabila.types import Cui, Slug
+from poarta_contabila.types import Cui, Period, Slug
 
 _RAW = Body(..., media_type="application/octet-stream")
+
+
+class DecontUpload(BaseModel):
+    filename: str
+    period: Period
+    file_b64: str
+    tenant_on_doc: bool = False  # the operator states the tenant is on the report (fail closed)
 
 
 class StatementUpload(BaseModel):
@@ -53,6 +61,15 @@ def operator_router(
         if not hmac.compare_digest(given.encode(), expected.encode()):
             raise HTTPException(401, "operator token required")
         return rt
+
+    def who(x_operator_name: str | None = Header(default=None)) -> str | None:
+        """The person answering (WP-33): one shared token names nobody, so they say."""
+        if x_operator_name is None:
+            return None
+        name = x_operator_name.strip()
+        if not name or len(name) > OPERATOR_NAME_MAX or not name.isprintable():
+            raise HTTPException(422, f"X-Operator-Name: 1–{OPERATOR_NAME_MAX} printable chars")
+        return name
 
     router = APIRouter(tags=["operator"])
 
@@ -162,6 +179,88 @@ def operator_router(
         except IngestRefused as exc:
             raise HTTPException(422, str(exc)) from exc
 
+    @router.post("/decont/{cui}")
+    def post_decont(
+        cui: str, body: DecontUpload, rt: Runtime = Depends(operator)
+    ) -> dict[str, Any]:
+        """An expense report: a container split into parts by a person (folder_triage, A2)."""
+        try:
+            data = base64.b64decode(body.file_b64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise HTTPException(422, "file_b64 is not base64") from exc
+        try:
+            return rt.ingest_decont(
+                cui, data, body.filename, body.period, tenant_on_doc=body.tenant_on_doc
+            )
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.get("/triage/{batch_id}")
+    def get_batch(batch_id: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
+        try:
+            return rt.batch_view(batch_id)
+        except KeyError:
+            raise HTTPException(404, f"unknown batch {batch_id}") from None
+
+    @router.post("/triage/{batch_id}/resume")
+    def resume_batch(
+        batch_id: str,
+        body: dict[str, Any],
+        rt: Runtime = Depends(operator),
+        name: str | None = Depends(who),
+    ) -> dict[str, Any]:
+        try:
+            return rt.resume_batch(batch_id, body, name)
+        except KeyError:
+            raise HTTPException(404, f"unknown batch {batch_id}") from None
+
+    @router.get("/answers")
+    def answers(
+        cui: str | None = Query(default=None),
+        thread: str | None = Query(default=None, description="e.g. job:…, recon:{cui}:{period}"),
+        limit: int = Query(default=50, ge=1, le=500),
+        rt: Runtime = Depends(operator),
+    ) -> list[dict[str, Any]]:
+        """Every answer a person submitted, newest first (WP-33): what, when, who, outcome."""
+        rows = rt.answers.recent(cui=cui, thread_id=thread, limit=limit)
+        return [r.model_dump(mode="json") for r in rows]
+
+    @router.get("/model-roles")
+    def model_roles(rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
+        """Every model role (00_LAW §3.5): where it acts, its model, whether it may be called."""
+        return rt.model_roles_view()
+
+    @router.get("/model-calls")
+    def model_calls(
+        role: str | None = Query(default=None),
+        limit: int = Query(default=50, ge=1, le=500),
+        rt: Runtime = Depends(operator),
+    ) -> list[dict[str, Any]]:
+        """What each role was sent, or would be (MODEL_CALLS=dry), newest first."""
+        return [c.model_dump(mode="json") for c in rt.model_calls.recent(role, limit)]
+
+    @router.post("/recon/{cui}/{period}")
+    def start_recon(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
+        """One reconcile_sink pass over the month's undecided PRE checks (WP-23)."""
+        try:
+            return rt.start_recon(cui, period)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.get("/recon/{cui}/{period}")
+    def get_recon(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
+        return rt.recon_view(cui, period)
+
+    @router.post("/recon/{cui}/{period}/resume")
+    def resume_recon(
+        cui: str,
+        period: str,
+        body: dict[str, Any],
+        rt: Runtime = Depends(operator),
+        name: str | None = Depends(who),
+    ) -> dict[str, Any]:
+        return rt.resume_recon(cui, period, body, name)
+
     @router.post("/close/{cui}/{period}")
     def start_close(
         cui: str,
@@ -179,9 +278,13 @@ def operator_router(
 
     @router.post("/close/{cui}/{period}/resume")
     def resume_close(
-        cui: str, period: str, body: Any = Body(...), rt: Runtime = Depends(operator)
+        cui: str,
+        period: str,
+        body: Any = Body(...),
+        rt: Runtime = Depends(operator),
+        name: str | None = Depends(who),
     ) -> dict[str, Any]:
-        return rt.resume_close(cui, period, body)
+        return rt.resume_close(cui, period, body, name)
 
     @router.post("/rules")
     def post_rule(body: RuleRequest, rt: Runtime = Depends(operator)) -> ExplainedRule:
@@ -205,9 +308,14 @@ def operator_router(
             raise HTTPException(404, "unknown job") from exc
 
     @router.post("/jobs/{job_id}/resume")
-    def resume(job_id: str, body: Any = Body(...), rt: Runtime = Depends(operator)) -> dict:
+    def resume(
+        job_id: str,
+        body: Any = Body(...),
+        rt: Runtime = Depends(operator),
+        name: str | None = Depends(who),
+    ) -> dict:
         try:
-            return rt.resume(job_id, body)
+            return rt.resume(job_id, body, name)
         except KeyError as exc:
             raise HTTPException(404, "unknown job") from exc
 

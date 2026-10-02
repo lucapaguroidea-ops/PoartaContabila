@@ -14,6 +14,7 @@ enums:
   number_match: [exact, alnum, digits_core]
   verdict_review: [confirm, contest, abstain]
   sink_source: [registru_jurnal, cartea_mare]
+  account_amount: [gross, vat]   # which document amount a synthetic account carries (POST, WP-31)
 
 # --- flux rows for reconcile_sink (also listed in ArticoleGraph.allowed_flux) ---
 flux:
@@ -148,6 +149,9 @@ profiles:
     require_all_accounts: false
     llm_review: true
     how: true
+    # WP-31: the amount the posting moves on each expected account that is listed here, against
+    # the document; accounts not listed (class 6/7: net may split) are not compared.
+    account_amounts: {"401": gross, "4111": gross, "4426": vat, "4427": vat}
 
   - profile_id: post_bon_how
     schema_version: "1"
@@ -160,6 +164,7 @@ profiles:
     require_all_accounts: false
     llm_review: true
     how: true
+    account_amounts: {"4426": vat}
 
   - profile_id: post_how_4428
     schema_version: "1"
@@ -174,6 +179,7 @@ profiles:
     require_all_accounts: false
     llm_review: true
     how: true
+    account_amounts: {"401": gross, "4111": gross, "4428": vat}
 
 # --- subgraphs inside reconcile_sink ---
 subgraphs:

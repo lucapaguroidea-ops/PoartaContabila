@@ -309,3 +309,61 @@ def test_a_bank_reference_names_the_line_only_when_unique():
         ]
     )
     assert [d.maps.get("referinta") for d in shared] == [None, None]
+
+
+# ----- WP-22: the proposal on the question -----
+
+
+def test_an_unbound_payment_is_asked_with_the_invoice_it_settles(cat):
+    from tests.test_runtime import NEW_INVOICE
+
+    o = _ops(cat)
+    _bank_tenant(o)
+    invoice = o.ingest(NEW_INVOICE).json()  # AB 0099 of 10.09.2026, 807.81, supplier 20000005
+    invoice_id = invoice["job"]["job_id"]
+    tables = [
+        {
+            "headers": ["Data", "Descriere", "Debit", "Credit"],
+            "rows": [["15.09.2026", "Plata ALT FURNIZOR SRL fact AB 0099", "807,81", ""]],
+        }
+    ]
+    out = _post(o, meta={**META, "closing": "4192.19"}, tables=tables).json()
+    (line,) = out["jobs"]
+    question = line["question"]
+    assert question["kind"] == "v3_approve"
+    proposal = question["proposal"]
+    assert proposal["edit"] == {
+        "partner": {"cui": PARTNER, "name": "ALT FURNIZOR SRL", "role": "supplier"},
+        "maps": {"factura_numar": "AB 0099", "factura_id": invoice_id},
+    }
+    # the person sends the proposal back as their edit: packaged through plata_xml
+    view = o.resume(line["job"]["job_id"], {"decision": "edit", "edit": proposal["edit"]})
+    assert view["job"]["status"] == "packaged" and view["job"]["module_id"] == "plata_xml"
+
+
+def test_an_invoice_paid_in_two_lines_is_proposed_for_what_stays_open(cat):
+    from tests.test_runtime import NEW_INVOICE
+
+    o = _ops(cat)
+    _bank_tenant(o)
+    invoice_id = o.ingest(NEW_INVOICE).json()["job"]["job_id"]  # AB 0099, 807.81
+    head = ["Data", "Descriere", "Debit", "Credit"]
+    first = _post(
+        o,
+        meta={**META, "closing": "4500.00"},
+        tables=[{"headers": head, "rows": [["12.09.2026", "Plata fact AB 0099", "500,00", ""]]}],
+    ).json()["jobs"][0]
+    proposal = first["question"]["proposal"]
+    assert proposal["candidates"][0]["cover"] == "partial"
+    assert proposal["candidates"][0]["open_after"] == "307.81"
+    o.resume(first["job"]["job_id"], {"decision": "edit", "edit": proposal["edit"]})
+
+    second = _post(
+        o,
+        meta={**META, "opening": "4500.00", "closing": "4192.19"},
+        tables=[{"headers": head, "rows": [["16.09.2026", "Plata rest", "307,81", ""]]}],
+    ).json()["jobs"][0]
+    rest = second["question"]["proposal"]
+    (c,) = rest["candidates"]
+    assert c["cover"] == "full" and c["factura_id"] == invoice_id and c["hits"] == ["amount"]
+    assert rest["edit"]["maps"] == {"factura_numar": "AB 0099", "factura_id": invoice_id}

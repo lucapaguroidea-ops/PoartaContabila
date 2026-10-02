@@ -8,6 +8,6 @@ This repo is the Poarta Primară pack (source of truth) plus the `poarta_contabi
 
 ```bash
 uv sync                                   # install
-uv run pytest -q                          # tests (DB tests need POARTA_TEST_DSN)
+uv run pytest -q                          # tests (DB tests need POARTA_TEST_DSN; cloud sessions get it from .claude/hooks/session-start.sh)
 uv run ruff check . && uv run ruff format --check .
 ```

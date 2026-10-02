@@ -30,6 +30,7 @@ Edges read ``state["status"]`` only. Runs on ``job:`` threads only.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
@@ -45,6 +46,7 @@ from poarta_contabila.jev import unjudged
 from poarta_contabila.packages import BlobStore, PackageRow, PackageStore, write_once
 from poarta_contabila.period_diff import prefile_failures
 from poarta_contabila.recon.pre import PreResult
+from poarta_contabila.recon.settle import SETTLES, SettlementProposal
 from poarta_contabila.sinks.saga_xml import (
     SagaXmlError,
     export_key,
@@ -56,6 +58,7 @@ from poarta_contabila.sinks.saga_xml import (
 from poarta_contabila.types import CanonicalDocument, Closed, JobRecord, Slug, WriteModule
 
 GRAPH_ID = "ingest_source_doc"
+log = logging.getLogger(__name__)
 THREAD_PREFIX = "job:"
 _OUTBOUND = {"iesire", "storn_iesire"}
 _INBOUND = {"intrare", "storn_intrare"}
@@ -94,6 +97,14 @@ class IngestDeps:
     doc_class when known), or None."""
     treasury_account: Callable[[str, str], str | None] = lambda cui, iban: None
     """(tenant cui, IBAN) → the SAGA treasury account it maps to (``5121.01``), or None."""
+    settlement: Callable[[CanonicalDocument], SettlementProposal | None] = lambda doc: None
+    observe: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: None
+    """(role_id, input, tenant cui): a shadow model role at its place (records only)."""
+    observe_question: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: (
+        None
+    )
+    """(HITL kind, question, tenant cui): the System Two roles that would explain it."""
+    """An unbound bank line → the invoices it could settle (a proposal for the person)."""
 
     def package(self, job: JobRecord, doc: CanonicalDocument, module: WriteModule) -> PackageRow:
         """Render and write once; set the job to `packaged`. Safe to replay."""
@@ -188,6 +199,21 @@ def _edited(doc: CanonicalDocument, edit: dict[str, Any]) -> CanonicalDocument:
     return CanonicalDocument.model_validate(data)
 
 
+def _proposal(deps: IngestDeps, doc: CanonicalDocument) -> dict[str, Any]:
+    """For a bank line with no partner: the invoices it could settle, under ``proposal``.
+
+    A proposal that cannot be built is left out; the question is asked all the same.
+    """
+    if doc.doc_class not in SETTLES or doc.partner.cui:
+        return {}
+    try:
+        proposal = deps.settlement(doc)
+    except Exception:  # a missing proposal never blocks the question
+        log.exception("settlement proposal failed for %s", doc.job_id)
+        return {}
+    return {"proposal": proposal.model_dump()} if proposal is not None else {}
+
+
 def _needs_question(deps: IngestDeps, job: JobRecord, articol: dict, verdict: dict) -> bool:
     if verdict.get("needs_human") or not verdict.get("accounts_ok", False):
         return True
@@ -225,6 +251,13 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
             day=doc.date,
         )
         cands = match_articole(cat, ctx, allow_draft=deps.allow_draft)
+        seen = doc.model_dump(exclude={"job_id", "tenant", "source", "jev"})
+        cui = job.tenant.cui
+        deps.observe("jev_v3_classify", {"tenant_cui": cui, "document": seen}, cui)
+        if len(cands) > 1:
+            deps.observe(
+                "jev_flux", {"tenant_cui": cui, "document": seen, "candidates": cands}, cui
+            )
         if len(cands) == 1:
             articol_id = cands[0]
         else:
@@ -298,17 +331,15 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
                     return "edit is only allowed with decision 'edit'"
                 return None
 
-            answer = ask(
-                "v3_approve",
-                {
-                    "job_id": job.job_id,
-                    "articol_id": state["articol_id"],
-                    "judge": verdict,
-                    "document": doc.model_dump(),
-                },
-                V3ApproveResume,
-                check,
-            )
+            question = {
+                "job_id": job.job_id,
+                "articol_id": state["articol_id"],
+                "judge": verdict,
+                "document": doc.model_dump(),
+                **_proposal(deps, doc),
+            }
+            deps.observe_question("v3_approve", question, job.tenant.cui)
+            answer = ask("v3_approve", question, V3ApproveResume, check)
             if answer.decision == "reject":
                 deps.jobs.update(job.job_id, status="rejected")
                 return {"status": "rejected"}
