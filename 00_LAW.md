@@ -33,7 +33,14 @@ The domain store (Postgres, A1) may hold an expected set and witness snapshots. 
 2. No process on Railway holds SYSDBA or writes INSERT/UPDATE/DELETE on `CONT_BAZA.FDB`.
 3. Posting = official SAGA path only: XML/DBF → Import date → Validare. Direct FDB write = `FORBIDDEN_FDB`.
 4. Graph edges read only stored fields or Jev answers already on state. No LLM on an edge.
-5. Jev is System One. Grok is System Two (explain, HITL). Grok never posts. RunPod only if `needs_ocr`.
+5. Models act only inside nodes, by **role**, and every role is pinned to one exact model in
+   `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (no alias, no auto-router, no fallback model;
+   an unset model means the role refuses and a person is asked). **System One = Jev**: routes and
+   classifies JSON / normalized data. **System Two = DeepSeek or GLM**: explains and drafts for a
+   person; never posts, never decides a gate. **Document reading = Gemini**: only where there is no
+   XML or text layer (`needs_ocr`), and its output is checked deterministically before use. Calls go
+   through OpenRouter, one key per role group. **Synthetic tenants only** until an EU host
+   (Scaleway) serves the roles; a client tenant's data never reaches another route.
 6. `interrupt()` resume re-enters the node from line 1. Side effects sit after the interrupt, behind domain-store idempotency (Postgres unique keys).
 7. One firm-period has one statutory sink: SAGA C.
 8. Compensation is SAGA-shaped: Anulează importul | Devalidare | Stornare. Backup/restore is firm-wide.
@@ -84,7 +91,7 @@ Chat / multi-tool is a later `chat:` face. It is not a mouth, matcher, or closer
 | WriteModule | Approved SAGA mouth | FDB INSERT |
 | Expected set | Document-derived totals | General ledger |
 | SagaEye | Read protocol | Write path |
-| Jev / Grok / RunPod | Classify in-node / explain / gated OCR | Poster / edge |
+| Jev / System Two (DeepSeek, GLM) / Gemini | Classify in-node / explain, draft / read scans | Poster / edge / gate |
 
 ### Statutory
 

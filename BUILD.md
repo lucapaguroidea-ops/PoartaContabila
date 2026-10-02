@@ -35,6 +35,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-21 | done | WP-13 | Statement PDFs read by Google Document AI into the extract contract |
 | WP-22 | done | WP-19 | Bank line → the invoice it settles: a proposal on `v3_approve`, a person decides |
 | WP-23 | done | WP-05 | `reconcile_sink` graph, PRE stage: `need_rj_export`, `recon_ambiguous`, review contest |
+| WP-24 | done | WP-20 | Model roles: one pinned model per role, synthetic-only guard, dry-run trace |
 
 ## WP details
 
@@ -327,6 +328,28 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Open: the POST stage (`recon_post_*`, `recon_how_mismatch`: which accounts SAGA used against
   the expected ones) needs the journal lines per document; `monthly_close` does not invoke this
   graph before V2 yet; no reviewer is wired (Grok, `GROK_API_KEY`, not built).
+
+### WP-24 Model roles (00_LAW §3.5, changed by the owner 2026-10-02)
+- Decided by the owner 2026-10-02: Jev = System One (routing, classification of JSON /
+  normalized data); DeepSeek / GLM = System Two (explain, draft); Gemini = document reading; all
+  through OpenRouter with an exact model per role; synthetic tenants only until the EU host
+  (Scaleway). Grok and RunPod are gone from the law.
+- Built: `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (13 roles over the four graphs: node,
+  system, family, pack or annex decision, HITL kinds, output, `wired` / `not_wired`, `model`,
+  provider pin `{only, allow_fallbacks: false, data_collection: deny}`, `eu_route`), loaded and
+  checked by `catalog.py` (`model_roles.load_roles`: exact ids only — no alias / `openrouter/auto`
+  / `:free`, no fallback list, family fits the system, a wired role names its pack; graph, HITL
+  kinds and JevAnnex decisions resolve). `model_roles.py`: `route_check` (calls off, no model, a
+  client tenant off the EU route → `RouteRefused`), `ModelCall` records, `domain.model_calls`.
+  `Tenant.data_class` (`synthetic` | `client`, default client). `jev.role_transport`:
+  `MODEL_CALLS=dry` records exactly what a role would be sent and sends nothing, then fails
+  closed (a person is asked); refusals are recorded with the reason. Pack `recon_review` and
+  `make_recon_review` wire `reconcile_sink`'s review hook through the `jev_recon_review` role.
+  Operator `GET /model-roles` (roles, pinned model, key set or not — never the value),
+  `GET /model-calls?role=`.
+- Open: every `model:` is null until the owner sends the ids (`docs/OWNER_CHECKLIST.md`); the
+  live sender is not built (this session was not permitted to write the outbound call); the
+  System Two, document-reading and other `not_wired` roles have no call site yet.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

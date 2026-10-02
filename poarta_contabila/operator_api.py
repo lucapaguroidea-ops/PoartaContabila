@@ -162,6 +162,20 @@ def operator_router(
         except IngestRefused as exc:
             raise HTTPException(422, str(exc)) from exc
 
+    @router.get("/model-roles")
+    def model_roles(rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
+        """Every model role (00_LAW §3.5): where it acts, its model, whether it may be called."""
+        return rt.model_roles_view()
+
+    @router.get("/model-calls")
+    def model_calls(
+        role: str | None = Query(default=None),
+        limit: int = Query(default=50, ge=1, le=500),
+        rt: Runtime = Depends(operator),
+    ) -> list[dict[str, Any]]:
+        """What each role was sent, or would be (MODEL_CALLS=dry), newest first."""
+        return [c.model_dump(mode="json") for c in rt.model_calls.recent(role, limit)]
+
     @router.post("/recon/{cui}/{period}")
     def start_recon(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
         """One reconcile_sink pass over the month's undecided PRE checks (WP-23)."""

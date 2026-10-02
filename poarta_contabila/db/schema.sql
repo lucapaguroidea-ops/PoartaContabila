@@ -153,6 +153,15 @@ CREATE TABLE IF NOT EXISTS domain.tenants (
     updated_at  timestamptz NOT NULL DEFAULT now()
 );
 
+-- Model roles (00_LAW §3.5): what each role was (or would be, MODEL_CALLS=dry) sent.
+CREATE TABLE IF NOT EXISTS domain.model_calls (
+    call_id     text PRIMARY KEY,
+    role_id     text NOT NULL,
+    at          text NOT NULL,               -- UTC, YYYY-MM-DDTHH:MM:SSZ
+    body        jsonb NOT NULL
+);
+CREATE INDEX IF NOT EXISTS model_calls_role_at ON domain.model_calls (role_id, at);
+
 CREATE TABLE IF NOT EXISTS domain.sink_exports (
     export_id   text PRIMARY KEY,            -- {kind}:{sha256 of the file}
     tenant_cui  text NOT NULL,

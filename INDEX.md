@@ -17,7 +17,7 @@ catalog/                 Catalog Cale — executable law
   20_document            SourceDoc, Jobs
   30_cale                Graph, Flux (= căi), WriteModule, Bon (parked)
   40_sink                Reconcile, Close
-  50_control             HITL, Jev
+  50_control             HITL, Jev, model roles
   60_harvest             Controls, Filings, CO.DiT axes, extra HITL — added from practice
 fixtures/                json-logic + jev tests
 annex/                   superseded briefs and old contract — not SoT

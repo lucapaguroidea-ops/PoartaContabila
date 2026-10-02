@@ -48,6 +48,9 @@ class Tenant(Closed):
     saga_firm_folder: str = Field(min_length=1)
     punct: str = "default"
     book_of_record: Product = "saga"
+    data_class: Literal["synthetic", "client"] = "client"
+    """``synthetic`` = invented test data; only such a tenant may reach a model route that is
+    not the EU host (00_LAW §3.5). Unset means client data: fail closed."""
     bank_accounts: dict[str, str] = Field(default_factory=dict)
     """IBAN → the SAGA treasury account its lines post to (``5121.01``), for the bank mouths."""
 

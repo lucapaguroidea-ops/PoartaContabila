@@ -46,9 +46,16 @@ class V2Gate(Closed):
     action: Literal["file", "hold", "patch_maps", "reopen"]
 
 
+class ReconReview(Closed):
+    """``recon_review`` (``reconcile_sink.llm_review``, JevAnnex ``jev_recon_review``)."""
+
+    verdict: Literal["confirm", "contest", "abstain"]
+
+
 PACKS: dict[str, tuple[str, type[Closed]]] = {
     "v3_judge": ("1", V3Judge),
     "v2_declaration_gate": ("1", V2Gate),
+    "recon_review": ("1", ReconReview),
 }
 """pack → (version, closed output model). A new version never reuses cached answers."""
 
@@ -186,6 +193,59 @@ def http_transport(base_url: str, api_key: str) -> Transport:
     return call
 
 
+def payload_cui(payload: dict[str, Any]) -> str | None:
+    """The tenant a pack input belongs to (for the synthetic-only rule)."""
+    if isinstance(payload.get("tenant_cui"), str):
+        return payload["tenant_cui"]
+    diff = payload.get("diff")
+    return diff.get("cui") if isinstance(diff, dict) else None
+
+
+def role_transport(
+    roles: dict[str, Any],
+    *,
+    mode: str,
+    calls: Any,
+    synthetic: Callable[[str | None], bool],
+) -> Transport:
+    """The transport behind the model-role catalog (``model_roles``). Nothing is sent.
+
+    ``off``: refuses. ``dry``: the role and the tenant are checked (``route_check``) and the
+    call is recorded in *calls* (``domain.model_calls``) with exactly what the role would be
+    sent; then :class:`JevError`, so the node fails closed as if Jev gave no answer.
+    """
+    from poarta_contabila.model_roles import RouteRefused, record, role_for_pack, route_check
+
+    def call(pack: str, payload: dict[str, Any], timeout_s: float) -> Any:
+        if mode != "dry":
+            raise JevError(f"{pack}: model calls are {mode!r}")
+        try:
+            role = role_for_pack(roles, pack)
+        except RouteRefused as exc:
+            raise JevError(str(exc)) from None
+        cui = payload_cui(payload)
+        try:
+            route_check(role, tenant_synthetic=synthetic(cui), mode=mode)
+        except RouteRefused as exc:
+            calls.add(
+                record(role, payload, mode=mode, tenant_cui=cui, status="refused", reason=str(exc))
+            )
+            raise JevError(str(exc)) from None
+        calls.add(
+            record(
+                role,
+                payload,
+                mode=mode,
+                tenant_cui=cui,
+                status="recorded",
+                reason="dry run: recorded, not sent",
+            )
+        )
+        raise JevError(f"{role.role_id}: dry run, recorded and not sent")
+
+    return call
+
+
 def jev_from_env(cache: Any) -> Jev | None:
     """Jev from ``JEV_BASE_URL`` + ``JEV_API_KEY`` (ARCHITECTURE §14); None if either is unset."""
     base_url, api_key = os.environ.get("JEV_BASE_URL"), os.environ.get("JEV_API_KEY")
@@ -236,6 +296,31 @@ def make_judge(jev: Jev | None) -> Callable[[CanonicalDocument, dict], dict]:
         return {**answer.body.model_dump(), "judge": "jev", "input_hash": answer.input_hash}
 
     return judge
+
+
+def recon_review_input(doc: CanonicalDocument, det: dict[str, Any]) -> dict[str, Any]:
+    """What ``recon_review`` sees: the det verdict and the document, no job id."""
+    return {
+        "tenant_cui": doc.tenant.cui,
+        "det": {k: det.get(k) for k in ("verdict", "reason", "hits", "near", "level")},
+        "document": doc.model_dump(exclude={"job_id", "tenant", "source", "jev"}),
+    }
+
+
+def make_recon_review(jev: Jev | None) -> Callable[[Any, Any], Any]:
+    """``ReconDeps.review``: Jev's ``recon_review``, or ``abstain`` (det stands)."""
+    from poarta_contabila.reconcile import Review
+
+    def review(waiting: Any, det: Any) -> Any:
+        if jev is None:
+            return Review(verdict="abstain", reason="no reviewer wired")
+        try:
+            answer = jev.ask("recon_review", recon_review_input(waiting.doc, det.model_dump()))
+        except JevError as exc:
+            return Review(verdict="abstain", reason=str(exc))
+        return Review(verdict=answer.body.verdict, reason="jev")
+
+    return review
 
 
 def make_v2(

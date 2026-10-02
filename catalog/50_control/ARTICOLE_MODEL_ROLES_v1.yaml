@@ -1,0 +1,184 @@
+# ARTICOLE_MODEL_ROLES_v1.yaml
+# Lane B. Every place a model acts, as one role row (00_LAW §3 invariant 5).
+# A role names exactly one model. `model: null` = not chosen yet: the role refuses and a
+# person is asked. No alias ("latest"), no "openrouter/auto", no fallback model list.
+# Model ids and provider pins are the owner's (docs/OWNER_CHECKLIST.md); a change is a
+# reviewed catalog change. Synthetic tenants only until `eu_route` is set (Scaleway).
+
+file_schema: "1"
+catalog: ArticoleModelRoles
+status: draft
+valid_from: "2026-10-02"
+
+enums:
+  system: [system_one, system_two, document_reading]
+  status: [wired, not_wired]
+  route: [openrouter]
+  key_env: [OPENROUTER_JEV_API_KEY, OPENROUTER_SYS2_API_KEY, OPENROUTER_OCR_API_KEY]
+
+defaults:
+  route: openrouter
+  provider: {only: [], allow_fallbacks: false, data_collection: deny}
+  data: synthetic_only
+  eu_route: null          # Scaleway, once chosen: the only route a client tenant may use
+
+# system → the key its roles use and what it may never do
+systems:
+  system_one:
+    family: jev
+    key_env: OPENROUTER_JEV_API_KEY
+    does: "classify and route JSON / normalized data into closed answers"
+    cannot: [explain_to_person, write_saga, set_codit_axes, choose_mouth, open_gate_alone]
+  system_two:
+    families: [deepseek, glm]
+    key_env: OPENROUTER_SYS2_API_KEY
+    does: "explain a question to a person; draft text a person approves"
+    cannot: [post, decide_gate, answer_hitl, write_saga, run_on_edge]
+  document_reading:
+    family: gemini
+    key_env: OPENROUTER_OCR_API_KEY
+    does: "read scans / PDFs without XML or text layer into the extract contract"
+    cannot: [read_xml_documents, skip_deterministic_checks, emit, classify]
+
+roles:
+
+  # ----- folder_triage -----
+  - role_id: jev_source_doc
+    graph_id: folder_triage
+    node: sniff
+    system: system_one
+    decision_id: jev_source_doc
+    pack: null
+    output: "source_doc_id from the closed ArticoleSourceDoc list + confidence"
+    status: not_wired
+    model: null
+
+  - role_id: jev_our_role
+    graph_id: folder_triage
+    node: after_source_doc
+    system: system_one
+    decision_id: jev_our_role
+    pack: null
+    output: "inbound | outbound | n/a"
+    status: not_wired
+    model: null
+
+  - role_id: ocr_decont_split
+    graph_id: folder_triage
+    node: decont_split
+    system: document_reading
+    pack: null
+    hitl_kinds: [decont_split]
+    output: "proposed parts of an expense report; a person confirms"
+    status: not_wired
+    model: null
+
+  # ----- ingest_source_doc -----
+  - role_id: ocr_extract
+    graph_id: ingest_source_doc
+    node: extract
+    system: document_reading
+    pack: null
+    output: "normalized/tables.json + markdown.md (EXTRACT.md), then the statement checks"
+    status: not_wired
+    model: null
+    note: "Document AI (WP-21) stays the built reader until this role is wired."
+
+  - role_id: jev_v3_classify
+    graph_id: ingest_source_doc
+    node: v3_classify
+    system: system_one
+    pack: v3_classify
+    output: "doc_class, needs_ocr, needs_human, confidence"
+    status: not_wired
+    model: null
+
+  - role_id: jev_flux
+    graph_id: ingest_source_doc
+    node: bind
+    system: system_one
+    decision_id: jev_flux
+    pack: null
+    output: "a ranking of the articole that already matched (v1: a person still picks)"
+    status: not_wired
+    model: null
+
+  - role_id: jev_v3_judge
+    graph_id: ingest_source_doc
+    node: judge
+    system: system_one
+    pack: v3_judge
+    output: "V3Judge {accounts_ok, risk, needs_human}"
+    status: wired
+    model: null
+
+  - role_id: sys2_explain_approve
+    graph_id: ingest_source_doc
+    node: approve
+    system: system_two
+    family: deepseek
+    pack: null
+    hitl_kinds: [v3_approve]
+    output: "plain-language explanation shown with the question"
+    status: not_wired
+    model: null
+
+  # ----- reconcile_sink -----
+  - role_id: jev_recon_review
+    graph_id: reconcile_sink
+    node: load_window
+    system: system_one
+    decision_id: jev_recon_review
+    pack: recon_review
+    output: "confirm | contest | abstain (a contest only asks a person)"
+    status: wired
+    model: null
+
+  - role_id: sys2_explain_recon
+    graph_id: reconcile_sink
+    node: ask
+    system: system_two
+    family: deepseek
+    pack: null
+    hitl_kinds: [recon_ambiguous, need_rj_export, recon_review_contest]
+    output: "plain-language explanation shown with the question"
+    status: not_wired
+    model: null
+
+  # ----- monthly_close -----
+  - role_id: jev_v2_gate
+    graph_id: monthly_close
+    node: layer2
+    system: system_one
+    pack: v2_declaration_gate
+    output: "V2Gate suggestion; cannot clear material"
+    status: wired
+    model: null
+
+  - role_id: sys2_explain_close
+    graph_id: monthly_close
+    node: v2_gate
+    system: system_two
+    family: deepseek
+    pack: null
+    hitl_kinds: [v2_close, control_disposition]
+    output: "plain-language explanation shown with the question"
+    status: not_wired
+    model: null
+
+  - role_id: sys2_draft_rule
+    graph_id: monthly_close
+    node: v2_gate
+    system: system_two
+    family: glm
+    pack: null
+    hitl_kinds: [explained_rule]
+    output: "a draft explained rule; a person approves it through POST /rules"
+    status: not_wired
+    model: null
+
+forbidden:
+  - a model on a graph edge
+  - a role without a row here
+  - model aliases, openrouter/auto, fallback model lists
+  - a client tenant on any route but eu_route

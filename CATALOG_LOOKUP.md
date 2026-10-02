@@ -17,5 +17,6 @@
 | “Bon matrix?” | `30_cale/ARTICOL_BON_v1.yaml` — parked |
 | “Statement PDF grain?” | `60_harvest/ARTICOLE_EXTRAS_GRAIN_v1.yaml` |
 | “Jev field allowed?” | `50_control/JEV_ANNEX_v1.yaml` + `JEV_VALIDATE_V_v1.yaml` |
+| “Which model, where?” | `50_control/ARTICOLE_MODEL_ROLES_v1.yaml` |
 
 Unknown `articol_id` or HITL kind is an error, not a skip.

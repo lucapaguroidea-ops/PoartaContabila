@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -41,7 +42,15 @@ from poarta_contabila.extract.ubl import UblError, parse_ubl, read_spv_zip, to_c
 from poarta_contabila.filings import due_filings
 from poarta_contabila.filings import views as filing_views
 from poarta_contabila.ingest import IngestDeps, build_ingest_graph, start_payload
-from poarta_contabila.jev import make_judge, make_v2
+from poarta_contabila.jev import (
+    InMemoryJevCache,
+    Jev,
+    make_judge,
+    make_recon_review,
+    make_v2,
+    role_transport,
+)
+from poarta_contabila.model_roles import InMemoryModelCallStore
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
 from poarta_contabila.recon.pre import PreResult, ReconStore, make_pre_check
@@ -99,8 +108,24 @@ class Runtime:
     jev: Any = None  # jev.Jev; None = not wired (fail closed)
     statement_reader: Any = None  # (pdf, *, tenant_cui) -> Extraction; DocumentAiReader
     extracts: Any = None  # InMemoryExtractStore | PostgresExtractStore
+    model_calls: Any = None  # InMemoryModelCallStore | PostgresModelCallStore
+    model_mode: str = "off"  # MODEL_CALLS: off | dry (record, send nothing)
 
     def __post_init__(self) -> None:
+        if self.model_calls is None:
+            self.model_calls = InMemoryModelCallStore()
+        if self.model_mode not in ("off", "dry"):
+            self.model_mode = "off"  # an unknown mode calls nothing
+        if self.jev is None and self.model_mode == "dry":
+            self.jev = Jev(
+                transport=role_transport(
+                    self.catalog.model_roles,
+                    mode="dry",
+                    calls=self.model_calls,
+                    synthetic=self._synthetic,
+                ),
+                cache=InMemoryJevCache(),
+            )
         self.deps = IngestDeps(
             catalog=self.catalog,
             jobs=self.jobs,
@@ -157,6 +182,7 @@ class Runtime:
                 ),
                 settle=self._settle_pre,
                 export_months=self._rj_export_months,
+                review=make_recon_review(self.jev),
             ),
             checkpointer=self.checkpointer,
         )
@@ -169,6 +195,28 @@ class Runtime:
         if tenant is None:
             raise IngestRefused(f"tenant {cui} is not registered")
         return tenant.name
+
+    def _synthetic(self, cui: str | None) -> bool:
+        tenant = self.registry.tenant(cui) if cui else None
+        return tenant is not None and tenant.data_class == "synthetic"
+
+    def model_roles_view(self) -> list[dict[str, Any]]:
+        """Each model role: where it acts, its pinned model, and whether it could be called.
+
+        Key variables are reported as set or not, never their values.
+        """
+        out = []
+        for role in self.catalog.model_roles.values():
+            out.append(
+                {
+                    **role.model_dump(mode="json"),
+                    "key_env": role.key_env,
+                    "key_set": bool(os.environ.get(role.key_env)),
+                    "mode": self.model_mode,
+                    "callable_in_dry_run": role.status == "wired" and role.model is not None,
+                }
+            )
+        return out
 
     def _treasury_account(self, cui: str, iban: str) -> str | None:
         tenant = self.registry.tenant(cui)
@@ -637,6 +685,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     from poarta_contabila.filings import PostgresFilingStore
     from poarta_contabila.jev import PostgresJevCache, jev_from_env
     from poarta_contabila.jobs import PostgresJobStore
+    from poarta_contabila.model_roles import PostgresModelCallStore
     from poarta_contabila.packages import PostgresPackageStore
     from poarta_contabila.period_diff import PostgresPeriodStore
     from poarta_contabila.recon.pre import PostgresReconStore
@@ -650,6 +699,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     )
     checkpointer = PostgresSaver(pool)
     checkpointer.setup()
+    model_mode = os.environ.get("MODEL_CALLS", "off").strip().lower() or "off"
     runtime = build_runtime(
         catalog=catalog,
         jobs=PostgresJobStore(dsn),
@@ -664,7 +714,9 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         closes=PostgresCloseStore(dsn),
         codits=PostgresCoditStore(dsn),
         filings=PostgresFilingStore(dsn),
-        jev=jev_from_env(PostgresJevCache(dsn)),
+        jev=None if model_mode == "dry" else jev_from_env(PostgresJevCache(dsn)),
+        model_calls=PostgresModelCallStore(dsn),
+        model_mode=model_mode,
         statement_reader=document_ai_from_env(),
         extracts=PostgresExtractStore(dsn),
     )
