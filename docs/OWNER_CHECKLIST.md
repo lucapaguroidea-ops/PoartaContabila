@@ -22,6 +22,9 @@ the answer and the session records it.
       `OPENROUTER_BASE_URL`, `OPENROUTER_JEV_API_KEY`, `OPENROUTER_SYS2_API_KEY`,
       `OPENROUTER_OCR_API_KEY`, `MODEL_CALLS=dry` to start. One OpenRouter key per role group,
       each with its own credit limit. `GET /model-roles` shows which keys are set (never values).
+- [ ] **Railway domain**: the `PoartaContabila` service has no public domain (checked
+      2026-10-02), so the operator API cannot be reached from outside. Generate one (service →
+      Settings → Networking) before testing on Railway; it runs PR #5's code until PR #6 merges.
 - [ ] **Test tenants** carry `"data_class": "synthetic"` (`PUT /tenants/{cui}`); any other tenant
       is client data and no model is called for it until the EU route exists.
 - [ ] **Scaleway (EU)**: which Scaleway-hosted models serve which role, once we leave synthetic
