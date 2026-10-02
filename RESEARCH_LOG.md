@@ -5,16 +5,94 @@ Each item names the question, the official URL, a short quote, the date it was r
 the code takes from it. A page that cannot be read gives nothing to build: the code keeps a
 typed stub that refuses (fail closed) and the item says what the owner must do.
 
-## R1 · SAGA C receipts / payments XML import (`incasare_xml`, `plata_xml`) — WP-19
+## R1 · SAGA C "Import date": invoices, receipts, payments, nomenclatures — WP-03, WP-19
 
-- Question: file name, root and child tags, value formats of the receipts and payments XML
-  import (`P_<data>.xml`, root `<Plati>`, and any receipts counterpart).
-- Official URL: https://manual.sagasoft.ro/sagac/topic-76-import-date.html
-- 2026-10-01: **not read.** The build session's network policy denied the host
-  (`CONNECT` refused by the egress proxy, both by direct fetch and by the web fetcher).
-- Quote: none. Nothing about the bank layout is built; no `fixtures/saga/incasare.xml` or
-  `plata.xml` exists. Bank lines still stop at `needs_human` ("post it in SAGA").
-- Instruct: allow `manual.sagasoft.ro` in the environment's network access, then rerun WP-19.
+- Question: file names, root and child tags, value formats of SAGA C's XML import for invoices
+  (`iesire_factura_xml` / `intrare_factura_xml`), receipts and payments (`incasare_xml` /
+  `plata_xml`), partners and articles (`parteneri_xml` / `articole_xml`).
+- Official URL: https://manual.sagasoft.ro/sagac/topic-76-import-date.html — 2026-10-01 **not
+  read** (the build session's network policy denied the host).
+- 2026-10-02: **read** instead from SAGA C's own help, printed to PDF by the owner from the
+  installed program (7 chapters, each page stamped `02/10/2026`). The prints are not in this
+  repo (SAGA's text). Section **Diverse → Import date**, pages 7–15 of 29, unless noted.
+- Quotes (Romanian as printed):
+  - Scope: "Ecranul este destinat importului din fișiere XML generate din programe Saga sau
+    din alte aplicații, care respectă structura prezentată mai jos."
+  - Sync: "dacă sincronizarea se face după "Nr.+data", se vor importa doar documentele cu
+    număr şi dată care nu există deja în baza de date."
+  - Not validated: "în cazul intrărilor şi ieşirilor datele importate nu sunt validate."
+    Undo: "Pentru anularea importului de intrări şi ieşiri, validate grupat după import,
+    trebuie ca acestea să fie devalidate în prealabil în ecranele de intrări sau ieşiri."
+  - Backup: "Înainte de import, efectuați o salvare a bazei de date."
+  - Routing: "Facturile în format XML se vor importa în ecranul "Intrari" când codul fiscal
+    al firmei se regăsește la eticheta ClientCIF din XML și în ecranul"Ieșiri" când se
+    găsește le eticheta FurnizorCIF."
+  - Invoices: "Numele fişierului trebuie să fie în formatul următor: F_<cod-fiscal>_<numar-
+    factura>_<data-factura>.xml." "Pentru a importa mai multe facturi concomitent, repetaţi
+    secvenţa <Factura>." Tags, in the manual's order (`?` = printed "Opțional"):
+
+    ```
+    <Facturi><Factura>
+      <Antet> FurnizorNume FurnizorCIF FurnizorNrRegCom FurnizorCapital FurnizorTara
+        FurnizorLocalitate FurnizorJudet FurnizorAdresa FurnizorTelefon FurnizorMail
+        FurnizorBanca FurnizorIBAN FurnizorInformatiiSuplimentare GUID_cod_client?
+        ClientNume ClientInformatiiSuplimentare ClientCIF ClientNrRegCom ClientJudet
+        ClientTara ClientLocalitate ClientAdresa ClientBanca ClientIBAN ClientTelefon
+        ClientMail FacturaNumar FacturaData FacturaScadenta FacturaTaxareInversa (Da/Nu)
+        FacturaTVAIncasare (Da/Nu) FacturaTip? FacturaInformatiiSuplimentare
+        FacturaMoneda ("Opţional pentru RON") FacturaGreutate FacturaAccize?
+        FacturaIndexSPV ("ID-ul de încărcare al e-Facturilor în SPV") Cod? </Antet>
+      <Detalii><Continut><Linie> LinieNrCrt Gestiune? Activitate? Descriere
+        CodArticolFurnizor? CodArticolClient? GUID_cod_articol? CodBare?
+        InformatiiSuplimentare? UM Cantitate Pret Valoare ProcTVA? TVA Cont? TipDeducere?
+        PretVanzare? </Linie>…</Continut></Detalii>
+      <FacturaID> sau <GUID_factura>
+    </Factura>…</Facturi>
+    ```
+
+    `FacturaID`: "(Opţional, ID unic, din aplicatia proprie, pentru identificarea încasării.
+    Asocierea cu ID-ul unic din Saga se salvează în baza de date, pentru identificare
+    ulterioară)".
+  - Receipts: "Numele fişierului trebuie să fie în formatul următor: I_<data>.xml."
+    "Pentru a importa mai multe încasări concomitent, repetaţi secvenţa <Linie>."
+    `<Incasari><Linie>` `Data`, `Numar`, `Suma`, `Cont` ("Cont de trezorerie din clasa 5"),
+    `ContClient` (Opţional), `Explicatie`, `FacturaID` ("Opţional - necesar pentru
+    identificarea facturii încasate dacă aceasta a fost importată dintr-un XML"),
+    `FacturaNumar` ("Opţional - permite identificarea facturii dupa număr"), `CodFiscal`
+    (Opţional), `Moneda` (Opţional). "Fisierul XML de încasări se poate importa şi prin
+    ecranele "Registru de casa" sau "Jurnal de banca". Această variantă permite asocierea
+    încasărilor cu facturile corespunzătoare."
+  - Payments: "P_<data>.xml", `<Plati><Linie>` with the same tags, `ContFurnizor` (Opţional)
+    in place of `ContClient`; the same sentence about "Registru de casa" / "Jurnal de banca".
+    The manual prints the row's closing tag as `<\Linie>`; read as `</Linie>`.
+  - Nomenclatures: `FUR_<data>.xml` `<Furnizori><Linie>` and `CLI_<data>.xml`
+    `<Clienti><Linie>` (`Cod`?, `Denumire`, `Cod_fiscal`, `Reg_com`, `Tara`, `Judet`,
+    `Localitate`, `Adresa`?, `Cont_banca`?, `Banca`?, `Tel`?, `Email`?, clients `Discount`?,
+    `Informatii`?, `Guid_cod`?); `ART_<data>.xml` `<Articole><Linie>` (`Cod`?, `Denumire`,
+    `Cod_NC`, `Cod_CPV`, `UM`, `Tip`, `TVA`, `Pret`?, `Pret_TVA`?, `Cod_bare`?,
+    `Informatii`?, `Guid_cod`?). "Nomenclatoarele se importă exclusiv în functie de codul
+    intern."
+  - Sample file: "Puteti obţine un model de XML cu date folosind tipărirea din ecranul
+    "Ieșiri" și alegând opţiunea "Formular PDF" … În folderul TEMP\Facturi se va copia, pe
+    lânga PDF, și XML-ul aferent facturii."
+  - Elsewhere: the firm's fiscal code "se va înscrie fără a fi precedat de atributul fiscal …
+    se va completa doar 1234 şi nu RO1234" (Configurare, p. 1); a partner checked as a VAT
+    payer gets "atributul fiscal "RO"" added (Fisiere → Terti); supplier code 00001 → analytic
+    "401.00001", client → "4111.00001" (Fisiere → Terti); Stornare gives "o înregistrare
+    devalidată, cu valori negative a documentului selectat, şi cu litera "s" adăugată la
+    numărul de document" (Operatii → Intrari); user type "Agent" is a sales agent with access
+    "doar la clienții, furnizorii și facturile introduse de acesta", and non-Admin users cannot
+    operate on "o perioadă închisă" nor devalidate "o lună închisă" (Configurare utilizatori);
+    backup archives are named "ZZ-LL-AAAA_N.ZIP" in `salv_bd\cod_firma` (Administrare →
+    Intretinere BD).
+- Not in the manual, so `[de confirmat]` on a copy firm: value formats (dates in tags and in
+  file names, decimal separator, a partner CIF with or without `RO`), whether an empty tag
+  equals an absent one, whether `Cont` takes an analytic, what SAGA does with a receipt or
+  payment that names no partner and no invoice, negative quantities in an imported invoice
+  (storno), the length and characters allowed in `FacturaID`. The sample file above settles
+  the formats for invoices.
+- Code takes: WP-03 writes only tags listed above (`sinks/saga_xml.py`); WP-19 builds the
+  receipts and payments mouths from this item.
 
 ## R2 · Jev (TypeSafe AI System One) API — WP-20
 

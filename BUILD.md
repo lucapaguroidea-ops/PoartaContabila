@@ -30,7 +30,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-17 | parked | — | Engagement backlog / `chat:` face |
 | WP-18 | parked | — | Take-on / year-end / D406 producer / FX engine |
 | WP-D3 | decision | WP-11 | Non-payer RC books: 4423 vs 446x on copy-firm note |
-| WP-19 | todo | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (blocked: R1 unread) |
+| WP-19 | todo | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (R1) |
 | WP-20 | in-progress | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; wire waits on R2 |
 | WP-21 | done | WP-13 | Statement PDFs read by Google Document AI into the extract contract |
 
@@ -193,14 +193,15 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   (cash) statements and foreign-currency accounts are not read.
 
 ### WP-19 Bank mouths
-- Read the SAGA manual's receipts/payments import (`P_<data>.xml`, root `<Plati>`, receipts
-  counterpart) and quote it in `RESEARCH_LOG.md` R1 first; tags only from that page.
+- Tags only from `RESEARCH_LOG.md` R1: receipts `I_<data>.xml` `<Incasari><Linie>`, payments
+  `P_<data>.xml` `<Plati><Linie>`.
 - Render the statement-line documents (`incasare` / `plata`, `extract/statement.py`) next to the
   invoice renderer in `sinks/saga_xml.py`; write once per `export_key`; the ingest `package`
   node uses these mouths instead of stopping at `needs_human`. Fixtures
   `fixtures/saga/incasare.xml` / `plata.xml` (synthetic). Modules stay `draft` until a green
   copy-firm import, which the owner does.
-- Blocked 2026-10-01: the manual's host was denied by the build session's network policy (R1).
+- Blocked 2026-10-01 (the manual's host was denied); unblocked 2026-10-02: R1 read from the
+  owner's print of SAGA C's installed help.
 
 ### WP-20 Jev Layer 1 + Layer 2
 - `v3_judge` → `IngestDeps.judge`; `v2_declaration_gate` → `CloseDeps.jev_v2`. JSON only,
