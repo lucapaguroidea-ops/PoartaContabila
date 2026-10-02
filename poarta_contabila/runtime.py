@@ -245,6 +245,16 @@ class Runtime:
                     "key_set": bool(os.environ.get(role.key_env)),
                     "mode": self.model_mode,
                     "callable_in_dry_run": role.status == "wired" and role.model is not None,
+                    "eu_route_set": role.eu_route is not None,
+                    "eu_keys_set": (
+                        all(
+                            bool(os.environ.get(name))
+                            for name in (role.eu_route.key_env, role.eu_route.project_env)
+                            if name
+                        )
+                        if role.eu_route
+                        else False
+                    ),
                     "card_hash": role.card_hash,
                     "brief": brief(role),
                 }

@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from poarta_contabila.types import Closed, Slug
 
@@ -42,6 +42,65 @@ FAMILIES = {
 }
 log = logging.getLogger(__name__)
 _ALIAS = re.compile(r"(^openrouter/auto$|latest|:free$|^auto$)", re.IGNORECASE)
+
+
+# WP-35: the EU route's regions, by provider — an explicit list, never a prefix. Google's
+# europe-west2 (London) and europe-west6 (Zurich) are outside the EU; "global" has no residency.
+EU_LOCATIONS: dict[str, frozenset[str]] = {
+    "vertex": frozenset(
+        {
+            "europe-central2",  # Warsaw
+            "europe-north1",  # Finland
+            "europe-north2",  # Stockholm
+            "europe-southwest1",  # Madrid
+            "europe-west1",  # Belgium
+            "europe-west3",  # Frankfurt
+            "europe-west4",  # Netherlands
+            "europe-west8",  # Milan
+            "europe-west9",  # Paris
+            "europe-west10",  # Berlin
+            "europe-west12",  # Turin
+        }
+    ),
+    "scaleway": frozenset({"fr-par", "nl-ams", "pl-waw"}),
+}
+_ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
+
+
+class EuRoute(Closed):
+    """The only route a client tenant's data may take (00_LAW §3 invariant 5; WP-35).
+
+    Who serves which family is the owner's decision (``docs/EU_VERTEX_SETUP.md``); this only
+    makes whatever is written checkable: an EU region of that provider, one exact model, and
+    the variables that hold the credential (values never in the catalog).
+    """
+
+    provider: Literal["vertex", "scaleway"]
+    location: str
+    model: str
+    key_env: str  # the credential: a sealed variable (e.g. the service-account JSON)
+    project_env: str | None = None  # Vertex: the variable holding the GCP project id
+
+    @model_validator(mode="after")
+    def _eu_only(self) -> EuRoute:
+        allowed = EU_LOCATIONS[self.provider]
+        if self.location not in allowed:
+            raise ValueError(
+                f"eu_route: {self.location!r} is not an EU region of {self.provider}"
+                f" ({', '.join(sorted(allowed))})"
+            )
+        if not self.model.strip() or _ALIAS.search(self.model):
+            raise ValueError(f"eu_route: {self.model!r} is not an exact model id")
+        for name in (self.key_env, self.project_env):
+            if name is not None and not _ENV_NAME.match(name):
+                raise ValueError(f"eu_route: {name!r} is not a variable name")
+        if self.provider == "vertex" and self.project_env is None:
+            raise ValueError("eu_route: a vertex route names its project_env")
+        return self
+
+    @property
+    def label(self) -> str:
+        return f"eu/{self.provider}/{self.location}"
 
 
 class RouteRefused(RuntimeError):
@@ -74,7 +133,7 @@ class ModelRole(Closed):
     route: Literal["openrouter"] = "openrouter"
     provider: ProviderPin = Field(default_factory=ProviderPin)
     data: Literal["synthetic_only"] = "synthetic_only"
-    eu_route: str | None = None
+    eu_route: EuRoute | None = None
     note: str | None = None
     card: dict[str, Any] = Field(default_factory=dict)
     """The merged role card (system base + role); see :func:`check_card`."""
@@ -243,10 +302,12 @@ def route_check(role: ModelRole, *, tenant_synthetic: bool, mode: str) -> None:
     """Raise :class:`RouteRefused` unless *role* may be called now (see module docstring)."""
     if mode not in ("dry",):
         raise RouteRefused(f"{role.role_id}: model calls are {mode!r}")
+    if not tenant_synthetic:  # client data: the EU route or nothing
+        if role.eu_route is None:
+            raise RouteRefused(f"{role.role_id}: a client tenant needs the EU route; none is set")
+        return
     if role.model is None:
         raise RouteRefused(f"{role.role_id}: no model chosen in ArticoleModelRoles")
-    if not tenant_synthetic and role.eu_route is None:
-        raise RouteRefused(f"{role.role_id}: a client tenant needs the EU route; none is set")
 
 
 # ----- what was (or would be) sent -----
@@ -278,13 +339,16 @@ def record(
     tenant_cui: str | None,
     status: Literal["recorded", "refused"],
     reason: str,
+    eu: bool = False,
 ) -> ModelCall:
+    """*eu*: a client tenant's call, which goes by the role's ``eu_route`` (when set)."""
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    route = role.eu_route if eu else None
     return ModelCall(
         call_id=str(uuid.uuid4()),
         role_id=role.role_id,
-        model=role.model,
-        route=role.route,
+        model=route.model if route else role.model,
+        route=route.label if route else ("eu/none" if eu else role.route),
         provider=role.provider,
         mode=mode,
         tenant_cui=tenant_cui,
@@ -382,8 +446,9 @@ class ModelGateway:
         role = self.roles.get(role_id)
         if self.mode != "dry" or role is None or role.status != "shadow":
             return
+        synthetic = self.synthetic(tenant_cui)
         try:
-            route_check(role, tenant_synthetic=self.synthetic(tenant_cui), mode=self.mode)
+            route_check(role, tenant_synthetic=synthetic, mode=self.mode)
         except RouteRefused as exc:
             call = record(
                 role,
@@ -392,6 +457,7 @@ class ModelGateway:
                 tenant_cui=tenant_cui,
                 status="refused",
                 reason=str(exc),
+                eu=not synthetic,
             )
         else:
             call = record(
@@ -401,6 +467,7 @@ class ModelGateway:
                 tenant_cui=tenant_cui,
                 status="recorded",
                 reason="shadow: recorded, not sent; its answer would decide nothing",
+                eu=not synthetic,
             )
         if not self.calls.seen(role_id, call.input_hash):
             self.calls.add(call)

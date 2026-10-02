@@ -492,3 +492,118 @@ def test_only_shadow_roles_are_observed(cat):
     assert calls.rows == []
     ModelGateway(roles=roles, calls=calls, mode="off").observe("jev_our_role", {}, CUI)
     assert calls.rows == []
+
+
+# ----- WP-35: the EU route's shape -----
+
+EU = {
+    "provider": "vertex",
+    "location": "europe-west4",
+    "model": "gemini-eu-2026-09",  # placeholder id for tests
+    "key_env": "GCP_DOCREAD_SA_JSON",
+    "project_env": "GCP_DOCREAD_PROJECT",
+}
+
+
+def _row(**change):
+    return {
+        "role_id": "r",
+        "graph_id": "ingest_source_doc",
+        "node": "extract",
+        "system": "document_reading",
+        "output": "x",
+        "status": "shadow",
+        "model": None,
+        "card": {"instructions": "read the page", "output": {"field": "string"}},
+        **change,
+    }
+
+
+def test_an_eu_route_loads_from_the_catalog():
+    (role,) = load_roles({"roles": [_row(eu_route=EU)]}).values()
+    assert role.eu_route.label == "eu/vertex/europe-west4"
+    (scw,) = load_roles(
+        {
+            "roles": [
+                _row(
+                    eu_route={
+                        "provider": "scaleway",
+                        "location": "fr-par",
+                        "model": "m-1",
+                        "key_env": "SCW_SECRET_KEY",
+                    }
+                )
+            ]
+        }
+    ).values()
+    assert scw.eu_route.project_env is None
+
+
+@pytest.mark.parametrize(
+    ("change", "match"),
+    [
+        ({"location": "europe-west2"}, "not an EU region"),  # London
+        ({"location": "europe-west6"}, "not an EU region"),  # Zurich
+        ({"location": "global"}, "not an EU region"),
+        ({"location": "us-central1"}, "not an EU region"),
+        ({"provider": "scaleway", "location": "europe-west4"}, "not an EU region"),
+        ({"model": "gemini-flash-latest"}, "exact model id"),
+        ({"key_env": "gcp key"}, "not a variable name"),
+        ({"project_env": None}, "names its project_env"),
+        ({"provider": "openrouter"}, "provider"),
+    ],
+)
+def test_an_eu_route_outside_the_eu_or_vague_does_not_load(change, match):
+    with pytest.raises(ValueError, match=match):
+        load_roles({"roles": [_row(eu_route={**EU, **change})]})
+
+
+def test_a_client_tenant_goes_by_the_eu_route_only(cat):
+    from poarta_contabila.model_roles import EuRoute, record
+
+    role = cat.model_roles["ocr_extract"]
+    with pytest.raises(RouteRefused, match="needs the EU route"):
+        route_check(role, tenant_synthetic=False, mode="dry")
+    gone = record(role, {}, mode="dry", tenant_cui=CUI, status="refused", reason="x", eu=True)
+    assert gone.route == "eu/none" and gone.model is None
+
+    eu_only = role.model_copy(update={"eu_route": EuRoute(**EU)})  # no OpenRouter model at all
+    route_check(eu_only, tenant_synthetic=False, mode="dry")  # client: the EU route is enough
+    with pytest.raises(RouteRefused, match="no model chosen"):
+        route_check(eu_only, tenant_synthetic=True, mode="dry")  # synthetic: OpenRouter's
+    call = record(eu_only, {}, mode="dry", tenant_cui=CUI, status="recorded", reason="x", eu=True)
+    assert (call.route, call.model) == ("eu/vertex/europe-west4", "gemini-eu-2026-09")
+
+
+def test_a_client_tenants_shadow_call_is_recorded_on_its_eu_route(cat):
+    from poarta_contabila.model_roles import EuRoute
+
+    roles = dict(_pinned(cat).model_roles)
+    roles["ocr_extract"] = roles["ocr_extract"].model_copy(update={"eu_route": EuRoute(**EU)})
+    o = Ops(_runtime(dataclasses.replace(cat, model_roles=roles), model_mode="dry"))
+    body = {"cui": CUI, "name": "F", "saga_firm_folder": FOLDER, "data_class": "client"}
+    o.http.put(f"/tenants/{CUI}", json=body, headers=o.op)
+    o.rt.gateway.observe("ocr_extract", {"tenant_cui": CUI}, CUI)
+    o.rt.gateway.observe("ocr_decont_split", {"tenant_cui": CUI}, CUI)
+    calls = {c["role_id"]: c for c in _calls(o)}
+    assert calls["ocr_extract"]["status"] == "recorded"
+    assert calls["ocr_extract"]["route"] == "eu/vertex/europe-west4"
+    assert calls["ocr_decont_split"]["status"] == "refused"
+    assert calls["ocr_decont_split"]["route"] == "eu/none"
+
+
+def test_the_roles_view_says_whether_the_eu_route_and_its_keys_are_set(cat, monkeypatch):
+    from poarta_contabila.model_roles import EuRoute
+
+    roles = dict(cat.model_roles)
+    roles["ocr_extract"] = roles["ocr_extract"].model_copy(update={"eu_route": EuRoute(**EU)})
+    o = Ops(_runtime(dataclasses.replace(cat, model_roles=roles)))
+    monkeypatch.setenv("GCP_DOCREAD_SA_JSON", '{"secret": "never-shown"}')
+    view = {r["role_id"]: r for r in o.http.get("/model-roles", headers=o.op).json()}
+    assert view["ocr_extract"]["eu_route_set"] is True
+    assert view["ocr_extract"]["eu_keys_set"] is False  # the project variable is missing
+    monkeypatch.setenv("GCP_DOCREAD_PROJECT", "p")
+    resp = o.http.get("/model-roles", headers=o.op)
+    assert {r["role_id"]: r for r in resp.json()}["ocr_extract"]["eu_keys_set"] is True
+    assert "never-shown" not in resp.text
+    assert view["ocr_decont_split"]["eu_route_set"] is False

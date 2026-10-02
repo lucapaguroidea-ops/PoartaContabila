@@ -244,11 +244,20 @@ def role_transport(
         except RouteRefused as exc:
             raise JevError(str(exc)) from None
         cui = payload_cui(payload)
+        eu = not synthetic(cui)
         try:
-            route_check(role, tenant_synthetic=synthetic(cui), mode=mode)
+            route_check(role, tenant_synthetic=not eu, mode=mode)
         except RouteRefused as exc:
             calls.add(
-                record(role, payload, mode=mode, tenant_cui=cui, status="refused", reason=str(exc))
+                record(
+                    role,
+                    payload,
+                    mode=mode,
+                    tenant_cui=cui,
+                    status="refused",
+                    reason=str(exc),
+                    eu=eu,
+                )
             )
             raise JevError(str(exc)) from None
         calls.add(
@@ -259,6 +268,7 @@ def role_transport(
                 tenant_cui=cui,
                 status="recorded",
                 reason="dry run: recorded, not sent",
+                eu=eu,
             )
         )
         raise JevError(f"{role.role_id}: dry run, recorded and not sent")

@@ -46,6 +46,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-32 | done | WP-26 | `sys2_draft_rule` in shadow at `monthly_close.v2_gate`: every model role has a call site |
 | WP-33 | done | WP-06R | Answer log: every answer a person submits, its outcome and its author, append-only |
 | WP-34 | done | WP-06R | Request bodies capped (413, `MAX_UPLOAD_MB`); `/ready` reports weak or shared tokens |
+| WP-35 | done | WP-24 | `eu_route` is a checked structure: provider, EU region, exact model, credential variables |
 
 ## WP details
 
@@ -513,6 +514,29 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   `ok`, `unset`, `shorter than 32 characters` or `same as the other token`. These are reported,
   never the values, and do not gate readiness.
 - Open: no rate limit; per-person tokens (see WP-33).
+
+### WP-35 The EU route's shape
+- Built: `model_roles.EuRoute` fixes the shape of `eu_route` without deciding it:
+  - `provider` is `vertex` or `scaleway`;
+  - `location` must be on that provider's explicit EU list (`EU_LOCATIONS`). Google's London
+    (`europe-west2`) and Zurich (`europe-west6`) regions and `global` are refused;
+  - `model` is an exact id (the same alias rules as `model`);
+  - `key_env` and `project_env` name the variables that hold the credential and the project
+    (Vertex needs both). The catalog holds names, never values.
+
+  Routing:
+  - a client tenant goes by `eu_route` alone and needs no OpenRouter `model`;
+  - a synthetic tenant goes by OpenRouter alone;
+  - recorded calls carry `route: eu/<provider>/<location>` and the EU model, or `eu/none` when
+    refused.
+
+  `GET /model-roles` adds `eu_route_set` and `eu_keys_set`, which say whether the variables
+  are set, never their values. The smoke run reports how many roles have one.
+- Also fixed: the smoke run built its SPV zip with the current time inside, so a rerun across a
+  2-second boundary minted a second Job for the same invoice. The zip now has a fixed
+  timestamp.
+- Open: every `eu_route` stays null until the owner's EU-route decision; no EU transport is
+  built (WP-20 / WP-24).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

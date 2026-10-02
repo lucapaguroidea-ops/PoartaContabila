@@ -30,7 +30,12 @@ defaults:
   route: openrouter
   provider: {only: [], allow_fallbacks: false, data_collection: deny}
   data: synthetic_only
-  eu_route: null          # Scaleway, once chosen: the only route a client tenant may use
+  eu_route: null          # the only route a client tenant may use; null = client data refused
+  # eu_route shape (WP-35), set per role once the owner decides (docs/EU_VERTEX_SETUP.md):
+  #   {provider: vertex | scaleway, location: <EU region of that provider>, model: <exact id>,
+  #    key_env: <variable with the credential>, project_env: <variable with the GCP project>}
+  # Regions are an explicit EU list (model_roles.EU_LOCATIONS): never "global", never
+  # europe-west2 (London) or europe-west6 (Zurich).
 
 # system → the key its roles use, what it may never do, and its base card
 systems:

@@ -122,8 +122,12 @@ def spv_invoice() -> bytes:
     xml = xml.replace(b"<cbc:ID>AB 0058</cbc:ID>", b"<cbc:ID>AB 0099</cbc:ID>")
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("4100000001.xml", xml)
-        zf.writestr("semnatura_4100000001.xml", (FIXTURES / "ubl/semnatura.xml").read_bytes())
+        for name, data in (
+            ("4100000001.xml", xml),
+            ("semnatura_4100000001.xml", (FIXTURES / "ubl/semnatura.xml").read_bytes()),
+        ):
+            # a fixed timestamp: the same bytes on every run, so a rerun finds the same Job
+            zf.writestr(zipfile.ZipInfo(name, date_time=(2026, 10, 1, 0, 0, 0)), data)
     return buf.getvalue()
 
 
@@ -186,6 +190,14 @@ def run(c: Client, *, allow_mode: Callable[[str], bool] = SAFE_MODES.__contains_
         raise SmokeRefused(f"MODEL_CALLS is {report.mode}: the smoke run needs off or dry")
     keys = sorted({f"{r['key_env']}={'set' if r['key_set'] else 'unset'}" for r in roles.values()})
     report.steps.append(Step("model roles", 200, f"mode {report.mode}; " + ", ".join(keys)))
+    eu = [r for r in roles.values() if r.get("eu_route_set")]
+    report.steps.append(
+        Step(
+            "eu route",
+            200,
+            f"set on {len(eu)} of {len(roles)} roles; a client firm is refused by the others",
+        )
+    )
 
     resp = c.put(f"/tenants/{CUI}", json=TENANT)
     report.steps.append(Step("tenant", resp.status_code, "synthetic", resp.status_code < 400))
