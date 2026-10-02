@@ -50,6 +50,8 @@ class StatementUpload(BaseModel):
     meta: StatementMeta
     tables: list[dict[str, Any]] | None = None
     pdf_b64: str
+    strong: bool = False
+    """Gemini reads with its strong tier first (00_LAW §8 A4); synthetic tenants only."""
 
 
 class RuleRequest(RuleBody):
@@ -210,7 +212,7 @@ def operator_router(
         except (binascii.Error, ValueError) as exc:
             raise HTTPException(422, "pdf_b64 is not base64") from exc
         try:
-            return rt.ingest_statement(cui, body.meta, body.tables, pdf)
+            return rt.ingest_statement(cui, body.meta, body.tables, pdf, body.strong)
         except IngestRefused as exc:
             raise HTTPException(422, str(exc)) from exc
 

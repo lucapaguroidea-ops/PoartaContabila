@@ -52,6 +52,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-38 | done | WP-34 | Token names `GRAPHUSERTOKEN_*`; the build agent's token, synthetic tenants only |
 | WP-39 | done | WP-36 | Gemini reader asks again when Google is busy (500/503/504), three tries at most |
 | WP-40 | done | WP-39 | Free-tier rate limits in the catalog; one backup model while the main one is at its limit |
+| WP-41 | done | WP-40 | Model tiers (Lite everyday, Flash strong), daily limits, second run on a read that does not tie |
 
 ## WP details
 
@@ -658,6 +659,27 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   override gets the main model's limits).
 - Open: the limits count only this process; Google's own count is per project, so another
   client of the same key still shows as 429.
+
+### WP-41 Model tiers, daily limits and the second run
+- Asked by the owner 2026-10-02 (00_LAW §8 A4) after the second live run: the free tier's
+  Flash models allow 20 requests a day, and the 503s seemed to count against it, so the
+  `dense` case got a daily 429.
+- Catalog (both document-reading roles): `tiers.everyday` = `gemini-3.5-flash-lite`,
+  `gemini-3.1-flash-lite` (15 RPM, RPD `[de confirmat]`); `tiers.strong` = `gemini-3.8-flash`,
+  `gemini-3.7-flash` (5 RPM, 20 RPD); `model` is the first everyday one. `backup_model` is gone.
+  `load_roles` refuses tiers off the Google AI Studio route, a model listed twice, an inexact
+  id, a `model` other than the first everyday one, and a tier model without a rate limit.
+- `extract/gemini.py`: the limiter also counts requests per Pacific day (every attempt);
+  `order()` is everyday → strong, strong first for 2+ pages or `strong: true`, strong only for
+  a second run; a 429 names its quota (`QuotaFailure.quotaId`) and a `…PerDay…` one skips the
+  model until Pacific midnight; a busy model gets one retry after 10 s (was 3 tries), then the
+  next model. The call records `tier`, `first_choice`, and "second run".
+- `runtime.py`: a Gemini read that fails `statement_problem` (holder CUI, IBAN, tie-out) is
+  read once more by the strong tier; still failing → refused, not stored, so a re-upload
+  reads again. `POST /extras/{cui}` takes `strong: true`.
+- The evaluation reads with one model (the first everyday one, or `--model`).
+- Open: the Lite models' daily limits and the ids `gemini-3.5-flash-lite` /
+  `gemini-3.1-flash-lite` are to be confirmed on the owner's AI Studio page.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

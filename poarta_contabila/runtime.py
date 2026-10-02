@@ -97,6 +97,23 @@ class IngestRefused(ValueError):
     """The upload cannot become a Job; the message says which gate."""
 
 
+def statement_problem(
+    extraction: Extraction, meta: StatementMeta, cui: str, *, tie: bool = True
+) -> str | None:
+    """Why a read statement does not confirm, or None: the holder CUI, the IBAN, and (with
+    *tie*) every line tying opening − debits + credits = closing."""
+    if not extraction.meta.identity_ok:
+        return f"stmt_no_identity: the statement does not show CUI {cui}"
+    if not shows_iban(extraction.markdown, meta.iban):
+        return f"the statement does not show the IBAN {meta.iban}"
+    if tie:
+        try:
+            parse_statement(extraction.tables, meta, cui)
+        except StatementError as exc:
+            return str(exc)
+    return None
+
+
 @dataclass
 class Runtime:
     catalog: Catalog
@@ -539,9 +556,19 @@ class Runtime:
 
     # -- bank statements (WP-13) --
 
-    def read_statement(self, tenant: Tenant, period: str, pdf: bytes) -> tuple[Extraction, str]:
+    def read_statement(
+        self,
+        tenant: Tenant,
+        period: str,
+        pdf: bytes,
+        meta: StatementMeta | None = None,
+        strong: bool = False,
+    ) -> tuple[Extraction, str]:
         """The extract contract for a statement PDF (WP-21): read once per
-        ``(source_hash, document_ai)``, reused after; returns it with the PDF's bucket key."""
+        ``(source_hash, document_ai)``, reused after; returns it with the PDF's bucket key.
+
+        Gemini (00_LAW §8 A4): a read that fails the statement checks against *meta* is read
+        once more by the strong tier; a read that still fails is refused and never stored."""
         cui = tenant.cui
         source_hash = hashlib.sha256(pdf).hexdigest()
         for backend in ("document_ai", "gemini"):
@@ -558,7 +585,10 @@ class Runtime:
                 " tenants with MODEL_CALLS=live): send the extract tables"
             )
         try:
-            extraction = reader(pdf, tenant_cui=cui)
+            if reader is self.gemini_reader and meta is not None:
+                extraction = self._read_until_it_ties(reader, pdf, meta, cui, strong)
+            else:
+                extraction = reader(pdf, tenant_cui=cui)
         except (DocumentAiError, GeminiError) as exc:
             raise IngestRefused(str(exc)) from exc
         prefix = f"tenants/{cui}/{tenant.punct}/{period}/extras/source/{source_hash}"
@@ -566,6 +596,22 @@ class Runtime:
         write_extraction(self.blobs, prefix, extraction)
         self.extracts.put(extraction.meta, prefix)  # the row after the files it proves
         return extraction, f"{prefix}/statement.pdf"
+
+    def _read_until_it_ties(
+        self, reader: Any, pdf: bytes, meta: StatementMeta, cui: str, strong: bool
+    ) -> Extraction:
+        """Gemini's read; a second run on the strong tier when the first does not confirm."""
+        extraction, _, model = reader.read_with_model(pdf, tenant_cui=cui, strong=strong)
+        problem = statement_problem(extraction, meta, cui)
+        if problem is None:
+            return extraction
+        if reader.role.tiers is None or reader.is_strong(model):
+            raise IngestRefused(f"{problem} (read by {model})")
+        extraction, _, again = reader.read_with_model(pdf, tenant_cui=cui, escalate=True)
+        second = statement_problem(extraction, meta, cui)
+        if second is not None:
+            raise IngestRefused(f"{second} (read by {model}, then {again})")
+        return extraction
 
     def _observe_reading(self, cui: str, pdf: bytes, meta: StatementMeta) -> None:
         """Where the reader is not called: what Gemini would be given (the file by
@@ -615,8 +661,8 @@ class Runtime:
             reader = replace(
                 reader, role=reader.role.model_copy(update={"model": model, "rate_limits": limits})
             )
-        # the evaluation scores one model: never the backup (00_LAW §8 A3)
-        reader = replace(reader, role=reader.role.model_copy(update={"backup_model": None}))
+        # the evaluation scores one model: never another tier (00_LAW §8 A4)
+        reader = replace(reader, role=reader.role.model_copy(update={"tiers": None}))
         chosen = [c for c in cases() if case is None or c.name == case]
         if not chosen:
             raise IngestRefused(f"unknown case {case!r}")
@@ -632,8 +678,11 @@ class Runtime:
         meta: StatementMeta,
         tables: list[dict[str, Any]] | None,
         pdf: bytes,
+        strong: bool = False,
     ) -> dict[str, Any]:
         """A PDF statement → a pack and one Job per movement line.
+
+        *strong*: Gemini reads with its strong tier first (00_LAW §8 A4).
 
         The movement tables come with the upload or, when none are sent, from the statement
         reader (Document AI), which must also show the tenant's CUI and the header's IBAN.
@@ -648,11 +697,10 @@ class Runtime:
         if tables is not None or self.reader_for(cui) is not self.gemini_reader:
             self._observe_reading(cui, pdf, meta)
         if tables is None:
-            extraction, pdf_key = self.read_statement(tenant, period, pdf)
-            if not extraction.meta.identity_ok:
-                raise IngestRefused(f"stmt_no_identity: the statement does not show CUI {cui}")
-            if not shows_iban(extraction.markdown, meta.iban):
-                raise IngestRefused(f"the statement does not show the IBAN {meta.iban}")
+            extraction, pdf_key = self.read_statement(tenant, period, pdf, meta, strong)
+            problem = statement_problem(extraction, meta, cui, tie=False)
+            if problem is not None:
+                raise IngestRefused(problem)
             tables = extraction.tables
         try:
             statement = parse_statement(tables, meta, cui)

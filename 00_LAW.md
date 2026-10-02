@@ -35,7 +35,7 @@ The domain store (Postgres, A1) may hold an expected set and witness snapshots. 
 4. Graph edges read only stored fields or Jev answers already on state. No LLM on an edge.
 5. Models act only inside nodes, by **role**, and every role is pinned to one exact model in
    `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (no alias, no auto-router, no fallback model
-   but the one rate-limit backup of §8 A3;
+   but the model tiers of Google AI Studio document reading, §8 A3–A4;
    an unset model means the role refuses and a person is asked). **System One = Jev**: routes and
    classifies JSON / normalized data. **System Two = DeepSeek or GLM**: explains and drafts for a
    person; never posts, never decides a gate. **Document reading = Gemini**: only where there is no
@@ -169,5 +169,18 @@ Decided by the owner on 2026-10-02, while document reading stays on the Google A
 3. **Both full:** the sender waits for the first free slot, at most 90 s; past that the statement is refused (fail closed).
 4. **Recorded.** Every call records the model that actually read; a backup read says so in its reason and output.
 5. **Not changed:** every other role keeps "no fallback model"; OpenRouter roles take no backup; the synthetic-only guard, the key and the client-data rules are untouched. The reading evaluation scores one model and never uses the backup.
+
+Not an amendment of: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` is unchanged.
+
+### A4 · 2026-10-02 — model tiers for Google AI Studio document reading (replaces A3's backup)
+
+Decided by the owner on 2026-10-02, after the free tier's daily quota (20 requests a day for the Flash models) ran out during a run, and Google's busy (503) answers appeared to count against it.
+
+1. **Tiers.** A Google AI Studio document-reading role names `tiers`: `everyday` models (the most requests a day) and `strong` models (more capable, fewer a day). Its `model` is the first everyday model. A3's single `backup_model` is replaced by these tiers.
+2. **Order.** Everyday models first. The strong tier first for a hard statement (2 pages or more) or when the operator asks (`strong: true` on the upload). The strong tier only for a **second run**: a read that does not confirm (holder CUI, IBAN, every line tying opening − debits + credits = closing) is read once more by the strong tier. A read that still does not confirm is refused and never stored.
+3. **Limits.** `rate_limits` per model carries `rpm`, `tpm` and `rpd` (requests per Pacific day; every attempt counts, a 503 included). An `rpd` the owner has not confirmed is `null` (`[de confirmat]`): only Google's daily 429 stops it.
+4. **Moving on.** The next model in the order is taken at once on a 429 (a daily 429, as Google names its quota, skips the model until Pacific midnight), after one retry 10 s later on a busy answer (5xx, unreachable), or when this process's own count of that model is full. When every model is full the reader waits for the first free slot, at most 90 s, then refuses.
+5. **Recorded.** Every call records the model that read, its tier, whether it was the first choice, and whether it was a second run.
+6. **Not changed:** every other role keeps one model and no fallback; the synthetic-only guard, the key and the client-data rules are untouched. The reading evaluation reads with one model and never another tier.
 
 Not an amendment of: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` is unchanged.

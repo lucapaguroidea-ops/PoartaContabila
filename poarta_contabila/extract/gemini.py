@@ -36,7 +36,9 @@ import time
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -52,12 +54,14 @@ from poarta_contabila.model_roles import (
 
 KEY_ENV = "GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC"
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-# Google answers 503 UNAVAILABLE (and 500/504) when the model is busy; its guidance is to
-# retry with backoff. Bounded: ATTEMPTS tries in all, BACKOFF seconds before each retry.
-# 429 is a rate limit, not a busy model: the reader moves to the backup instead (A3).
+# Google answers 503 UNAVAILABLE (and 500/504) when the model is busy. On the free tier a 503
+# seems to count against the daily quota, so a busy model is asked once more, then the next
+# model in the order is (00_LAW §8 A4). 429 is a quota: the next model at once.
 TRANSIENT = frozenset({500, 503, 504})
-ATTEMPTS = 3
-BACKOFF = (2.0, 6.0)
+ATTEMPTS = 2
+BACKOFF = (10.0,)
+PACIFIC = ZoneInfo("America/Los_Angeles")  # Google's daily quotas reset at midnight there
+HARD_PAGES = 2  # from this many pages a statement goes to the strong tier first
 WINDOW = 60.0  # the quotas are per minute
 MAX_WAIT = 90.0  # longest wait for a free slot before the statement is refused
 PAGE_TOKENS = 258  # Google counts a PDF page as 258 input tokens
@@ -100,28 +104,70 @@ class GeminiError(ValueError):
 
 
 class RateLimited(GeminiError):
-    """Google answered 429: this model's quota is spent for now."""
+    """Google answered 429: this model's quota is spent (``daily``: until Pacific midnight)."""
+
+    def __init__(self, message: str, daily: bool = False):
+        super().__init__(message)
+        self.daily = daily
+
+
+class Busy(GeminiError):
+    """Google stayed busy (5xx, or unreachable) on this model after its retries."""
+
+
+def page_count(pdf: bytes) -> int:
+    return len(re.findall(rb"/Type\s*/Page(?!s)", pdf)) or 1
+
+
+def quota_ids(data: dict) -> list[str]:
+    """The quotas a 429 names (``QuotaFailure`` details), e.g. ``…PerDay…``."""
+    out = []
+    for detail in ((data or {}).get("error") or {}).get("details") or []:
+        for violation in (detail or {}).get("violations") or []:
+            if isinstance(violation, dict) and violation.get("quotaId"):
+                out.append(str(violation["quotaId"]))
+    return out
 
 
 def estimate_tokens(pdf: bytes) -> int:
     """Input tokens a PDF will cost, before sending (its pages, plus the brief)."""
-    pages = len(re.findall(rb"/Type\s*/Page(?!s)", pdf)) or 1
-    return pages * PAGE_TOKENS + BRIEF_TOKENS
+    return page_count(pdf) * PAGE_TOKENS + BRIEF_TOKENS
 
 
 @dataclass
 class RateLimiter:
-    """Requests and tokens per model over the last minute, shared by every reader in the
-    process (00_LAW §8 A3). Only counts what this process sent: Google stays the judge (429)."""
+    """Requests and tokens per model over the last minute, and requests per Pacific day,
+    shared by every reader in the process (00_LAW §8 A3, A4). Only counts what this process
+    sent: Google stays the judge (429)."""
 
     clock: Callable[[], float] = time.monotonic
+    wall: Callable[[], datetime] = lambda: datetime.now(PACIFIC)
     _sent: dict[str, deque[list[float]]] = field(default_factory=dict)
     _blocked: dict[str, float] = field(default_factory=dict)
+    _day: dict[str, tuple[str, int]] = field(default_factory=dict)
+    _spent_day: dict[str, str] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def _today(self) -> tuple[str, float]:
+        """The Pacific date, and the seconds until it ends."""
+        now = self.wall().astimezone(PACIFIC)
+        midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        return now.date().isoformat(), (midnight - now).total_seconds()
+
+    def used_today(self, model: str) -> int:
+        with self._lock:
+            day, _ = self._today()
+            seen, count = self._day.get(model, (day, 0))
+            return count if seen == day else 0
 
     def take(self, model: str, limit: RateLimit, tokens: int) -> float:
         """0 and the slot is taken; else the seconds until one may be free."""
         with self._lock:
+            day, to_midnight = self._today()
+            seen, count = self._day.get(model, (day, 0))
+            count = count if seen == day else 0
+            if self._spent_day.get(model) == day or (limit.rpd and count >= limit.rpd):
+                return to_midnight
             now = self.clock()
             sent = self._sent.setdefault(model, deque())
             while sent and sent[0][0] <= now - WINDOW:
@@ -143,6 +189,7 @@ class RateLimiter:
             if wait > 0:
                 return wait
             sent.append([now, tokens])
+            self._day[model] = (day, count + 1)
             return 0.0
 
     def settle(self, model: str, estimated: int, actual: int) -> None:
@@ -153,9 +200,11 @@ class RateLimiter:
                     entry[1] = actual
                     return
 
-    def exhaust(self, model: str) -> None:
-        """Google said 429: no request to *model* for a whole window."""
+    def exhaust(self, model: str, daily: bool = False) -> None:
+        """Google said 429: no request to *model* for a whole window (or the Pacific day)."""
         with self._lock:
+            if daily:
+                self._spent_day[model] = self._today()[0]
             self._blocked[model] = self.clock() + WINDOW
 
 
@@ -246,11 +295,18 @@ class GeminiStatementReader:
             )
         )
 
-    def __call__(self, pdf: bytes, *, tenant_cui: str) -> Extraction:
-        return self.read(pdf, tenant_cui=tenant_cui)[0]
+    def __call__(self, pdf: bytes, *, tenant_cui: str, strong: bool = False) -> Extraction:
+        return self.read_with_model(pdf, tenant_cui=tenant_cui, strong=strong)[0]
 
     def read(self, pdf: bytes, *, tenant_cui: str) -> tuple[Extraction, dict[str, str]]:
         """The extraction and the header as printed (the evaluation scores both)."""
+        extraction, header, _ = self.read_with_model(pdf, tenant_cui=tenant_cui)
+        return extraction, header
+
+    def read_with_model(
+        self, pdf: bytes, *, tenant_cui: str, strong: bool = False, escalate: bool = False
+    ) -> tuple[Extraction, dict[str, str], str]:
+        """The extraction, the header as printed, and the model that read it."""
         source_hash = hashlib.sha256(pdf).hexdigest()
         payload = {
             "tenant_cui": tenant_cui,
@@ -274,23 +330,26 @@ class GeminiStatementReader:
             self._record(payload, tenant_cui, "refused", "the PDF is over 18 MB")
             raise GeminiError("the PDF is over 18 MB; send its tables instead")
 
-        model = str(self.role.model)
+        models = self.order(pdf, strong=strong, escalate=escalate)
+        payload["models"] = models
         try:
-            header, tables, version, model = self._read_within_limits(pdf)
+            header, tables, version, model = self._read_within_limits(pdf, models)
         except GeminiError as exc:
             self._record(payload, tenant_cui, "failed", str(exc))
             raise
-        backup = model != self.role.model
+        tier = "strong" if self.is_strong(model) else "everyday"
         self._record(
             payload,
             tenant_cui,
             "sent",
-            "read by Gemini (Google AI Studio, synthetic)"
-            + (f"; backup: {self.role.model} was at its rate limit" if backup else ""),
+            f"read by Gemini (Google AI Studio, synthetic; {tier} tier"
+            + (", second run" if escalate else "")
+            + ")",
             model=model,
             output={
                 "model_version": version,
-                "backup": backup,
+                "tier": tier,
+                "first_choice": model == models[0],
                 "header": header,
                 "tables": len(tables),
                 "rows": sum(len(t["rows"]) for t in tables),
@@ -307,10 +366,23 @@ class GeminiStatementReader:
                 identity_ok=_holder_is(header, tenant_cui),
             ),
         )
-        return extraction, header
+        return extraction, header, model
 
-    def _models(self) -> list[str]:
-        return [m for m in (self.role.model, self.role.backup_model) if m]
+    def order(self, pdf: bytes, *, strong: bool = False, escalate: bool = False) -> list[str]:
+        """The models to try, in order (00_LAW §8 A4): everyday first; the strong tier first
+        for a hard statement (``HARD_PAGES``) or when asked; only the strong tier for a second
+        run on a read that did not tie out (*escalate*)."""
+        tiers = self.role.tiers
+        if tiers is None:
+            return [str(self.role.model)]
+        if escalate:
+            return list(tiers.strong)
+        if strong or page_count(pdf) >= HARD_PAGES:
+            return [*tiers.strong, *tiers.everyday]
+        return [*tiers.everyday, *tiers.strong]
+
+    def is_strong(self, model: str) -> bool:
+        return self.role.tiers is not None and model in self.role.tiers.strong
 
     def _slot(self, models: list[str], tokens: int) -> str:
         """The first of *models* with a free slot, waiting (at most MAX_WAIT) when none has."""
@@ -333,23 +405,27 @@ class GeminiStatementReader:
             waited += wait
 
     def _read_within_limits(
-        self, pdf: bytes
+        self, pdf: bytes, models: list[str]
     ) -> tuple[dict[str, str], list[dict[str, Any]], str, str]:
-        """The main model while it has quota, else the backup (00_LAW §8 A3)."""
+        """The first of *models* with quota that answers (00_LAW §8 A4)."""
         tokens = estimate_tokens(pdf)
-        models = self._models()
-        for _ in range(len(models) + 1):
-            model = self._slot(models, tokens)
+        left, errors = list(models), []
+        while left:
+            model = self._slot(left, tokens)
             try:
                 header, tables, version, used = self._generate(pdf, model, tokens)
-            except RateLimited:
-                self.limiter.exhaust(model)
+            except RateLimited as exc:
+                self.limiter.exhaust(model, daily=exc.daily)
+                errors.append(f"{model}: {exc}")
+                left.remove(model)
+                continue
+            except Busy as exc:
+                errors.append(f"{model}: {exc}")
+                left.remove(model)
                 continue
             self.limiter.settle(model, tokens, used or tokens)
             return header, tables, version, model
-        raise GeminiError(
-            f"Google AI Studio answered HTTP 429 RESOURCE_EXHAUSTED for {', '.join(models)}"
-        )
+        raise GeminiError("; ".join(errors))
 
     def _generate(
         self, pdf: bytes, model: str, tokens: int
@@ -385,7 +461,7 @@ class GeminiStatementReader:
                 response = self.http.post(url, json=body, headers={"x-goog-api-key": self.key})
             except httpx.HTTPError as exc:
                 if last:
-                    raise GeminiError(
+                    raise Busy(
                         f"Google AI Studio unreachable: {type(exc).__name__}"
                         f" (after {attempt} attempts)"
                     ) from None
@@ -401,11 +477,13 @@ class GeminiStatementReader:
             status = ((data or {}).get("error") or {}).get("status") or ""
             message = f"Google AI Studio answered HTTP {response.status_code} {status}"
             if response.status_code == 429:
-                raise RateLimited(message)
+                quotas = quota_ids(data)
+                daily = any("PerDay" in q for q in quotas)
+                raise RateLimited(message + (f" ({', '.join(quotas)})" if quotas else ""), daily)
             if response.status_code not in TRANSIENT:
                 raise GeminiError(message)
             if last:
-                raise GeminiError(f"{message} (after {attempt} attempts)")
+                raise Busy(f"{message} (after {attempt} attempts)")
             self.sleep(BACKOFF[attempt - 1])
             self._slot([model], tokens)
         blocked = (data.get("promptFeedback") or {}).get("blockReason")

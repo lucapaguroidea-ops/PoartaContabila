@@ -2,9 +2,9 @@
 # Lane B. Every place a model acts, as one role row (00_LAW §3 invariant 5).
 # A role names exactly one model. `model: null` = not chosen yet: the role refuses and a
 # person is asked. No alias ("latest"), no "openrouter/auto", no fallback model list.
-# One exception (00_LAW §8 A3): a Google AI Studio document-reading role may pin ONE
-# `backup_model`, read with only while `model` is at its rate limit (`rate_limits`, the
-# free tier's per-minute quota per model, from the owner's AI Studio page 2026-10-02).
+# One exception (00_LAW §8 A3, A4): a Google AI Studio document-reading role names its
+# `tiers` (everyday models first: the most requests a day; strong models for hard documents
+# and second runs) and each model's free-tier `rate_limits` (rpm, tpm, rpd).
 # Model ids and provider pins are the owner's (docs/OWNER_CHECKLIST.md); a change is a
 # reviewed catalog change. Synthetic tenants only until `eu_route` is set (Scaleway).
 #
@@ -143,11 +143,15 @@ roles:
     output: "proposed parts of an expense report; a person confirms"
     status: shadow
     route: google_ai_studio
-    model: gemini-3.8-flash   # owner, 2026-10-02 (Google AI Studio id)
-    backup_model: gemini-3.7-flash   # owner, 2026-10-02 (00_LAW §8 A3)
-    rate_limits:   # AI Studio free tier, per project (owner's screenshot, 2026-10-02)
-      gemini-3.8-flash: {rpm: 5, tpm: 250000}
-      gemini-3.7-flash: {rpm: 5, tpm: 250000}
+    model: gemini-3.5-flash-lite   # = tiers.everyday[0] (owner, 2026-10-02, 00_LAW §8 A4)
+    tiers:
+      everyday: [gemini-3.5-flash-lite, gemini-3.1-flash-lite]
+      strong: [gemini-3.8-flash, gemini-3.7-flash]
+    rate_limits:   # AI Studio free tier, per project (owner, 2026-10-02)
+      gemini-3.5-flash-lite: {rpm: 15, tpm: 250000, rpd: null}   # rpd [de confirmat]
+      gemini-3.1-flash-lite: {rpm: 15, tpm: 250000, rpd: null}   # rpd [de confirmat]
+      gemini-3.8-flash: {rpm: 5, tpm: 250000, rpd: 20}
+      gemini-3.7-flash: {rpm: 5, tpm: 250000, rpd: 20}
     card:
       task: >-
         This file is an expense report (decont de cheltuieli) with its receipts and invoices.
@@ -164,11 +168,15 @@ roles:
     output: "normalized/tables.json + markdown.md (EXTRACT.md), then the statement checks"
     status: wired
     route: google_ai_studio
-    model: gemini-3.8-flash   # owner, 2026-10-02 (Google AI Studio id)
-    backup_model: gemini-3.7-flash   # owner, 2026-10-02 (00_LAW §8 A3)
-    rate_limits:   # AI Studio free tier, per project (owner's screenshot, 2026-10-02)
-      gemini-3.8-flash: {rpm: 5, tpm: 250000}
-      gemini-3.7-flash: {rpm: 5, tpm: 250000}
+    model: gemini-3.5-flash-lite   # = tiers.everyday[0] (owner, 2026-10-02, 00_LAW §8 A4)
+    tiers:
+      everyday: [gemini-3.5-flash-lite, gemini-3.1-flash-lite]
+      strong: [gemini-3.8-flash, gemini-3.7-flash]
+    rate_limits:   # AI Studio free tier, per project (owner, 2026-10-02)
+      gemini-3.5-flash-lite: {rpm: 15, tpm: 250000, rpd: null}   # rpd [de confirmat]
+      gemini-3.1-flash-lite: {rpm: 15, tpm: 250000, rpd: null}   # rpd [de confirmat]
+      gemini-3.8-flash: {rpm: 5, tpm: 250000, rpd: 20}
+      gemini-3.7-flash: {rpm: 5, tpm: 250000, rpd: 20}
     note: >-
       WP-36: reads a synthetic tenant's statement PDF when MODEL_CALLS=live and the key is set
       (extract/gemini.py); Document AI (WP-21) reads otherwise. Never a client tenant's.
@@ -386,6 +394,6 @@ roles:
 forbidden:
   - a model on a graph edge
   - a role without a row here
-  - model aliases, openrouter/auto, fallback model lists (one backup_model: 00_LAW §8 A3)
+  - model aliases, openrouter/auto, fallback model lists (tiers: 00_LAW §8 A4)
   - a client tenant on any route but eu_route
   - a persona or a decision field in a System Two card
