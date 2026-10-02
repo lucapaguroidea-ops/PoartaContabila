@@ -263,3 +263,49 @@ def test_two_receipts_of_one_day_go_in_two_runs(cat):
     names = [i["filename"] for b in pulled["batches"] for i in b["items"]]
     assert names == ["I_20-09-2026.xml"]
     assert [h["reason"] for h in pulled["held"]] == ["I_20-09-2026.xml is already in this run"]
+
+
+def _line_docs(tables):
+    from poarta_contabila.extract.statement import statement_line_document
+    from poarta_contabila.types import JobRecord, TenantRef
+
+    meta = {**META, "closing": "5000.00", "opening": "5000.00"}
+    st = parse_statement(tables, _meta(**meta), CUI)
+    job = JobRecord(
+        job_id="j",
+        tenant=TenantRef(cui=CUI, saga_firm_folder="0001"),
+        period=PERIOD,
+        status="ingested",
+    )
+    return [
+        statement_line_document(st, ln, job=job, bucket_key="k", source_hash="a" * 64)
+        for ln in st.lines
+    ]
+
+
+def test_a_bank_reference_names_the_line_only_when_unique():
+    head = ["Data", "Descriere", "Referinta", "Debit", "Credit"]
+    unique = _line_docs(
+        [
+            {
+                "headers": head,
+                "rows": [
+                    ["20.09.2026", "a", "OP-1", "", "10,00"],
+                    ["20.09.2026", "b", "OP-2", "10,00", ""],
+                ],
+            }
+        ]
+    )
+    assert [d.maps.get("referinta") for d in unique] == ["OP-1", "OP-2"]
+    shared = _line_docs(
+        [
+            {
+                "headers": head,
+                "rows": [
+                    ["20.09.2026", "a", "OP-1", "", "10,00"],
+                    ["20.09.2026", "b", "OP-1", "10,00", ""],
+                ],
+            }
+        ]
+    )
+    assert [d.maps.get("referinta") for d in shared] == [None, None]

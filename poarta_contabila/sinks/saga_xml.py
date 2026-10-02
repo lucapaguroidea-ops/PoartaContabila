@@ -26,7 +26,8 @@ names its partner (CUI, bound by a person), the invoice it settles (``FacturaID`
 salaries, transfers, an unknown payer) is posted in SAGA by a person. ``ContClient`` /
 ``ContFurnizor`` are not written: SAGA owns the partner analytics. An optional tag is
 written only with a value. ``[de confirmat]`` as for invoices, plus what SAGA does with
-``Numar``.
+``Numar``. ``Numar`` is the bank's reference when the statement gives one that no other line
+shares, else the line's own number (``EXT-…``).
 """
 
 from __future__ import annotations
@@ -289,7 +290,7 @@ def render_bank_line(
 
     values = {
         "Data": _ro_date(doc.date),
-        "Numar": doc.number,
+        "Numar": maps.get("referinta") or doc.number,
         "Suma": str(gross.quantize(_CENT)),
         "Cont": cont,
         "Explicatie": doc.lines[0].desc if doc.lines else doc.number,
@@ -421,6 +422,6 @@ def bank_fixture_documents() -> dict[str, CanonicalDocument]:
         "242.00",
         "Plata FURNIZOR TEST SRL fact A-77",
         PartnerRef(cui="20000005", name="Furnizor Test SRL", role="supplier"),
-        {"factura_numar": "A-77"},
+        {"factura_numar": "A-77", "referinta": "OP-77"},
     )
     return {"incasare": incasare, "plata": plata}

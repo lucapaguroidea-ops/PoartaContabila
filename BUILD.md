@@ -222,9 +222,11 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   of the same name for the next run (two receipts of one day are both `I_<data>.xml`).
   Fixtures `incasare.xml` (settles `iesire.xml`, by `FacturaID`) and `plata.xml` (settles
   `intrare.xml`, by number), so one copy-firm session proves invoices and their settlement.
-- Open: both modules `draft` until the owner's copy-firm import; `Numar` is the line's
-  synthetic number (`EXT-…`), the bank's own reference is not carried yet; nothing proposes the
-  partner or the invoice (a person binds both).
+- `Numar` is the bank's reference (`maps.referinta`, from the statement's reference column) when
+  no other line of the statement shares it, else the line's own number (`EXT-…`): with sync
+  "Nr.+data" SAGA would skip a second document of the same number and date.
+- Open: both modules `draft` until the owner's copy-firm import (`docs/COPY_FIRM_TEST.md`);
+  nothing proposes the partner or the invoice (a person binds both).
 
 ### WP-20 Jev Layer 1 + Layer 2
 - `v3_judge` → `IngestDeps.judge`; `v2_declaration_gate` → `CloseDeps.jev_v2`. JSON only,

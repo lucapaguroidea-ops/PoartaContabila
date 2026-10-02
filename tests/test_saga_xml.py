@@ -311,3 +311,10 @@ def test_committed_bank_fixture_matches_renderer(cat, bank, module_id, kind):
     assert module.status == "draft"  # until the owner's copy-firm import is green
     rendered = render_bank_line(bank[kind], module, cont=FIXTURE_TREASURY)
     assert (FIXTURES / f"{kind}.xml").read_bytes() == rendered.xml
+
+
+def test_numar_is_the_bank_reference_when_known(cat, bank):
+    _, _, paid = _line(bank["plata"], cat.write_modules["plata_xml"])
+    _, _, cashed = _line(bank["incasare"], cat.write_modules["incasare_xml"])
+    assert paid.findtext("Numar") == "OP-77"
+    assert cashed.findtext("Numar") == "EXT-0f0f0f0f-2"  # no reference: the line's own number
