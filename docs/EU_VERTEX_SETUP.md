@@ -48,8 +48,19 @@ Enterprise Agent Platform".
 Poarta controls its own code, so it needs **no OpenRouter-compatible proxy**. The EU route is a
 transport inside Poarta, chosen per role:
 
-- `ARTICOLE_MODEL_ROLES_v1.yaml`: each document-reading role (`ocr_extract`, `ocr_decont_split`)
-  gets `eu_route` naming this Vertex AI project and region, plus its exact Vertex model id.
+- `ARTICOLE_MODEL_ROLES_v1.yaml`: each document-reading role (`ocr_extract`,
+  `ocr_decont_split`) gets an `eu_route` in the checked shape of WP-35:
+
+  ```yaml
+  eu_route:
+    provider: vertex
+    location: europe-west4
+    model: <exact Vertex model id>
+    key_env: GCP_DOCREAD_SA_JSON
+    project_env: GCP_DOCREAD_PROJECT
+  ```
+
+  A non-EU region, `global` or an alias does not load.
 - `model_roles.route_check`: a tenant with `data_class: client` goes only to `eu_route`, and a
   role without one refuses. This rule already exists.
 - The live sender (blocked, item 3) gets one Vertex transport beside the OpenRouter one.
