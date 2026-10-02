@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 15
     services:
       postgres:
-        image: postgres:16
+        image: postgres:18  # as on Railway (postgres-ssl:18)
         env:
           POSTGRES_USER: poarta
           POSTGRES_PASSWORD: poarta
