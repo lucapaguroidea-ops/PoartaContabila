@@ -185,6 +185,7 @@ POST /tenants/{cui}/exports/{rj|balanta|spv_register}
 POST /ingest
 GET  /jobs/{id}
 POST /jobs/{id}/resume
+POST /recon/{cui}/{period}          # one reconcile_sink pass (WP-23); GET shows; …/resume answers
 GET  /close/{cui}/{period}
 POST /close/{cui}/{period}/resume
 GET  /agent/pull

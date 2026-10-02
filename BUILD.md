@@ -34,6 +34,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-20 | in-progress | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; wire waits on R2 |
 | WP-21 | done | WP-13 | Statement PDFs read by Google Document AI into the extract contract |
 | WP-22 | done | WP-19 | Bank line → the invoice it settles: a proposal on `v3_approve`, a person decides |
+| WP-23 | done | WP-05 | `reconcile_sink` graph, PRE stage: `need_rj_export`, `recon_ambiguous`, review contest |
 
 ## WP details
 
@@ -78,9 +79,9 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   verdict stored once per `(job_id, pre, sink_snapshot_id)`), `recon/numbers.py` (`number_match`
   ladder exact → alnum → digits_core, `[de confirmat]` on the profile), `sinks/spv_register.py`
   (C-F12 register, checked), `SagaEye.covers` (absent only for months whose books were read).
-- Open: `recon_ambiguous` / `need_rj_export` answers live on the `reconcile_sink` graph (not built);
-  until then such jobs stop at `needs_human` with the reason. Storno has no PRE row in the catalog,
-  so every storno asks. Register partners match by name only (it carries no CUI).
+- Open: `recon_ambiguous` / `need_rj_export` are answered on the `reconcile_sink` graph (WP-23).
+  Storno has no PRE row in the catalog, so every storno asks. Register partners match by name only
+  (it carries no CUI).
 
 ### WP-06 Agent
 - HTTP as ARCHITECTURE.md §10. AGENT user cannot devalidate.
@@ -302,6 +303,28 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Open: partial payments and one payment for several invoices get no candidate; the books'
   candidates carry no partner name (the journals' CUI only); the proposal is recomputed when
   the node re-enters on resume (reads the books again).
+
+### WP-23 reconcile_sink, PRE stage
+- Asked by the owner 2026-10-02: the fourth graph (ARCHITECTURE §2), so a person can answer the
+  PRE checks ingest cannot decide.
+- Built: `reconcile.py` — `build_reconcile_graph` on `recon:{cui}:{period}` (other threads
+  refused): `load_window` → `ask` → `apply` → `load_window` …, one question per pass of the loop.
+  `load_window` takes the period's jobs whose ingest thread ended at an `ambiguous` PRE
+  (`Runtime.recon_waiting`) and runs `det_match` again on the books as they are now; a
+  decisive verdict goes back to its job by itself unless the review contests it. The question
+  is stored on the thread before it is asked: `need_rj_export` (all missing months at once;
+  the answer is the `export_id` of the tenant's latest journal upload covering one of them)
+  before `recon_review_contest` before `recon_ambiguous` (oldest document first; the sink
+  documents shown by index; `already_posted` names at least one, `override_absent` none).
+  `apply` stores the person's verdict beside the det one (`{snapshot}:person`) and hands it
+  back by job id (`Runtime._settle_pre`): `already_posted` → `already_in_sink`; `absent` → the
+  ingest thread goes on from `reconcile_pre` to `judge` / `v3_approve`. `absent` is never
+  concluded for an uncovered month. `llm_review` is the `ReconDeps.review` hook, `abstain`
+  until a reviewer is wired; a contest only asks (it cannot flip to posted). `PreResult.missing`
+  names the uncovered months. Operator: `POST /recon/{cui}/{period}`, `GET`, `POST …/resume`.
+- Open: the POST stage (`recon_post_*`, `recon_how_mismatch`: which accounts SAGA used against
+  the expected ones) needs the journal lines per document; `monthly_close` does not invoke this
+  graph before V2 yet; no reviewer is wired (Grok, `GROK_API_KEY`, not built).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

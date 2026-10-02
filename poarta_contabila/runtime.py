@@ -44,7 +44,7 @@ from poarta_contabila.ingest import IngestDeps, build_ingest_graph, start_payloa
 from poarta_contabila.jev import make_judge, make_v2
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
-from poarta_contabila.recon.pre import ReconStore, make_pre_check
+from poarta_contabila.recon.pre import PreResult, ReconStore, make_pre_check
 from poarta_contabila.recon.settle import (
     SETTLES,
     InvoiceJob,
@@ -52,6 +52,7 @@ from poarta_contabila.recon.settle import (
     propose_settlement,
     settle_key,
 )
+from poarta_contabila.reconcile import ReconDeps, WaitingJob, build_reconcile_graph
 from poarta_contabila.registry import (
     ExportKind,
     Product,
@@ -147,6 +148,18 @@ class Runtime:
         )
         self.deps.posted_doc = self.agent.posted_doc
         self.deps.treasury_account = self._treasury_account
+        self.reconcile = build_reconcile_graph(
+            ReconDeps(
+                catalog=self.catalog,
+                waiting=self.recon_waiting,
+                recheck=lambda w: self.deps.pre_check(
+                    w.job, w.doc, fiscal_class=w.fiscal_class, axes=w.axes
+                ),
+                settle=self._settle_pre,
+                export_months=self._rj_export_months,
+            ),
+            checkpointer=self.checkpointer,
+        )
         self.deps.settlement = self.settlement
 
     # -- helpers --
@@ -179,6 +192,83 @@ class Runtime:
         self.jobs.get(job_id)  # KeyError for an unknown job
         self.ingest.invoke(Command(resume=payload), self._cfg(job_id))
         return self.view(job_id)
+
+    # -- reconcile_sink (WP-23) --
+
+    def recon_waiting(self, cui: str, period: str) -> list[WaitingJob]:
+        """The period's jobs whose ingest thread ended at an undecided PRE check."""
+        out = []
+        for job in self.jobs.for_period(cui, period):
+            if job.status != "needs_human":
+                continue
+            state = self.ingest.get_state(self._cfg(job.job_id))
+            pre = state.values.get("pre") or {}
+            if state.tasks or state.values.get("status") != "needs_human":
+                continue
+            if pre.get("verdict") != "ambiguous" or "canonical" not in state.values:
+                continue
+            source = self.catalog.source_docs.get(state.values.get("source_doc_id")) or {}
+            out.append(
+                WaitingJob(
+                    job=job,
+                    doc=CanonicalDocument.model_validate(state.values["canonical"]),
+                    fiscal_class=source.get("fiscal_class"),
+                    axes=dict(state.values.get("axes") or {}),
+                )
+            )
+        return sorted(out, key=lambda w: (w.doc.date, w.job.job_id))
+
+    def _settle_pre(self, w: WaitingJob, result: PreResult) -> None:
+        """Hand a final PRE verdict back to the job's own thread (glue = job id)."""
+        if self.recon is not None:
+            result = self.recon.put_once(w.job.job_id, "pre", result)
+        cfg = self._cfg(w.job.job_id)
+        if result.verdict == "already_posted":
+            self.jobs.update(w.job.job_id, status="already_in_sink", error=None)
+            self.ingest.update_state(
+                cfg,
+                {"status": "already_in_sink", "pre": result.model_dump()},
+                as_node="reconcile_pre",
+            )
+            return
+        if result.verdict != "absent":
+            raise ValueError(f"only a decided verdict is handed back, not {result.verdict!r}")
+        self.jobs.update(w.job.job_id, status="reconcile_pre", error=None)
+        self.ingest.update_state(
+            cfg, {"status": "reconcile_pre", "pre": result.model_dump()}, as_node="reconcile_pre"
+        )
+        self.ingest.invoke(None, cfg)  # judge → v3_approve, as if PRE had said absent
+
+    def _rj_export_months(self, cui: str, export_id: str) -> list[str] | None:
+        row = self.registry.latest_export(cui, "rj")
+        return list(row.periods) if row is not None and row.export_id == export_id else None
+
+    @staticmethod
+    def _recon_cfg(cui: str, period: str) -> dict:
+        return {"configurable": {"thread_id": f"recon:{cui}:{period}"}}
+
+    def recon_view(self, cui: str, period: str) -> dict[str, Any]:
+        state = self.reconcile.get_state(self._recon_cfg(cui, period))
+        question = next((i.value for t in state.tasks for i in t.interrupts), None)
+        return {
+            "question": question,
+            "settled": state.values.get("settled") or [],
+            "waiting": [w.job.job_id for w in self.recon_waiting(cui, period)],
+        }
+
+    def start_recon(self, cui: str, period: str) -> dict[str, Any]:
+        """One pass over the period's PRE questions; a waiting question is shown, not redone."""
+        if self.registry.tenant(cui) is None:
+            raise IngestRefused(f"tenant {cui} is not registered")
+        cfg = self._recon_cfg(cui, period)
+        if self.reconcile.get_state(cfg).tasks:
+            return self.recon_view(cui, period)
+        self.reconcile.invoke({"cui": cui, "period": period, "settled": []}, cfg)
+        return self.recon_view(cui, period)
+
+    def resume_recon(self, cui: str, period: str, payload: Any) -> dict[str, Any]:
+        self.reconcile.invoke(Command(resume=payload), self._recon_cfg(cui, period))
+        return self.recon_view(cui, period)
 
     # -- period --
 

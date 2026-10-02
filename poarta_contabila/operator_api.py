@@ -162,6 +162,24 @@ def operator_router(
         except IngestRefused as exc:
             raise HTTPException(422, str(exc)) from exc
 
+    @router.post("/recon/{cui}/{period}")
+    def start_recon(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
+        """One reconcile_sink pass over the month's undecided PRE checks (WP-23)."""
+        try:
+            return rt.start_recon(cui, period)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.get("/recon/{cui}/{period}")
+    def get_recon(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
+        return rt.recon_view(cui, period)
+
+    @router.post("/recon/{cui}/{period}/resume")
+    def resume_recon(
+        cui: str, period: str, body: dict[str, Any], rt: Runtime = Depends(operator)
+    ) -> dict[str, Any]:
+        return rt.resume_recon(cui, period, body)
+
     @router.post("/close/{cui}/{period}")
     def start_close(
         cui: str,

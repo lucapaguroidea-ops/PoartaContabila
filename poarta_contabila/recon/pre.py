@@ -63,6 +63,7 @@ class PreResult(Closed):
     level: NumberLevel | None = None
     hits: list[str] = Field(default_factory=list)
     near: list[str] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)  # months the books do not cover yet
 
 
 @dataclass(frozen=True)
@@ -321,7 +322,9 @@ def det_match(
         return result("ambiguous", "a close but not decisive match", near=near)
     missing = [p for p in months if not covered[p]]
     if missing:
-        return result("ambiguous", f"need_rj_export: no registru jurnal export for {missing}")
+        return result(
+            "ambiguous", f"need_rj_export: no registru jurnal export for {missing}", missing=missing
+        )
     return result("absent", f"registru jurnal for {months} has no match")
 
 
