@@ -71,6 +71,8 @@ class ModelRole(Closed):
     data: Literal["synthetic_only"] = "synthetic_only"
     eu_route: str | None = None
     note: str | None = None
+    card: dict[str, Any] = Field(default_factory=dict)
+    """The merged role card (system base + role); see :func:`check_card`."""
 
     @field_validator("model")
     @classmethod
@@ -85,18 +87,127 @@ class ModelRole(Closed):
     def key_env(self) -> str:
         return KEY_ENV[self.system]
 
+    @property
+    def card_hash(self) -> str:
+        body = json.dumps(self.card, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return hashlib.sha256(body.encode()).hexdigest()
+
+    def questions(self) -> dict[str, Any] | None:
+        """System One: the question set this role asks (as written in its card)."""
+        return self.card.get("questions") if self.system == "system_one" else None
+
+
+# ----- role cards (WP-25) -----
+
+_QUESTION_TYPES = {"noul", "choice", "score"}
+_SYS2_FIELDS = ["explanation", "facts_cited", "missing"]
+_DECISION_WORDS = {"recommendation", "action", "decision", "verdict", "approve", "file", "gate"}
+_PERSONA = re.compile(r"\byou are (an?|the) ", re.IGNORECASE)
+
+
+def _fail(role_id: str, msg: str) -> None:
+    raise ValueError(f"role {role_id!r} card: {msg}")
+
+
+def check_card(role: ModelRole, pack_fields: set[str] | None) -> None:
+    """Refuse a card the role cannot honour (``ValueError``).
+
+    System One: every question has a known type; a choice names its criteria (inline or
+    ``criteria_from``); a score has levels; ``fields`` names only asked questions (or a
+    choice's ``.confidence``) and, for a built pack, covers exactly its closed model's fields;
+    thresholds are probabilities. Document reading: instructions and an output shape. System
+    Two: a task, the base limits, exactly the output fields ``explanation, facts_cited,
+    missing`` (no decision field) and no persona.
+    """
+    c, rid = role.card, role.role_id
+    bad = _non_string_key(c)
+    if bad is not None:
+        _fail(rid, f"key {bad!r} is not text (YAML reads yes/no/on/off/true/false as booleans)")
+    if role.system == "system_one":
+        questions = c.get("questions")
+        if not isinstance(questions, dict) or not questions:
+            _fail(rid, "a System One card asks at least one question")
+        for name, q in questions.items():
+            if not isinstance(q, dict) or q.get("type") not in _QUESTION_TYPES:
+                _fail(rid, f"question {name!r} has no type among {sorted(_QUESTION_TYPES)}")
+            if q["type"] == "choice" and not (q.get("criteria") or q.get("criteria_from")):
+                _fail(rid, f"choice {name!r} names no criteria")
+            if q["type"] == "score" and not q.get("criteria"):
+                _fail(rid, f"score {name!r} has no levels")
+        fields = c.get("fields")
+        if not isinstance(fields, dict) or not fields:
+            _fail(rid, "names which closed field each question fills (fields)")
+        for field_name, source in fields.items():
+            base, _, attr = str(source).partition(".")
+            if base not in questions or attr not in ("", "confidence"):
+                _fail(rid, f"field {field_name!r} reads {source!r}, which is not asked")
+        if pack_fields is not None and set(fields) != pack_fields:
+            _fail(rid, f"fields {sorted(fields)} must be the pack's {sorted(pack_fields)}")
+        for key, value in (c.get("thresholds") or {}).items():
+            if not isinstance(value, int | float) or not 0 < value < 1:
+                _fail(rid, f"threshold {key!r} must be between 0 and 1")
+    elif role.system == "document_reading":
+        if not c.get("instructions") or not c.get("output"):
+            _fail(rid, "a document-reading card has instructions and an output shape")
+    else:
+        if not c.get("task") or not c.get("limits"):
+            _fail(rid, "a System Two card has a task and limits")
+        if c.get("output_fields") != _SYS2_FIELDS:
+            _fail(rid, f"output_fields must be exactly {_SYS2_FIELDS}")
+        if _DECISION_WORDS & {str(f).lower() for f in c.get("output_fields") or []}:
+            _fail(rid, "no decision field in a System Two output")
+        text = json.dumps(c, ensure_ascii=False)
+        if _PERSONA.search(text) or "persona" in c:
+            _fail(rid, "no persona: say who reads, what to do and what never to do")
+
+
+def _non_string_key(value: Any) -> Any:
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if not isinstance(k, str):
+                return k
+            found = _non_string_key(v)
+            if found is not None:
+                return found
+    elif isinstance(value, list):
+        for v in value:
+            found = _non_string_key(v)
+            if found is not None:
+                return found
+    return None
+
+
+def brief(role: ModelRole) -> str | None:
+    """System Two: the card rendered as the text the model would be given (deterministic)."""
+    if role.system != "system_two":
+        return None
+    c = role.card
+    lines = [f"Reader: {c['audience'].strip()}", f"Task: {c['task'].strip()}", "Never:"]
+    lines += [f"- {limit}" for limit in c["limits"]]
+    lines.append(f"Language: {c.get('language', '').strip()}")
+    if c.get("terms"):
+        lines.append("Terms:")
+        lines += [f"- {t}" for t in c["terms"]]
+    lines.append(f"Output: {c.get('output_rule', '').strip()}")
+    return "\n".join(lines)
+
 
 def load_roles(doc: dict[str, Any]) -> dict[str, ModelRole]:
     """The catalog's role rows, validated; ``ValueError`` names the first bad row."""
+    from poarta_contabila.jev import PACKS  # the closed models a wired card must fill
+
     defaults = doc.get("defaults") or {}
+    systems = doc.get("systems") or {}
     out: dict[str, ModelRole] = {}
     for row in doc.get("roles") or []:
         if "fallback_models" in row or "models" in row:
             raise ValueError(f"role {row.get('role_id')!r}: fallback model lists are forbidden")
+        base_card = (systems.get(row.get("system")) or {}).get("card") or {}
         merged = {
             "provider": defaults.get("provider") or {},
             "eu_route": defaults.get("eu_route"),
             **row,
+            "card": {**base_card, **(row.get("card") or {})},
         }
         role = ModelRole.model_validate(merged)
         family = role.family or ("jev" if role.system == "system_one" else "gemini")
@@ -106,8 +217,12 @@ def load_roles(doc: dict[str, Any]) -> dict[str, ModelRole]:
             raise ValueError(f"role {role.role_id!r}: family {family!r} is not {role.system}")
         if role.status == "wired" and role.pack is None:
             raise ValueError(f"role {role.role_id!r}: a wired role names its pack")
+        if role.status == "wired" and role.pack not in PACKS:
+            raise ValueError(f"role {role.role_id!r}: pack {role.pack!r} is not built")
         if role.role_id in out:
             raise ValueError(f"duplicate role_id {role.role_id!r}")
+        pack_fields = set(PACKS[role.pack][1].model_fields) if role.status == "wired" else None
+        check_card(role, pack_fields)
         out[role.role_id] = role
     return out
 
@@ -141,8 +256,10 @@ class ModelCall(Closed):
     mode: str
     tenant_cui: str | None
     pack: str | None
+    card_hash: str
     input_hash: str
     input: dict[str, Any]
+    questions: dict[str, Any] | None = None  # System One: the question set that would be asked
     status: Literal["recorded", "refused"]
     reason: str
     at: str
@@ -167,8 +284,10 @@ def record(
         mode=mode,
         tenant_cui=tenant_cui,
         pack=role.pack,
+        card_hash=role.card_hash,
         input_hash=hashlib.sha256(body.encode()).hexdigest(),
         input=payload,
+        questions=role.questions(),
         status=status,
         reason=reason,
         at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),

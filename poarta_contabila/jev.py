@@ -71,10 +71,14 @@ class JevNotDocumented(JevError):
     """The wire has not been read from the official docs; nothing is sent."""
 
 
-def input_hash(pack: str, payload: dict[str, Any]) -> str:
+def input_hash(pack: str, payload: dict[str, Any], pin: dict[str, str] | None = None) -> str:
+    """Cache key: pack, its version, the input and (when given) the role's model + card hash."""
     version = PACKS[pack][0]
+    key: dict[str, Any] = {"pack": pack, "version": version, "input": payload}
+    if pin:
+        key["pin"] = pin
     body = json.dumps(
-        {"pack": pack, "version": version, "input": payload},
+        key,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,
@@ -152,13 +156,15 @@ class Jev:
     transport: Transport
     cache: Any = field(default_factory=InMemoryJevCache)  # InMemoryJevCache | PostgresJevCache
     timeout_s: float = 20.0
+    pin: Callable[[str], dict[str, str]] | None = None
+    """pack → {model, card}: a changed model or role card never reuses a cached answer."""
 
     def ask(self, pack: str, payload: dict[str, Any]) -> JevAnswer:
         """The validated answer, from the cache or the transport; :class:`JevError` otherwise."""
         if pack not in PACKS:
             raise JevError(f"unknown Jev pack {pack!r}")
         try:
-            key = input_hash(pack, payload)
+            key = input_hash(pack, payload, self.pin(pack) if self.pin else None)
             hit = self.cache.get(pack, key)
         except Exception as exc:
             raise JevError(f"{pack}: cache unavailable: {type(exc).__name__}") from exc
@@ -199,6 +205,20 @@ def payload_cui(payload: dict[str, Any]) -> str | None:
         return payload["tenant_cui"]
     diff = payload.get("diff")
     return diff.get("cui") if isinstance(diff, dict) else None
+
+
+def role_pin(roles: dict[str, Any]) -> Callable[[str], dict[str, str]]:
+    """``Jev.pin`` from the model-role catalog: the pack's role model and card hash."""
+    from poarta_contabila.model_roles import RouteRefused, role_for_pack
+
+    def pin(pack: str) -> dict[str, str]:
+        try:
+            role = role_for_pack(roles, pack)
+        except RouteRefused:
+            return {}
+        return {"role": role.role_id, "model": role.model or "", "card": role.card_hash}
+
+    return pin
 
 
 def role_transport(

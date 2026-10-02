@@ -4,6 +4,15 @@
 # person is asked. No alias ("latest"), no "openrouter/auto", no fallback model list.
 # Model ids and provider pins are the owner's (docs/OWNER_CHECKLIST.md); a change is a
 # reviewed catalog change. Synthetic tenants only until `eu_route` is set (Scaleway).
+#
+# Role cards (WP-25): what each role is told. A system's `card` is the base; a role's `card`
+# adds to it (its keys win). The merged card is hashed: the hash is recorded on every call and
+# is part of the answer cache key, so a changed card never reuses an old answer.
+# - system_one (Jev): `questions` (the System One question set), `fields` (closed-model field
+#   ← question), `thresholds`. Wording `[de confirmat]` on synthetic runs.
+# - document_reading (Gemini): `instructions` + `output` (the extract contract it must fill).
+# - system_two (DeepSeek / GLM): audience, task, limits, language, terms, `output_fields`.
+#   No persona: the card says who reads, what to do and what never to do.
 
 file_schema: "1"
 catalog: ArticoleModelRoles
@@ -15,6 +24,7 @@ enums:
   status: [wired, not_wired]
   route: [openrouter]
   key_env: [OPENROUTER_JEV_API_KEY, OPENROUTER_SYS2_API_KEY, OPENROUTER_OCR_API_KEY]
+  question_type: [noul, choice, score]
 
 defaults:
   route: openrouter
@@ -22,23 +32,57 @@ defaults:
   data: synthetic_only
   eu_route: null          # Scaleway, once chosen: the only route a client tenant may use
 
-# system → the key its roles use and what it may never do
+# system → the key its roles use, what it may never do, and its base card
 systems:
   system_one:
     family: jev
     key_env: OPENROUTER_JEV_API_KEY
     does: "classify and route JSON / normalized data into closed answers"
     cannot: [explain_to_person, write_saga, set_codit_axes, choose_mouth, open_gate_alone]
+    card:
+      thresholds: {noul_yes: 0.90, choice: 0.80, human: 0.10}
+      threshold_rule: >-
+        a noul counts as yes from `noul_yes`; a choice stands from `choice` confidence; a needs_human
+        noul asks a person from `human`. Below them the field takes its cautious value.
+
   system_two:
     families: [deepseek, glm]
     key_env: OPENROUTER_SYS2_API_KEY
     does: "explain a question to a person; draft text a person approves"
     cannot: [post, decide_gate, answer_hitl, write_saga, run_on_edge]
+    card:
+      audience: >-
+        An accountant in a Romanian accounting practice, answering one question in Poarta
+        Primară. They know SAGA C and Romanian accounting; they do not see this system's code.
+      limits:
+        - "You do not decide. Never say whether to approve, reject, file, hold, post or reopen."
+        - "Use only facts present in the input. Name the field each fact comes from."
+        - "If a fact needed to understand the question is missing, list it under `missing`; never guess it."
+        - "No figures that are not in the input; no recomputed totals."
+        - "No legal advice beyond what the input's own fields state."
+      language: "Romanian, plain and short; amounts and dates exactly as in the input."
+      terms:
+        - "document primar (the source document), not notă contabilă: SAGA posts the notă"
+        - "articol de cale (the walk a document takes), poartă (the gate that must open)"
+        - "registru jurnal, balanță, jurnal de cumpărări / vânzări (SAGA's reports)"
+        - "SPV / e-Factura, CUI (without RO), TVA la încasare"
+      output_fields: [explanation, facts_cited, missing]
+      output_rule: >-
+        JSON only: `explanation` (at most 5 short sentences), `facts_cited` (list of
+        {field, value} copied from the input), `missing` (list of strings). No other keys.
+
   document_reading:
     family: gemini
     key_env: OPENROUTER_OCR_API_KEY
     does: "read scans / PDFs without XML or text layer into the extract contract"
     cannot: [read_xml_documents, skip_deterministic_checks, emit, classify]
+    card:
+      instructions:
+        - "Copy what is printed. Never compute, round, total or correct a value."
+        - "Leave a value empty when it is not printed or not legible; never guess it."
+        - "Keep numbers as printed (e.g. 1.234,56); keep dates as printed (e.g. 15.09.2026)."
+        - "A CUI is copied with or without RO exactly as printed."
+        - "Every value is a string. JSON only, in the output shape; no other keys."
 
 roles:
 
@@ -52,6 +96,13 @@ roles:
     output: "source_doc_id from the closed ArticoleSourceDoc list + confidence"
     status: not_wired
     model: null
+    card:
+      questions:
+        source_doc_id:
+          type: choice
+          instructions: "Which kind of source document is this file?"
+          criteria_from: JevAnnex.jev_source_doc.allowed
+      fields: {source_doc_id: source_doc_id}
 
   - role_id: jev_our_role
     graph_id: folder_triage
@@ -62,6 +113,16 @@ roles:
     output: "inbound | outbound | n/a"
     status: not_wired
     model: null
+    card:
+      questions:
+        our_role:
+          type: choice
+          instructions: "Which side of this invoice is the tenant (tenant_cui) on?"
+          criteria:
+            inbound: "The tenant is the customer: a purchase."
+            outbound: "The tenant is the supplier: a sale."
+            n/a: "The tenant is neither party."
+      fields: {our_role: our_role}
 
   - role_id: ocr_decont_split
     graph_id: folder_triage
@@ -72,6 +133,12 @@ roles:
     output: "proposed parts of an expense report; a person confirms"
     status: not_wired
     model: null
+    card:
+      task: >-
+        This file is an expense report (decont de cheltuieli) with its receipts and invoices.
+        List each part: the report itself, each receipt, each invoice.
+      output:
+        parts: "[{pages: '1-2', kind: 'report|receipt|invoice|other', number, date, total, issuer_cui}]"
 
   # ----- ingest_source_doc -----
   - role_id: ocr_extract
@@ -83,6 +150,14 @@ roles:
     status: not_wired
     model: null
     note: "Document AI (WP-21) stays the built reader until this role is wired."
+    card:
+      task: >-
+        This file is a Romanian bank statement (extras de cont) in RON. Read its header and
+        every movement table.
+      output:
+        header: "{iban, holder_cui, currency, opening, closing, statement_date}"
+        tables: "[{headers: [..], rows: [[..]]}] — every table, its header row as printed"
+      checked_after: "parse_statement: one side per line, whole cents, opening − debits + credits = closing, holder CUI = tenant"
 
   - role_id: jev_v3_classify
     graph_id: ingest_source_doc
@@ -92,6 +167,23 @@ roles:
     output: "doc_class, needs_ocr, needs_human, confidence"
     status: not_wired
     model: null
+    card:
+      questions:
+        doc_class:
+          type: choice
+          instructions: "What class of accounting document is this, from the tenant's side?"
+          criteria_from: types.DocClass
+        needs_ocr:
+          type: noul
+          instructions: "The document has no usable text layer: it must be read as an image."
+        needs_human:
+          type: noul
+          instructions: "The document is unclear enough that an accountant should classify it."
+      fields:
+        doc_class: doc_class
+        needs_ocr: needs_ocr
+        needs_human: needs_human
+        confidence: doc_class.confidence
 
   - role_id: jev_flux
     graph_id: ingest_source_doc
@@ -102,6 +194,13 @@ roles:
     output: "a ranking of the articole that already matched (v1: a person still picks)"
     status: not_wired
     model: null
+    card:
+      questions:
+        articol_id:
+          type: choice
+          instructions: "Which of these articole de cale fits this document best?"
+          criteria_from: flux.match_articole survivors
+      fields: {articol_id: articol_id}
 
   - role_id: jev_v3_judge
     graph_id: ingest_source_doc
@@ -111,6 +210,29 @@ roles:
     output: "V3Judge {accounts_ok, risk, needs_human}"
     status: wired
     model: null
+    card:
+      questions:
+        accounts_ok:
+          type: noul
+          instructions: >-
+            The articol's expect_accounts and write_modules fit this document: its side
+            (purchase or sale), its lines and its VAT.
+          criteria:
+            "true": "Accounts, side and VAT treatment all fit the document."
+            "false": "An account, the side or the VAT treatment does not fit."
+        risk:
+          type: choice
+          instructions: >-
+            How risky is it to post this document in the books without a person reviewing it
+            first?
+          criteria:
+            low: "A routine document; accounts, amounts and VAT are plainly right."
+            medium: "Something is unusual and a reviewer should glance at it."
+            high: "Doubtful accounts, VAT, partner or amounts."
+        needs_human:
+          type: noul
+          instructions: "An accountant should review this document before it is posted."
+      fields: {accounts_ok: accounts_ok, risk: risk, needs_human: needs_human}
 
   - role_id: sys2_explain_approve
     graph_id: ingest_source_doc
@@ -122,6 +244,11 @@ roles:
     output: "plain-language explanation shown with the question"
     status: not_wired
     model: null
+    card:
+      task: >-
+        Explain the v3_approve question: what the document is, which articol de cale it is
+        on, what the judge said (or that no judge answered), and, for a bank line, what the
+        settlement proposal points to.
 
   # ----- reconcile_sink -----
   - role_id: jev_recon_review
@@ -133,6 +260,19 @@ roles:
     output: "confirm | contest | abstain (a contest only asks a person)"
     status: wired
     model: null
+    card:
+      independence: "Worded apart from jev_v3_judge (JevAnnex: different prompt)."
+      questions:
+        verdict:
+          type: choice
+          instructions: >-
+            A deterministic matcher compared this document with the books. Does its verdict
+            hold, given the document and the book lines it names?
+          criteria:
+            confirm: "The verdict fits the document and the lines shown."
+            contest: "The verdict looks wrong: a person should decide."
+            abstain: "The input is not enough to judge."
+      fields: {verdict: verdict}
 
   - role_id: sys2_explain_recon
     graph_id: reconcile_sink
@@ -144,6 +284,11 @@ roles:
     output: "plain-language explanation shown with the question"
     status: not_wired
     model: null
+    card:
+      task: >-
+        Explain this reconcile question: which document, which months of the books are
+        missing (need_rj_export) or which book lines came close and on which keys they agree
+        or differ (recon_ambiguous).
 
   # ----- monthly_close -----
   - role_id: jev_v2_gate
@@ -154,6 +299,34 @@ roles:
     output: "V2Gate suggestion; cannot clear material"
     status: wired
     model: null
+    card:
+      questions:
+        books_support_declaration:
+          type: noul
+          instructions: >-
+            The month's books, as this period diff shows them, support filing the period's
+            tax declarations.
+        gap_materiality:
+          type: choice
+          instructions: >-
+            How material are the gaps between the expected documents and the books in this
+            period diff?
+          criteria:
+            none: "No gap at all."
+            immaterial: "Small gaps that change no declaration."
+            material: "Gaps that would change a declaration or hide a document."
+        action:
+          type: choice
+          instructions: "What should the accountant closing the month do next?"
+          criteria:
+            file: "File: the books support the declarations."
+            hold: "Hold: wait for missing documents or answers."
+            patch_maps: "Fix the partner or account maps, then run the close again."
+            reopen: "Reopen the month: something posted must be corrected."
+      fields:
+        books_support_declaration: books_support_declaration
+        gap_materiality: gap_materiality
+        action: action
 
   - role_id: sys2_explain_close
     graph_id: monthly_close
@@ -165,6 +338,10 @@ roles:
     output: "plain-language explanation shown with the question"
     status: not_wired
     model: null
+    card:
+      task: >-
+        Explain the month-close question: which controls failed and why, which documents are
+        holes or unexplained, and what Layer 2 suggested (it cannot clear material).
 
   - role_id: sys2_draft_rule
     graph_id: monthly_close
@@ -176,9 +353,15 @@ roles:
     output: "a draft explained rule; a person approves it through POST /rules"
     status: not_wired
     model: null
+    card:
+      task: >-
+        Draft the wording of an explained rule for the book lines the person selected: what
+        they are, in the accountant's words. Do not choose the rule's scope or accounts; the
+        person sets those.
 
 forbidden:
   - a model on a graph edge
   - a role without a row here
   - model aliases, openrouter/auto, fallback model lists
   - a client tenant on any route but eu_route
+  - a persona or a decision field in a System Two card

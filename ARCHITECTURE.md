@@ -225,8 +225,9 @@ JSON only. Cache `{pack, input_hash}`. Layer 2 cannot clear `material`.
 Code: `poarta_contabila/jev.py`. The answer is stored on the thread in its own node (`judge`,
 `layer2`) before the node that asks a person, so a resume never asks Jev again.
 Each pack is a role in `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (one pinned model,
-provider pin, synthetic-only until the EU route); `MODEL_CALLS=dry` records what a role would
-be sent (`GET /model-calls`) and sends nothing.
+provider pin, synthetic-only until the EU route) with a role card (Jev's questions and criteria,
+Gemini's extraction rules, the System Two brief; no persona); `MODEL_CALLS=dry` records what a
+role would be sent (`GET /model-calls`, with the card hash) and sends nothing.
 
 ## 13. Windows agent
 

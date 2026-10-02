@@ -36,6 +36,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-22 | done | WP-19 | Bank line → the invoice it settles: a proposal on `v3_approve`, a person decides |
 | WP-23 | done | WP-05 | `reconcile_sink` graph, PRE stage: `need_rj_export`, `recon_ambiguous`, review contest |
 | WP-24 | done | WP-20 | Model roles: one pinned model per role, synthetic-only guard, dry-run trace |
+| WP-25 | done | WP-24 | Role cards: what each role is told, checked, hashed into the cache key |
 
 ## WP details
 
@@ -350,6 +351,26 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Open: every `model:` is null until the owner sends the ids (`docs/OWNER_CHECKLIST.md`); the
   live sender is not built (this session was not permitted to write the outbound call); the
   System Two, document-reading and other `not_wired` roles have no call site yet.
+
+### WP-25 Role cards
+- Asked by the owner 2026-10-02: a card per role instead of a persona — who reads, what to do,
+  what never to do, in which shape.
+- Built: `card` on every row of `ARTICOLE_MODEL_ROLES_v1.yaml`, merged over its system's base
+  card. System One (Jev): `questions` (noul / choice / score with criteria, or `criteria_from` a
+  catalog list), `fields` (closed field ← question, or a choice's `.confidence`), `thresholds`
+  (`noul_yes` 0.90, `choice` 0.80, `human` 0.10, `[de confirmat]`). Document reading (Gemini):
+  `instructions` (copy what is printed, never compute or guess, strings only) + `output` (the
+  extract contract). System Two (DeepSeek / GLM): audience, task, limits (no decision, only
+  input facts, list what is missing), Romanian, the lexicon's terms, `output_fields` exactly
+  `explanation, facts_cited, missing`; `model_roles.brief` renders it as text. `check_card`
+  refuses: a choice without criteria, a field reading an unasked question, a wired card that
+  does not fill exactly its pack's closed model, a non-text key (YAML `yes` / `no` read as
+  booleans — the first draft's `thresholds: {yes: …}` was one), a persona ("you are a …"), a
+  System Two decision field. `ModelRole.card_hash` is recorded on every call (with the System One
+  question set) and is part of Jev's cache key with the role's model (`jev.role_pin`).
+  `GET /model-roles` shows `card_hash` and the System Two `brief`.
+- Open: the wording is a first draft, to be compared on synthetic dry / live runs; the System Two
+  and document-reading cards have no call site yet.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

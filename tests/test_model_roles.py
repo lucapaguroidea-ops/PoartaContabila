@@ -194,3 +194,148 @@ def test_model_roles_view_never_shows_a_key(cat, monkeypatch):
     assert roles["jev_v3_judge"]["key_set"] is True
     assert roles["sys2_explain_approve"]["key_set"] is False
     assert roles["jev_v3_judge"]["callable_in_dry_run"] is True
+
+
+# ----- role cards (WP-25) -----
+
+
+def _row(system="system_one", **over):
+    base = {
+        "role_id": "r",
+        "graph_id": "monthly_close",
+        "node": "layer2",
+        "system": system,
+        "output": "x",
+        "status": "not_wired",
+        "pack": None,
+        "model": None,
+    }
+    if system == "system_one":
+        base["card"] = {
+            "questions": {"q": {"type": "noul", "instructions": "Is it?"}},
+            "fields": {"f": "q"},
+        }
+    elif system == "system_two":
+        base["family"] = "deepseek"
+        base["card"] = {
+            "task": "Explain.",
+            "limits": ["You do not decide."],
+            "output_fields": ["explanation", "facts_cited", "missing"],
+        }
+    else:
+        base["card"] = {"instructions": ["Copy what is printed."], "output": {"a": "b"}}
+    base.update(over)
+    return base
+
+
+def test_wired_jev_cards_fill_exactly_their_closed_model(cat):
+    from poarta_contabila.jev import PACKS
+
+    for role in cat.model_roles.values():
+        if role.status == "wired":
+            assert set(role.card["fields"]) == set(PACKS[role.pack][1].model_fields)
+            assert role.card["thresholds"] == {"noul_yes": 0.90, "choice": 0.80, "human": 0.10}
+
+
+def test_system_two_roles_get_the_base_card_and_no_persona(cat):
+    from poarta_contabila.model_roles import brief
+
+    role = cat.model_roles["sys2_explain_recon"]
+    assert role.card["output_fields"] == ["explanation", "facts_cited", "missing"]
+    assert any("You do not decide" in limit for limit in role.card["limits"])
+    text = brief(role)
+    assert text.startswith("Reader: An accountant") and "Task: Explain this reconcile" in text
+    assert "you are an" not in text.lower()
+    assert brief(cat.model_roles["jev_v3_judge"]) is None
+
+
+@pytest.mark.parametrize(
+    ("row", "match"),
+    [
+        (
+            _row(card={"questions": {"q": {"type": "choice"}}, "fields": {"f": "q"}}),
+            "names no criteria",
+        ),
+        (
+            _row(card={"questions": {"q": {"type": "noul"}}, "fields": {"f": "other"}}),
+            "not asked",
+        ),
+        (
+            _row(card={"questions": {"q": {"type": "guess"}}, "fields": {"f": "q"}}),
+            "no type",
+        ),
+        (
+            _row(
+                card={
+                    "questions": {"q": {"type": "noul", "criteria": {True: "x"}}},
+                    "fields": {"f": "q"},
+                }
+            ),
+            "not text",
+        ),
+        (
+            _row(
+                status="wired",
+                pack="recon_review",
+                card={"questions": {"q": {"type": "noul"}}, "fields": {"f": "q"}},
+            ),
+            "must be the pack's",
+        ),
+        (
+            _row(
+                "system_two",
+                card={
+                    "task": "You are an expert accountant. Explain.",
+                    "limits": ["x"],
+                    "output_fields": ["explanation", "facts_cited", "missing"],
+                },
+            ),
+            "no persona",
+        ),
+        (
+            _row(
+                "system_two",
+                card={
+                    "task": "Explain.",
+                    "limits": ["x"],
+                    "output_fields": ["explanation", "recommendation"],
+                },
+            ),
+            "output_fields must be exactly",
+        ),
+        (_row("system_two", card={"limits": ["x"]}), "has a task and limits"),
+        (_row("document_reading", card={"instructions": ["x"]}), "an output shape"),
+    ],
+)
+def test_a_card_the_role_cannot_honour_is_refused(row, match):
+    with pytest.raises(ValueError, match=match):
+        load_roles({"roles": [row]})
+
+
+def test_a_changed_card_never_reuses_a_cached_answer(cat):
+    from poarta_contabila.jev import input_hash, role_pin
+
+    payload = {"x": 1}
+    before = input_hash("v3_judge", payload, role_pin(_pinned(cat).model_roles)("v3_judge"))
+    reworded = _pinned(cat)
+    judge = reworded.model_roles["jev_v3_judge"]
+    card = {**judge.card, "questions": {**judge.card["questions"]}}
+    card["questions"]["needs_human"] = {"type": "noul", "instructions": "Reworded."}
+    roles = {**reworded.model_roles, "jev_v3_judge": judge.model_copy(update={"card": card})}
+    after = input_hash("v3_judge", payload, role_pin(roles)("v3_judge"))
+    assert before != after
+    other_model = role_pin(_pinned(cat, "vendor/model-2026-10-01").model_roles)("v3_judge")
+    assert input_hash("v3_judge", payload, other_model) != before
+
+
+def test_dry_run_records_the_card_and_its_questions(cat):
+    o = _ops(cat)
+    o.ingest(NEW_INVOICE)
+    (call,) = _calls(o, "jev_v3_judge")
+    role = cat.model_roles["jev_v3_judge"]
+    assert call["card_hash"] == role.card_hash
+    assert set(call["questions"]) == {"accounts_ok", "risk", "needs_human"}
+    assert call["questions"]["risk"]["criteria"]["low"].startswith("A routine document")
+    roles = {r["role_id"]: r for r in o.http.get("/model-roles", headers=o.op).json()}
+    assert roles["jev_v3_judge"]["card_hash"] == role.card_hash
+    assert roles["sys2_draft_rule"]["brief"].startswith("Reader:")

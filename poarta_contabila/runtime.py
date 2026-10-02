@@ -48,9 +48,10 @@ from poarta_contabila.jev import (
     make_judge,
     make_recon_review,
     make_v2,
+    role_pin,
     role_transport,
 )
-from poarta_contabila.model_roles import InMemoryModelCallStore
+from poarta_contabila.model_roles import InMemoryModelCallStore, brief
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
 from poarta_contabila.recon.pre import PreResult, ReconStore, make_pre_check
@@ -125,6 +126,7 @@ class Runtime:
                     synthetic=self._synthetic,
                 ),
                 cache=InMemoryJevCache(),
+                pin=role_pin(self.catalog.model_roles),
             )
         self.deps = IngestDeps(
             catalog=self.catalog,
@@ -214,6 +216,8 @@ class Runtime:
                     "key_set": bool(os.environ.get(role.key_env)),
                     "mode": self.model_mode,
                     "callable_in_dry_run": role.status == "wired" and role.model is not None,
+                    "card_hash": role.card_hash,
+                    "brief": brief(role),
                 }
             )
         return out

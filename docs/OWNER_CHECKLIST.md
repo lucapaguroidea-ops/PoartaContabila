@@ -26,6 +26,10 @@ the answer and the session records it.
       is client data and no model is called for it until the EU route exists.
 - [ ] **Scaleway (EU)**: which Scaleway-hosted models serve which role, once we leave synthetic
       data. It becomes each role's `eu_route`.
+- [ ] **Role cards** (WP-25): read each role's `card` in `ARTICOLE_MODEL_ROLES_v1.yaml` — Jev's
+      questions and criteria, Gemini's extraction rules, the System Two brief
+      (`GET /model-roles` shows it rendered). Change wording in the catalog; the hash changes and
+      old cached answers are not reused.
 - [ ] **The live sender**: this build session was not permitted to write the outbound call with
       a key. Either allow it (Claude Code permission rule) or have it written elsewhere; it plugs
       into `role_transport` in `poarta_contabila/jev.py`.
