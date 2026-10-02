@@ -61,7 +61,7 @@ TRANSIENT = frozenset({500, 503, 504})
 ATTEMPTS = 2
 BACKOFF = (10.0,)
 PACIFIC = ZoneInfo("America/Los_Angeles")  # Google's daily quotas reset at midnight there
-HARD_PAGES = 2  # from this many pages a statement goes to the strong tier first
+BUSY_RETRY = 300.0  # every model busy (5xx): ask again in five minutes
 WINDOW = 60.0  # the quotas are per minute
 MAX_WAIT = 90.0  # longest wait for a free slot before the statement is refused
 PAGE_TOKENS = 258  # Google counts a PDF page as 258 input tokens
@@ -113,6 +113,16 @@ class RateLimited(GeminiError):
 
 class Busy(GeminiError):
     """Google stayed busy (5xx, or unreachable) on this model after its retries."""
+
+
+class OutOfQuota(GeminiError):
+    """No model in the order can read now (all at their limit, or all busy): nothing is wrong
+    with the document, so it waits (00_LAW §8 A5). *retry_after*: seconds until the first
+    model may read again."""
+
+    def __init__(self, message: str, retry_after: float):
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 def page_count(pdf: bytes) -> int:
@@ -191,6 +201,15 @@ class RateLimiter:
             sent.append([now, tokens])
             self._day[model] = (day, count + 1)
             return 0.0
+
+    def to_midnight(self) -> float:
+        with self._lock:
+            return self._today()[1]
+
+    def spent_today(self, model: str) -> bool:
+        """Google said this model's daily quota is spent (a daily 429)."""
+        with self._lock:
+            return self._spent_day.get(model) == self._today()[0]
 
     def settle(self, model: str, estimated: int, actual: int) -> None:
         """Replace the newest estimate for *model* with the tokens Google counted."""
@@ -369,17 +388,40 @@ class GeminiStatementReader:
         return extraction, header, model
 
     def order(self, pdf: bytes, *, strong: bool = False, escalate: bool = False) -> list[str]:
-        """The models to try, in order (00_LAW §8 A4): everyday first; the strong tier first
-        for a hard statement (``HARD_PAGES``) or when asked; only the strong tier for a second
-        run on a read that did not tie out (*escalate*)."""
+        """The models to try, in order (00_LAW §8 A4, A5): always everyday first (the Lite
+        models read hard statements too); the strong tier first only when asked; only the
+        strong tier for a second run on a read that did not tie out (*escalate*)."""
         tiers = self.role.tiers
         if tiers is None:
             return [str(self.role.model)]
         if escalate:
             return list(tiers.strong)
-        if strong or page_count(pdf) >= HARD_PAGES:
+        if strong:
             return [*tiers.strong, *tiers.everyday]
         return [*tiers.everyday, *tiers.strong]
+
+    def budget(self) -> list[dict[str, Any]]:
+        """Each model in the order: its limits, what this process used today, what is left
+        (None when the daily limit is not confirmed), and whether Google spent it."""
+        tiers = self.role.tiers
+        rows = []
+        for model in tiers.all if tiers else [str(self.role.model)]:
+            limit = self.role.rate_limits.get(model)
+            used = self.limiter.used_today(model)
+            spent = self.limiter.spent_today(model)
+            left = None if limit is None or limit.rpd is None else max(limit.rpd - used, 0)
+            rows.append(
+                {
+                    "model": model,
+                    "tier": "strong" if self.is_strong(model) else "everyday",
+                    "rpm": limit.rpm if limit else None,
+                    "rpd": limit.rpd if limit else None,
+                    "used_today": used,
+                    "left_today": 0 if spent else left,
+                    "spent_by_google": spent,
+                }
+            )
+        return rows
 
     def is_strong(self, model: str) -> bool:
         return self.role.tiers is not None and model in self.role.tiers.strong
@@ -397,9 +439,10 @@ class GeminiStatementReader:
                 waits[model] = wait
             wait = min(waits.values())
             if waited + wait > MAX_WAIT:
-                raise GeminiError(
+                raise OutOfQuota(
                     f"rate limit: {', '.join(models)} full for another {wait:.0f} s"
-                    " (Google AI Studio free tier)"
+                    " (Google AI Studio free tier)",
+                    wait,
                 )
             self.sleep(wait)
             waited += wait
@@ -409,23 +452,28 @@ class GeminiStatementReader:
     ) -> tuple[dict[str, str], list[dict[str, Any]], str, str]:
         """The first of *models* with quota that answers (00_LAW §8 A4)."""
         tokens = estimate_tokens(pdf)
-        left, errors = list(models), []
+        left, errors, retry = list(models), [], []
         while left:
-            model = self._slot(left, tokens)
+            try:
+                model = self._slot(left, tokens)
+            except OutOfQuota as exc:
+                raise OutOfQuota("; ".join([*errors, str(exc)]), exc.retry_after) from None
             try:
                 header, tables, version, used = self._generate(pdf, model, tokens)
             except RateLimited as exc:
                 self.limiter.exhaust(model, daily=exc.daily)
+                retry.append(self.limiter.to_midnight() if exc.daily else WINDOW)
                 errors.append(f"{model}: {exc}")
                 left.remove(model)
                 continue
             except Busy as exc:
+                retry.append(BUSY_RETRY)
                 errors.append(f"{model}: {exc}")
                 left.remove(model)
                 continue
             self.limiter.settle(model, tokens, used or tokens)
             return header, tables, version, model
-        raise GeminiError("; ".join(errors))
+        raise OutOfQuota("; ".join(errors), min(retry))
 
     def _generate(
         self, pdf: bytes, model: str, tokens: int

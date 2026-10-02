@@ -362,7 +362,8 @@ def test_the_catalog_reads_lite_first_and_flash_to_escalate(cat):
         assert role.model == "gemini-3.5-flash-lite"
         assert role.rate_limits["gemini-3.8-flash"] == RateLimit(rpm=5, tpm=250_000, rpd=20)
         assert role.rate_limits["gemini-3.7-flash"] == RateLimit(rpm=5, tpm=250_000, rpd=20)
-        assert role.rate_limits["gemini-3.5-flash-lite"].rpd is None  # [de confirmat]
+        assert role.rate_limits["gemini-3.5-flash-lite"] == RateLimit(rpm=15, tpm=250_000, rpd=500)
+        assert role.rate_limits["gemini-3.1-flash-lite"] == RateLimit(rpm=15, tpm=250_000, rpd=500)
 
 
 def _tiered_row(**change):
@@ -405,7 +406,7 @@ def _pages(n: int) -> bytes:
     ("pdf", "kw", "order"),
     [
         (_pages(1), {}, [LITE, LITE2, STRONG, STRONG2]),
-        (_pages(2), {}, [STRONG, STRONG2, LITE, LITE2]),  # a hard statement
+        (_pages(2), {}, [LITE, LITE2, STRONG, STRONG2]),  # pages do not decide (A5)
         (_pages(1), {"strong": True}, [STRONG, STRONG2, LITE, LITE2]),  # asked for
         (_pages(1), {"escalate": True}, [STRONG, STRONG2]),  # a second run
     ],
@@ -430,7 +431,7 @@ def test_the_strong_tier_stops_at_its_daily_limit(cat):
     google, sleeps = Google(), []
     reader = _reader(cat, google, tiers=True, sleeps=sleeps)
     for _ in range(41):  # one every 13 s: under 5 a minute, so only the day stops them
-        reader(_pages(2), tenant_cui=CUI)
+        reader(PDF, tenant_cui=CUI, strong=True)
         reader.limiter.clock.now += 13
     models = [_model_of(r) for r in google.requests]
     assert models.count(STRONG) == 20 and models.count(STRONG2) == 20
