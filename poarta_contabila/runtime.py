@@ -179,6 +179,9 @@ class Runtime:
                 ),
                 codit_put=self.codits.put if self.codits is not None else None,
                 observe_question=self.gateway.observe_question,
+                recon_open=lambda cui, period: [
+                    w.job.job_id for w in self.recon_waiting(cui, period)
+                ],
             ),
             checkpointer=self.checkpointer,
         )

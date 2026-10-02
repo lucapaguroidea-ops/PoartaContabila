@@ -327,9 +327,12 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   concluded for an uncovered month. `llm_review` is the `ReconDeps.review` hook, `abstain`
   until a reviewer is wired; a contest only asks (it cannot flip to posted). `PreResult.missing`
   names the uncovered months. Operator: `POST /recon/{cui}/{period}`, `GET`, `POST …/resume`.
+- 2026-10-02: `monthly_close` locks a month with documents still waiting on a PRE answer as
+  material (blocker `reconcile_sink: n document(s) wait on a PRE answer`, `CloseDeps.recon_open`):
+  answered on the recon thread, never closed around.
 - Open: the POST stage (`recon_post_*`, `recon_how_mismatch`: which accounts SAGA used against
-  the expected ones) needs the journal lines per document; `monthly_close` does not invoke this
-  graph before V2 yet; no reviewer is wired (Grok, `GROK_API_KEY`, not built).
+  the expected ones); the review goes through the `jev_recon_review` role (WP-24), which sends
+  nothing until the live sender exists.
 
 ### WP-24 Model roles (00_LAW §3.5, changed by the owner 2026-10-02)
 - Decided by the owner 2026-10-02: Jev = System One (routing, classification of JSON /

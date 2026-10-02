@@ -12,6 +12,8 @@
   asks, so a resume shows and records the same one without asking Jev again.
 - **v2_gate**: a person answers ``v2_close``; ``file`` is refused while Layer 1 is material
   (00_LAW 13).
+- A month with documents still waiting on a ``reconcile_sink`` PRE answer is material
+  (blocker at lock): it is answered on ``recon:{cui}:{period}``, never closed around.
 - **v4_codit**: only after ``file``. ``skip`` writes nothing; ``accept`` may patch the filed
   period's CO.DiT on ``v4.may_patch`` only (``edit``) and seed the next period's on
   ``v4.seed_next_period_on`` (``seed_next``; an existing next CO.DiT is never overwritten).
@@ -132,6 +134,8 @@ class CloseDeps:
         None
     )
     """(HITL kind, question, tenant cui): the System Two roles that would explain it."""
+    recon_open: Callable[[str, str], list[str]] = lambda cui, period: []
+    """(cui, period) → jobs still waiting on a reconcile_sink PRE answer (WP-23)."""
 
 
 class CloseState(TypedDict, total=False):
@@ -192,6 +196,12 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
             blockers.append("no close kind fits the period's CO.DiT (tva/exig)")
         if doc is not None:
             blockers += [f"CO.DiT {flag} blocks filing" for flag in doc.blocks_file]
+        waiting = deps.recon_open(state["cui"], state["period"])
+        if waiting:
+            blockers.append(
+                f"reconcile_sink: {len(waiting)} document(s) wait on a PRE answer"
+                f" (POST /recon/{state['cui']}/{state['period']})"
+            )
         run = run.model_copy(
             update={
                 "status": "locked",

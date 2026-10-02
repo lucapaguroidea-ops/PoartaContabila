@@ -184,3 +184,30 @@ def test_a_contested_det_verdict_is_asked_not_flipped(cat):
     assert "POST question" in q["error"]
     graph.invoke(Command(resume={"action": "override_absent"}), cfg)
     assert _job(o, job_id)["question"]["kind"] == "v3_approve"
+
+
+# ----- monthly_close waits on open PRE answers -----
+
+
+def test_close_is_material_while_a_pre_answer_is_open(cat):
+    o, job_id = _close_call(cat)
+    out = o.http.post(f"/close/{CUI}/{PERIOD}", params={"tva": "tva_platitor"}, headers=o.op)
+    q = out.json()["question"]
+    assert q["kind"] == "v2_close" and q["material"] is True
+    assert any("reconcile_sink: 1 document(s)" in b for b in q["blockers"])
+    filed = o.http.post(
+        f"/close/{CUI}/{PERIOD}/resume",
+        json={"action": "file", "explained_rule": None},
+        headers=o.op,
+    ).json()
+    assert "cannot file" in filed["question"]["error"]
+    # answered on the recon thread, the next close run no longer names it
+    _recon(o)
+    _recon(o, {"action": "already_posted", "sink_line_ids": [0]})
+    o.http.post(
+        f"/close/{CUI}/{PERIOD}/resume",
+        json={"action": "reopen", "explained_rule": None},
+        headers=o.op,
+    )
+    again = o.http.post(f"/close/{CUI}/{PERIOD}", params={"tva": "tva_platitor"}, headers=o.op)
+    assert not any("reconcile_sink" in b for b in again.json()["question"]["blockers"])
