@@ -54,6 +54,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-40 | done | WP-39 | Free-tier rate limits in the catalog; one backup model while the main one is at its limit |
 | WP-41 | done | WP-40 | Model tiers (Lite everyday, Flash strong), daily limits, second run on a read that does not tie |
 | WP-42 | done | WP-41 | Lite first always; a statement no model can read waits and is read later; reading budget |
+| WP-44 | done | WP-37 | The reading evaluation says why a read does not tie, and how many rows the model returned |
 
 ## WP details
 
@@ -704,6 +705,13 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Open: the counts are this process's; a redeploy restarts them at 0 (Google's 429 still
   stops a spent model). The operator's on-the-fly choice when every tier is spent (reserve
   models, evaluated first) is the next WP.
+
+### WP-44 Why a read does not tie
+- Asked by the owner 2026-10-02: on the live evaluation `two_pages` read 60/60 lines and 6/6
+  header fields but did not tie, twice; the score did not say why.
+- `CaseScore` gains `tie_error` (`parse_statement`'s reason, at most 300 characters) and
+  `rows_read` (every row the model returned); `render` prints
+  `does not tie (N rows read): <reason>` under the case.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

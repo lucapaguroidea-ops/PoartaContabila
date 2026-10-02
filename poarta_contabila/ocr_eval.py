@@ -86,6 +86,8 @@ class CaseScore(Closed):
     iban: bool = False
     header_fields: int = 0
     ties: bool = False
+    tie_error: str | None = None  # why the read does not tie (parse_statement's reason)
+    rows_read: int = 0  # every row the model returned, headers excluded
     lines_expected: int
     lines_exact: int = 0
     seconds: float = 0.0
@@ -349,15 +351,17 @@ def score(case: EvalCase, reader: Any, cui: str = CUI) -> CaseScore:
     exact = sum(1 for a, b in zip(got, truth, strict=False) if a == b)
     try:
         parse_statement(extraction.tables, StatementMeta.model_validate(case.meta), cui)
-        ties = True
-    except StatementError:
-        ties = False
+        ties, tie_error = True, None
+    except StatementError as exc:
+        ties, tie_error = False, str(exc)[:300]
     return CaseScore(
         read=True,
         identity=extraction.meta.identity_ok,
         iban=_same("iban", header.get("iban", ""), case.meta["iban"]),
         header_fields=sum(_same(f, header.get(f, ""), v) for f, v in case.meta.items()),
         ties=ties,
+        tie_error=tie_error,
+        rows_read=sum(len(t.get("rows") or []) for t in extraction.tables),
         lines_exact=exact if len(got) == len(truth) else min(exact, len(truth)),
         seconds=seconds,
         **base,
@@ -387,6 +391,8 @@ def render(scores: list[CaseScore]) -> str:
         )
         if s.error:
             lines.append(f"  error: {s.error}")
+        if s.tie_error:
+            lines.append(f"  does not tie ({s.rows_read} rows read): {s.tie_error}")
     t = summary(scores)
     lines.append(
         f"total: read {t['read']}/{t['cases']}, ties {t['ties']}/{t['cases']}, "
