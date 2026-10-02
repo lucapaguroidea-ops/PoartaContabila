@@ -128,6 +128,22 @@ class RateLimit(Closed):
 
     rpm: int = Field(gt=0)
     tpm: int = Field(gt=0)
+    rpd: int | None = Field(default=None, gt=0)
+    """Requests per day (Pacific day; every attempt counts, a 503 included). None = not yet
+    confirmed (`[de confirmat]`): only Google's daily 429 stops it."""
+
+
+class Tiers(Closed):
+    """00_LAW §8 A4: the order Google AI Studio document reading uses its models in.
+    ``everyday``: the most requests a day, read first. ``strong``: more capable, fewer a day;
+    for hard documents, an asked re-read, or a second run on a read that does not tie out."""
+
+    everyday: list[str] = Field(min_length=1)
+    strong: list[str] = Field(min_length=1)
+
+    @property
+    def all(self) -> list[str]:
+        return [*self.everyday, *self.strong]
 
 
 class ModelRole(Closed):
@@ -145,11 +161,11 @@ class ModelRole(Closed):
     flow (MODEL_CALLS=dry records it) but its answer would decide nothing. not_wired: no call
     site yet."""
     model: str | None = None
-    backup_model: str | None = None
-    """00_LAW §8 A3: Google AI Studio document reading only — the one model read with while
-    ``model`` is at its rate limit. Never on another route, never a list."""
+    tiers: Tiers | None = None
+    """00_LAW §8 A4: Google AI Studio document reading only; ``model`` is its first everyday
+    model. Never on another route."""
     rate_limits: dict[str, RateLimit] = Field(default_factory=dict)
-    """Per model id: the free-tier quota the sender keeps under (A3)."""
+    """Per model id: the free-tier quota the sender keeps under (A3, A4)."""
     route: Route = "openrouter"
     provider: ProviderPin = Field(default_factory=ProviderPin)
     data: Literal["synthetic_only"] = "synthetic_only"
@@ -158,7 +174,7 @@ class ModelRole(Closed):
     card: dict[str, Any] = Field(default_factory=dict)
     """The merged role card (system base + role); see :func:`check_card`."""
 
-    @field_validator("model", "backup_model")
+    @field_validator("model")
     @classmethod
     def _exact(cls, value: str | None) -> str | None:
         if value is None:
@@ -333,25 +349,28 @@ def load_roles(doc: dict[str, Any]) -> dict[str, ModelRole]:
                     f"role {role.role_id!r}: {role.model!r} is not a Google AI Studio model id"
                     " (gemini-…, without google/)"
                 )
-        if role.backup_model is not None:
+        if role.tiers is not None:
             if role.route != "google_ai_studio":
                 raise ValueError(
-                    f"role {role.role_id!r}: a backup model is only for Google AI Studio"
-                    " document reading (00_LAW §8 A3)"
+                    f"role {role.role_id!r}: model tiers are only for Google AI Studio"
+                    " document reading (00_LAW §8 A4)"
                 )
-            if role.model is None or role.backup_model == role.model:
-                raise ValueError(f"role {role.role_id!r}: the backup differs from a set model")
-            if not _AI_STUDIO_MODEL.match(role.backup_model):
-                raise ValueError(
-                    f"role {role.role_id!r}: {role.backup_model!r} is not a Google AI Studio"
-                    " model id (gemini-…, without google/)"
-                )
+            models = role.tiers.all
+            if len(set(models)) != len(models):
+                raise ValueError(f"role {role.role_id!r}: a model is listed twice in tiers")
+            for m in models:
+                if not ai_studio_model_ok(m):
+                    raise ValueError(
+                        f"role {role.role_id!r}: {m!r} is not an exact Google AI Studio model id"
+                        " (gemini-…, without google/, no alias)"
+                    )
+            if role.model != role.tiers.everyday[0]:
+                raise ValueError(f"role {role.role_id!r}: model is the first everyday model")
         if role.rate_limits and role.route != "google_ai_studio":
             raise ValueError(f"role {role.role_id!r}: rate limits are Google AI Studio's")
         if role.route == "google_ai_studio" and role.model is not None:
-            missing = [
-                m for m in (role.model, role.backup_model) if m and m not in role.rate_limits
-            ]
+            used = role.tiers.all if role.tiers else [role.model]
+            missing = [m for m in used if m not in role.rate_limits]
             if missing:
                 raise ValueError(f"role {role.role_id!r}: no rate limit for {missing}")
         if role.role_id in out:

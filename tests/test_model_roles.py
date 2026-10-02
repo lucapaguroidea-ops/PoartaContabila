@@ -46,8 +46,8 @@ def test_every_model_call_site_has_one_role(cat):
     }
     # chosen by the owner, not guessed: only document reading has one (2026-10-02)
     assert {r.role_id: r.model for r in roles.values() if r.model} == {
-        "ocr_extract": "gemini-3.8-flash",
-        "ocr_decont_split": "gemini-3.8-flash",
+        "ocr_extract": "gemini-3.5-flash-lite",  # tiers.everyday[0] (00_LAW §8 A4)
+        "ocr_decont_split": "gemini-3.5-flash-lite",
     }
     assert all(r.provider.allow_fallbacks is False for r in roles.values())
     assert {r.system for r in roles.values()} == {"system_one", "system_two", "document_reading"}
