@@ -362,6 +362,8 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Open: every `model:` is null until the owner sends the ids (`docs/OWNER_CHECKLIST.md`); the
   live sender is not built (this session was not permitted to write the outbound call); the
   `shadow` roles (WP-26) record at their place but none has a sender either.
+  EU route: `docs/EU_VERTEX_SETUP.md` (Gemini on Vertex AI EU, a draft blocked on the owner's
+  EU-route decision: `00_LAW.md` names Scaleway only).
 
 ### WP-25 Role cards
 - Asked by the owner 2026-10-02: a card per role instead of a persona — who reads, what to do,

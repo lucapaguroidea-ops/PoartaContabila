@@ -14,8 +14,20 @@ the answer and the session records it.
       (`JEV_BASE_URL`, `JEV_API_KEY`).
 - [ ] **Provider pins**: for each role, the provider(s) OpenRouter may use (`provider.only`);
       fallbacks stay off and data collection denied.
-- [ ] **Gemini through OpenRouter BYOK**: does OpenRouter's BYOK list Google AI Studio, and does
-      the AI Studio free tier still apply through it (quota, fees)?
+- [x] **Gemini through OpenRouter BYOK**: the AI Studio key is in OpenRouter (2026-10-02).
+- [ ] **Gemini BYOK, remaining steps** (synthetic tests only):
+      1. In OpenRouter's BYOK settings for Google AI Studio, choose **"Always use this key"**.
+         The default, "Use shared capacity", falls back to OpenRouter's own Google endpoints
+         when your key fails.
+      2. In OpenRouter → Keys, create an OpenRouter key for document reading (e.g.
+         `poarta-ocr`) with a credit limit. BYOK costs 5 % of the usual price after the first
+         1M BYOK requests a month.
+      3. Railway → `faithful-mercy` → `PoartaContabila` → Variables: set it as
+         `OPENROUTER_OCR_API_KEY` (sealed), plus `OPENROUTER_BASE_URL` and `MODEL_CALLS=dry`.
+         The Google key itself never goes to Railway.
+      4. Send the exact Gemini model id from its OpenRouter page (no `:free`, no `latest`). It
+         goes into `ocr_extract` and `ocr_decont_split` with `provider.only:
+         [google-ai-studio]` and fallbacks off.
 - [ ] **Gemini API terms for the free tier** (Google's "Unpaid Services"): free tier for synthetic
       tests only; client documents only on the EU host (decided 2026-10-02).
 - [ ] **Railway variables** (project `faithful-mercy`):
@@ -31,8 +43,20 @@ the answer and the session records it.
       role would have been sent, by graph and node. `--local` shows the same without a server.
 - [ ] **Test tenants** carry `"data_class": "synthetic"` (`PUT /tenants/{cui}`); any other tenant
       is client data and no model is called for it until the EU route exists.
-- [ ] **Scaleway (EU)**: which Scaleway-hosted models serve which role, once we leave synthetic
-      data. It becomes each role's `eu_route`.
+- [ ] **Decision: the EU route per model family** (`00_LAW.md` §3 invariant 5 names Scaleway
+      only). Proposed:
+      - document reading (Gemini): Vertex AI in an EU region (`docs/EU_VERTEX_SETUP.md`);
+      - System Two (DeepSeek / GLM): Scaleway;
+      - Jev: open, because where it processes data is unknown.
+      The law changes once you decide.
+- [ ] **Scaleway (EU)**: which Scaleway-hosted models serve which System Two role, once we leave
+      synthetic data. It becomes each role's `eu_route`.
+- [ ] **Vertex AI EU setup** (`docs/EU_VERTEX_SETUP.md`, reviewed 2026-10-02). **Blocked by:**
+      - the EU-route decision above;
+      - a domain you control (Cloud Identity);
+      - the live sender;
+      - leaving synthetic data.
+      Do §A–§D then, and tick §H before the first client document.
 - [ ] **Role cards** (WP-25): read each role's `card` in `ARTICOLE_MODEL_ROLES_v1.yaml` — Jev's
       questions and criteria, Gemini's extraction rules, the System Two brief
       (`GET /model-roles` shows it rendered). Change wording in the catalog; the hash changes and
