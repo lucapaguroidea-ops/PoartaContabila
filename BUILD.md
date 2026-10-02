@@ -58,6 +58,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-44 | done | WP-37 | The reading evaluation says why a read does not tie, and how many rows the model returned |
 | WP-45 | done | WP-44 | A balance or total row is not a line, whatever column its label is in; the brief keeps balances out of tables |
 | WP-46 | done | WP-08, WP-13 | C0 counts a statement line's counterpart: from its binding, or one matching posting in the books |
+| WP-47 | done | WP-29, WP-46 | The smoke run closes a clean August (books hold exactly its documents); September reopens on a lock mismatch |
 
 ## WP details
 
@@ -759,6 +760,33 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   statement line here is still a difference (the fixture test keeps it).
 - `period_diff.bank_counterparts`; the books' documents are matched as before (bank: side +
   date + amount), and the counterpart is added to the implied turnover. Catalog: C0 note.
+
+### WP-47 A clean month in the smoke run
+- Asked by the owner 2026-10-02 ("fix the month-close blockers"). The synthetic firm's
+  September close was held by four blockers, none of them a fault:
+  - **lock mismatch**: the smoke answered `hold` every run while its September jobs kept
+    changing; `hold` keeps the lock, only `reopen` releases it (WP-10, by design);
+  - **C1**: its packaged jobs wait for the SAGA agent (`acked` comes only from an agent
+    snapshot, and the build agent's token never opens the agent routes, WP-38);
+  - **C2 and most of C0**: the smoke reused `saga_rj.xls`, the books of another test, which
+    hold invoices 1427, FX-101 and AB0058 that the smoke never uploads, while its own
+    documents are not in them;
+  - **C0 401 Dr**: a statement line's counterpart was never implied (fixed by WP-46).
+- Decided by the owner 2026-10-02: prove a clean close on a fresh month, keep September as
+  the honest held example.
+  - `fixtures/sink/make_fixtures.py` writes `saga_rj_smoke.xls`: a clean August (the SPV
+    purchase AB 0070 of 12.08, 807,81 with 132,31 VAT; its payment OP-81 of 20.08, 401 Dr /
+    5121 Cr; a customer receipt IN-25 of 25.08, 500,00, 5121 Dr / 4111 Cr), then September
+    line for line as `saga_rj.xls` (which is unchanged, byte for byte). The books view uses
+    the tenant's latest export, so one export covers both months.
+  - The smoke uploads it, then (step 8) August's SPV invoice (`fixtures/ubl` renumbered
+    `AB 0070`, issued 12.08) and statement (opening 5 307,81, closing 5 000,00 = September's
+    opening): every job ends `already_in_sink`.
+  - `monthly_close` runs for September, then August, answered `hold` (nothing is filed). On a
+    lock mismatch it answers `reopen` first, then closes again
+    (`reopened after a lock mismatch; …`).
+- Expected: August `material=False` with no blocker; September material (its packages wait
+  for an agent; its books hold invoices never uploaded).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

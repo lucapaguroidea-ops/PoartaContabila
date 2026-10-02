@@ -20,7 +20,12 @@ def test_the_smoke_run_goes_through_every_graph():
     assert steps["line 2 v3_approve"].outcome.startswith("job packaged")
     assert steps["decont_split"].outcome == "workings emit=False"
     assert steps["eu route"].outcome.startswith("set on 0 of ")
-    assert steps["monthly_close"].outcome.startswith("material=True; held (hold)")
+    assert steps["monthly_close 2026-09"].outcome.startswith("material=True; held (hold)")
+    # WP-47: the clean month — every document already in the books, nothing blocks
+    assert steps["registru jurnal"].outcome == "covers ['2026-08', '2026-09']"
+    assert steps["august invoice"].outcome == "job already_in_sink"
+    assert steps["august statement"].outcome == "job already_in_sink; job already_in_sink"
+    assert steps["monthly_close 2026-08"].outcome == "material=False; held (hold)"
     assert {
         "folder_triage.sniff",
         "folder_triage.decont_split",
@@ -38,7 +43,33 @@ def test_the_smoke_run_goes_through_every_graph():
     steps = _steps(again)
     assert steps["invoice v3_approve"].outcome.startswith("nothing to answer: job packaged")
     assert steps["line 2 v3_approve"].outcome.startswith("nothing to answer")
+    assert steps["monthly_close 2026-08"].outcome == "material=False; held (hold)"  # same lock
     assert again.ok
+
+
+def test_a_month_changed_since_its_lock_is_reopened_then_closed():
+    from poarta_contabila.smoke import CUI, STATEMENT
+
+    client = _local_client()
+    run(client)
+    later = {  # another September statement: a new line, so the month's jobs change
+        **STATEMENT,
+        "meta": {**STATEMENT["meta"], "opening": "4290.00", "closing": "4390.00"},
+        "tables": [
+            {
+                "headers": ["Data", "Descriere", "Referinta", "Debit", "Credit"],
+                "rows": [["28.09.2026", "Incasare CLIENT TEST SRL FX-103", "", "", "100,00"]],
+            }
+        ],
+        "pdf_b64": "JVBERi0xLjQgbGF0ZXI=",  # %PDF-1.4 later
+    }
+    assert client.post(f"/extras/{CUI}", json=later).status_code == 200
+    steps = _steps(run(client))
+    assert steps["monthly_close 2026-09"].outcome.startswith(
+        "reopened after a lock mismatch; material=True; held (hold)"
+    )
+    assert "lock mismatch" not in steps["monthly_close 2026-09"].outcome.split("; ", 1)[1]
+    assert steps["monthly_close 2026-08"].outcome == "material=False; held (hold)"
 
 
 def test_the_smoke_run_refuses_a_server_that_would_send():
@@ -116,8 +147,9 @@ def test_the_ocr_step_has_the_server_read_a_synthetic_statement_pdf():
     step = _steps(report)["statement PDF read"]
     assert step.ok and step.outcome.startswith("job reconcile_pre asks v3_approve")
     assert len(sent) == 1 and b"FX-102" in synthetic_statement_pdf()
-    # the statement sent with its tables records what Gemini would be given; this one was sent
+    # the statements sent with their tables (September, and August: WP-47) record what Gemini
+    # would be given; this one was sent
     statuses = [c["status"] for c in report.calls["ingest_source_doc.extract"]]
-    assert sorted(statuses) == ["recorded", "sent"]
+    assert sorted(statuses) == ["recorded", "recorded", "sent"]
     run(_local_client(rt), ocr=True)  # a rerun: the stored extract, no second call
     assert len(sent) == 1
