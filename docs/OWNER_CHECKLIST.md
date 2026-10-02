@@ -17,9 +17,8 @@ the answer and the session records it.
 - [x] **Gemini direct for synthetic data** (decided 2026-10-02, WP-36): the AI Studio key is
       on Railway as `GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC`. It replaces the OpenRouter BYOK route
       for document reading, so the BYOK key in OpenRouter can be removed.
-- [ ] **Gemini model id for AI Studio**: the bare id from Google AI Studio (`gemini-…`, not
-      OpenRouter's `google/…`, no `latest`). It goes into `ocr_extract`; until then the reader
-      refuses.
+- [x] **Gemini model id for AI Studio**: `gemini-3.8-flash`, pinned on both document-reading
+      roles (2026-10-02).
 - [ ] **Turn it on**: set `MODEL_CALLS=live` on Railway (from `dry`). Only synthetic document
       reading sends; every other role keeps recording. Check `GET /model-roles` shows
       `ocr_extract` with `key_set: true`.

@@ -81,7 +81,7 @@ systems:
     # direct to Google AI Studio (owner, 2026-10-02): synthetic tenants only; its free tier may
     # use what it is sent. Model ids are the bare form (gemini-…), not OpenRouter's google/….
     key_env: GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC
-    does: "read scans / PDFs without XML or text layer into the extract contract"
+    does: "read scans / PDFs without XML or text layer, and bank statement tables from any PDF (00_LAW §3.5), into the extract contract"
     cannot: [read_xml_documents, skip_deterministic_checks, emit, classify]
     card:
       instructions:
@@ -140,7 +140,7 @@ roles:
     output: "proposed parts of an expense report; a person confirms"
     status: shadow
     route: google_ai_studio
-    model: null
+    model: gemini-3.8-flash   # owner, 2026-10-02 (Google AI Studio id)
     card:
       task: >-
         This file is an expense report (decont de cheltuieli) with its receipts and invoices.
@@ -157,7 +157,7 @@ roles:
     output: "normalized/tables.json + markdown.md (EXTRACT.md), then the statement checks"
     status: wired
     route: google_ai_studio
-    model: null
+    model: gemini-3.8-flash   # owner, 2026-10-02 (Google AI Studio id)
     note: >-
       WP-36: reads a synthetic tenant's statement PDF when MODEL_CALLS=live and the key is set
       (extract/gemini.py); Document AI (WP-21) reads otherwise. Never a client tenant's.

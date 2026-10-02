@@ -567,9 +567,16 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   stays `shadow` on the same route.
 - The smoke run accepts `live`, and `--ocr` uploads a real generated one-page synthetic
   statement PDF without tables.
-- Open: the model id (`ocr_extract.model`) is the owner's to send; until then the reader
-  refuses. A wrong field name in the request would show as `failed` with Google's HTTP status
-  on the first live run.
+- Then (owner, 2026-10-02):
+  - both document-reading roles are pinned to `gemini-3.8-flash`;
+  - `00_LAW.md` §3.5 now lets a model read statement tables even from a text-layer PDF,
+    because the tie-out checks every line;
+  - the request carries `STATEMENT_SCHEMA` as `responseSchema`, so the answer is constrained
+    to the card's shape and `parse_answer` still checks it.
+
+  A refused client call is recorded with no model (route `eu/none`).
+- Open: a wrong field name in the request would show as `failed` with Google's HTTP status on
+  the first live run.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

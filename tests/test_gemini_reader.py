@@ -73,7 +73,20 @@ def test_a_synthetic_statement_is_read_and_the_call_recorded(cat):
     assert pdf_part["inlineData"]["mimeType"] == "application/pdf"
     assert base64.b64decode(pdf_part["inlineData"]["data"]) == PDF
     assert "bank statement" in body["systemInstruction"]["parts"][0]["text"]
-    assert body["generationConfig"] == {"temperature": 0, "responseMimeType": "application/json"}
+    config = body["generationConfig"]
+    assert config["temperature"] == 0 and config["responseMimeType"] == "application/json"
+    schema = config["responseSchema"]
+    assert schema["required"] == ["header", "tables"]
+    assert set(schema["properties"]["header"]["properties"]) == {
+        "iban",
+        "holder_cui",
+        "currency",
+        "opening",
+        "closing",
+        "statement_date",
+    }
+    rows = schema["properties"]["tables"]["items"]["properties"]["rows"]
+    assert rows == {"type": "ARRAY", "items": {"type": "ARRAY", "items": {"type": "STRING"}}}
 
     assert extraction.tables == TABLES and extraction.meta.backend == "gemini"
     assert extraction.meta.identity_ok and IBAN in extraction.markdown

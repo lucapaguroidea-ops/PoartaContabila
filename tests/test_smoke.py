@@ -28,9 +28,10 @@ def test_the_smoke_run_goes_through_every_graph():
         "ingest_source_doc.v3_classify",
         "monthly_close.layer2",
     } <= set(report.calls)
-    # no model ids yet: every role refuses, and says why
+    # only document reading has a model: it records what it would be sent; the rest refuse
     calls = [c for cs in report.calls.values() for c in cs]
-    assert {c["status"] for c in calls} == {"refused"}
+    assert {c["status"] for c in calls if not c["role_id"].startswith("ocr_")} == {"refused"}
+    assert {c["status"] for c in calls if c["role_id"].startswith("ocr_")} == {"recorded"}
     assert "no model chosen" in render(report)
 
     again = run(client)  # a second run answers nothing new

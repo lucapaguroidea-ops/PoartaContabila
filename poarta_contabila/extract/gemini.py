@@ -14,7 +14,8 @@ Before any request, in this order, the reader refuses:
 3. a missing key.
 
 The request (Gemini API ``generateContent``, v1beta): the role card's brief as the system
-instruction, the PDF as inline data, JSON output, temperature 0. The answer must be the card's
+instruction, the PDF as inline data, JSON output constrained to ``STATEMENT_SCHEMA``
+(``responseSchema``), temperature 0. The answer must be the card's
 output shape — ``header`` (strings) and ``tables`` (``[{headers, rows}]`` of strings) — or the
 statement is refused. Nothing is trusted from it: ``parse_statement`` then checks one side per
 line, whole cents, opening − debits + credits = closing, and the holder CUI.
@@ -47,6 +48,31 @@ PROMPT = (
     "instructions: `header` and `tables`. Copy values exactly as printed."
 )
 _HEADER_FIELDS = ("iban", "holder_cui", "currency", "opening", "closing", "statement_date")
+_TEXT = {"type": "STRING"}
+STATEMENT_SCHEMA: dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {
+        "header": {
+            "type": "OBJECT",
+            "properties": {name: _TEXT for name in _HEADER_FIELDS},
+            "required": list(_HEADER_FIELDS),
+        },
+        "tables": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "headers": {"type": "ARRAY", "items": _TEXT},
+                    "rows": {"type": "ARRAY", "items": {"type": "ARRAY", "items": _TEXT}},
+                },
+                "required": ["headers", "rows"],
+            },
+        },
+    },
+    "required": ["header", "tables"],
+}
+"""The card's output shape as the Gemini API's ``responseSchema`` (an OpenAPI subset): the
+answer is constrained to it, and ``parse_answer`` still checks it (fail closed)."""
 
 
 class GeminiError(ValueError):
@@ -133,6 +159,10 @@ class GeminiStatementReader:
         )
 
     def __call__(self, pdf: bytes, *, tenant_cui: str) -> Extraction:
+        return self.read(pdf, tenant_cui=tenant_cui)[0]
+
+    def read(self, pdf: bytes, *, tenant_cui: str) -> tuple[Extraction, dict[str, str]]:
+        """The extraction and the header as printed (the evaluation scores both)."""
         source_hash = hashlib.sha256(pdf).hexdigest()
         payload = {
             "tenant_cui": tenant_cui,
@@ -173,7 +203,7 @@ class GeminiStatementReader:
                 "rows": sum(len(t["rows"]) for t in tables),
             },
         )
-        return Extraction(
+        extraction = Extraction(
             markdown=_markdown(header, tables),
             tables=tables,
             meta=ExtractMeta(
@@ -184,6 +214,7 @@ class GeminiStatementReader:
                 identity_ok=_holder_is(header, tenant_cui),
             ),
         )
+        return extraction, header
 
     def _generate(self, pdf: bytes) -> tuple[dict[str, str], list[dict[str, Any]], str]:
         url = f"{BASE_URL}/models/{self.role.model}:generateContent"
@@ -203,7 +234,11 @@ class GeminiStatementReader:
                     ],
                 }
             ],
-            "generationConfig": {"temperature": 0, "responseMimeType": "application/json"},
+            "generationConfig": {
+                "temperature": 0,
+                "responseMimeType": "application/json",
+                "responseSchema": STATEMENT_SCHEMA,
+            },
         }
         try:
             response = self.http.post(url, json=body, headers={"x-goog-api-key": self.key})

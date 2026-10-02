@@ -276,6 +276,11 @@ def _reading_brief(role: ModelRole) -> str:
     return "\n".join(lines)
 
 
+def ai_studio_model_ok(model: str) -> bool:
+    """A bare Google AI Studio id (``gemini-…``), no alias (WP-36)."""
+    return bool(_AI_STUDIO_MODEL.match(model)) and not _ALIAS.search(model)
+
+
 def load_roles(doc: dict[str, Any]) -> dict[str, ModelRole]:
     """The catalog's role rows, validated; ``ValueError`` names the first bad row."""
     from poarta_contabila.jev import PACKS  # the closed models a wired card must fill
@@ -382,7 +387,7 @@ def record(
     return ModelCall(
         call_id=str(uuid.uuid4()),
         role_id=role.role_id,
-        model=route.model if route else role.model,
+        model=route.model if route else (None if eu else role.model),
         route=route.label if route else ("eu/none" if eu else role.route),
         provider=role.provider,
         mode=mode,

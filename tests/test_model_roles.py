@@ -44,7 +44,11 @@ def test_every_model_call_site_has_one_role(cat):
         "v2_declaration_gate",
         "recon_review",
     }
-    assert all(r.model is None for r in roles.values())  # chosen by the owner, not guessed
+    # chosen by the owner, not guessed: only document reading has one (2026-10-02)
+    assert {r.role_id: r.model for r in roles.values() if r.model} == {
+        "ocr_extract": "gemini-3.8-flash",
+        "ocr_decont_split": "gemini-3.8-flash",
+    }
     assert all(r.provider.allow_fallbacks is False for r in roles.values())
     assert {r.system for r in roles.values()} == {"system_one", "system_two", "document_reading"}
 
@@ -568,7 +572,7 @@ def test_a_client_tenant_goes_by_the_eu_route_only(cat):
     gone = record(role, {}, mode="dry", tenant_cui=CUI, status="refused", reason="x", eu=True)
     assert gone.route == "eu/none" and gone.model is None
 
-    eu_only = role.model_copy(update={"eu_route": EuRoute(**EU)})  # no OpenRouter model at all
+    eu_only = role.model_copy(update={"eu_route": EuRoute(**EU), "model": None})  # no other
     route_check(eu_only, tenant_synthetic=False, mode="dry")  # client: the EU route is enough
     with pytest.raises(RouteRefused, match="no model chosen"):
         route_check(eu_only, tenant_synthetic=True, mode="dry")  # synthetic: OpenRouter's
