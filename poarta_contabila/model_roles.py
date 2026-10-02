@@ -123,6 +123,13 @@ class ProviderPin(Closed):
     data_collection: Literal["deny"] = "deny"
 
 
+class RateLimit(Closed):
+    """A model's quota on its route, per minute (Google counts per project, not per key)."""
+
+    rpm: int = Field(gt=0)
+    tpm: int = Field(gt=0)
+
+
 class ModelRole(Closed):
     role_id: Slug
     graph_id: Slug
@@ -138,6 +145,11 @@ class ModelRole(Closed):
     flow (MODEL_CALLS=dry records it) but its answer would decide nothing. not_wired: no call
     site yet."""
     model: str | None = None
+    backup_model: str | None = None
+    """00_LAW §8 A3: Google AI Studio document reading only — the one model read with while
+    ``model`` is at its rate limit. Never on another route, never a list."""
+    rate_limits: dict[str, RateLimit] = Field(default_factory=dict)
+    """Per model id: the free-tier quota the sender keeps under (A3)."""
     route: Route = "openrouter"
     provider: ProviderPin = Field(default_factory=ProviderPin)
     data: Literal["synthetic_only"] = "synthetic_only"
@@ -146,7 +158,7 @@ class ModelRole(Closed):
     card: dict[str, Any] = Field(default_factory=dict)
     """The merged role card (system base + role); see :func:`check_card`."""
 
-    @field_validator("model")
+    @field_validator("model", "backup_model")
     @classmethod
     def _exact(cls, value: str | None) -> str | None:
         if value is None:
@@ -321,6 +333,27 @@ def load_roles(doc: dict[str, Any]) -> dict[str, ModelRole]:
                     f"role {role.role_id!r}: {role.model!r} is not a Google AI Studio model id"
                     " (gemini-…, without google/)"
                 )
+        if role.backup_model is not None:
+            if role.route != "google_ai_studio":
+                raise ValueError(
+                    f"role {role.role_id!r}: a backup model is only for Google AI Studio"
+                    " document reading (00_LAW §8 A3)"
+                )
+            if role.model is None or role.backup_model == role.model:
+                raise ValueError(f"role {role.role_id!r}: the backup differs from a set model")
+            if not _AI_STUDIO_MODEL.match(role.backup_model):
+                raise ValueError(
+                    f"role {role.role_id!r}: {role.backup_model!r} is not a Google AI Studio"
+                    " model id (gemini-…, without google/)"
+                )
+        if role.rate_limits and role.route != "google_ai_studio":
+            raise ValueError(f"role {role.role_id!r}: rate limits are Google AI Studio's")
+        if role.route == "google_ai_studio" and role.model is not None:
+            missing = [
+                m for m in (role.model, role.backup_model) if m and m not in role.rate_limits
+            ]
+            if missing:
+                raise ValueError(f"role {role.role_id!r}: no rate limit for {missing}")
         if role.role_id in out:
             raise ValueError(f"duplicate role_id {role.role_id!r}")
         pack_fields = set(PACKS[role.pack][1].model_fields) if jev_wired else None
