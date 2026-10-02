@@ -75,6 +75,8 @@ def test_a_dropped_line_breaks_the_tie_and_costs_lines(cat):
 
     s = score(cases()[0], _reader(cat, drop_one))
     assert s.read and not s.ties and s.lines_exact == 0 and s.lines_expected == 2
+    assert s.tie_error.startswith("opening 5000.00") and s.rows_read == 2  # + a non-line row
+    assert f"does not tie (2 rows read): {s.tie_error}" in render([s])
 
 
 def test_a_misread_header_field_is_counted(cat):
