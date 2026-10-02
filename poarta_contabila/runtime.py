@@ -73,7 +73,7 @@ from poarta_contabila.registry import (
     rj_eye,
     witnesses_provider,
 )
-from poarta_contabila.triage import Pack, decide_emit
+from poarta_contabila.triage import Pack, build_triage_graph, decide_emit
 from poarta_contabila.types import CanonicalDocument, JobRecord, SourceRef, TenantRef
 
 SETTLE_MONTHS = 3
@@ -211,6 +211,7 @@ class Runtime:
             checkpointer=self.checkpointer,
         )
         self.deps.settlement = self.settlement
+        self.triage = build_triage_graph(self.catalog, self.jobs, checkpointer=self.checkpointer)
 
     # -- helpers --
 
@@ -697,6 +698,91 @@ class Runtime:
         self.registry.add_export(row)
         return row.model_dump()
 
+    # -- folder_triage: expense reports (WP-28) --
+
+    _DECONT_KINDS = {".pdf": "pdf", ".xls": "xls", ".xlsx": "xlsx", ".msg": "msg", ".eml": "eml"}
+
+    @staticmethod
+    def _batch_cfg(batch_id: str) -> dict:
+        return {"configurable": {"thread_id": f"batch:{batch_id}"}}
+
+    def batch_view(self, batch_id: str) -> dict[str, Any]:
+        state = self.triage.get_state(self._batch_cfg(batch_id))
+        if not state.values:
+            raise KeyError(batch_id)
+        question = next((i.value for t in state.tasks for i in t.interrupts), None)
+        values = state.values
+        return {
+            "batch_id": batch_id,
+            "question": question,
+            "decision": values.get("decision"),
+            "children": [
+                {
+                    "source_doc_id": c["pack"]["source_doc_id"],
+                    "part_hash": c["pack"]["source_hash"],
+                    "emit": c["decision"]["emit"],
+                    "failed": c["decision"]["failed"],
+                    "job_id": c.get("job_id"),
+                }
+                for c in values.get("children") or []
+            ],
+        }
+
+    def ingest_decont(
+        self, cui: str, data: bytes, filename: str, period: str, *, tenant_on_doc: bool
+    ) -> dict[str, Any]:
+        """An expense report (decont de cheltuieli, A2) → folder_triage on ``batch:decont-…``.
+
+        The report is a container: it never becomes a Job. Once its identity and primary
+        gates pass, a person names its parts (``decont_split``); each part is a child Pack
+        through the same gates. Nothing reads the file yet, so the tenant's presence on it
+        is the operator's statement (``tenant_on_doc``); without it the identity gate fails.
+        """
+        tenant: Tenant | None = self.registry.tenant(cui)
+        if tenant is None:
+            raise IngestRefused(f"tenant {cui} is not registered")
+        kind = self._DECONT_KINDS.get(Path(filename).suffix.lower())
+        if kind is None:
+            raise IngestRefused(f"an expense report is one of {sorted(self._DECONT_KINDS)}")
+        if not data:
+            raise IngestRefused("the expense report file is empty")
+        source_hash = hashlib.sha256(data).hexdigest()
+        batch_id = f"decont-{cui}-{source_hash[:32]}"
+        cfg = self._batch_cfg(batch_id)
+        if self.triage.get_state(cfg).values:
+            return {"created": False, **self.batch_view(batch_id)}
+        self.blobs.put(
+            f"tenants/{cui}/{tenant.punct}/{period}/decont/source/{source_hash}/{filename}", data
+        )
+        row = self.catalog.source_docs["decont_cheltuieli"]
+        self.gateway.observe(  # shadow: what Gemini would be given to propose the parts
+            "ocr_decont_split",
+            {
+                "tenant_cui": cui,
+                "file": {"sha256": source_hash, "bytes": len(data), "kind": kind},
+                "children": list(row["split"]["children"]),
+            },
+            cui,
+        )
+        pack = Pack(
+            tenant_cui=cui,
+            saga_firm_folder=tenant.saga_firm_folder,
+            punct=tenant.punct,
+            period=period,
+            source_hash=source_hash,
+            source_doc_id="decont_cheltuieli",
+            kinds=[kind],
+            our_role="inbound",
+            identity_ok=tenant_on_doc,
+        )
+        self.triage.invoke({"pack": pack.model_dump()}, cfg)
+        return {"created": True, **self.batch_view(batch_id)}
+
+    def resume_batch(self, batch_id: str, payload: Any) -> dict[str, Any]:
+        self.batch_view(batch_id)  # KeyError for an unknown batch
+        self.triage.invoke(Command(resume=payload), self._batch_cfg(batch_id))
+        return self.batch_view(batch_id)
+
     def ingest_upload(self, cui: str, data: bytes, filename: str) -> dict[str, Any]:
         """XML first: an SPV zip or a UBL XML becomes a Job and starts its thread."""
         tenant: Tenant | None = self.registry.tenant(cui)
@@ -762,8 +848,10 @@ class Runtime:
         if not decision.emit:
             raise IngestRefused(f"emit gates failed: {decision.failed}")
         result = self.jobs.emit(pack, decision)
-        if not result.created:
+        started = "canonical" in self.ingest.get_state(self._cfg(result.job.job_id)).values
+        if not result.created and started:
             return {"created": False, **self.view(result.job.job_id)}
+        # a Job minted by folder_triage (an expense report's part) gets its thread now
         self.blobs.put(source.bucket_key, data)
         doc = doc.model_copy(update={"job_id": result.job.job_id})
         self.ingest.invoke(
@@ -775,7 +863,7 @@ class Runtime:
             ),
             self._cfg(result.job.job_id),
         )
-        return {"created": True, **self.view(result.job.job_id)}
+        return {"created": result.created, **self.view(result.job.job_id)}
 
 
 def build_runtime(**parts: Any) -> Runtime:

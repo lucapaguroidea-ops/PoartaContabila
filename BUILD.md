@@ -39,6 +39,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-25 | done | WP-24 | Role cards: what each role is told, checked, hashed into the cache key |
 | WP-26 | done | WP-25 | Shadow roles: every model role observed at its place in the flow (dry) |
 | WP-27 | done | WP-23 | `reconcile_sink` POST stage: how SAGA posted an acked document (`recon_how_mismatch`) |
+| WP-28 | done | WP-06R | Expense reports over HTTP: `folder_triage` splits the container, a person names the parts |
 
 ## WP details
 
@@ -112,7 +113,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   only, XML first), `GET /jobs/{id}`, `POST /jobs/{id}/resume`.
 - Open: Jev sends nothing until its live sender exists (WP-20, WP-24), so every document asks
   `v3_approve`; `MODEL_CALLS=dry` records what it would be sent. Over HTTP: SPV / UBL invoices,
-  bank statements (WP-13); not expense reports, receipts or other PDFs.
+  bank statements (WP-13), expense reports as containers (WP-28); not receipts or other PDFs.
 
 ### WP-07 SagaEye v1
 - Parse SAGA report pack / RJ-CM **headers only** first (harvest C-11). Column map lives in `sinks/saga_eye.py`, not in graph code.
@@ -390,8 +391,8 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   size, never its bytes, + the typed header); System Two explainers on the questions their
   HITL kinds name: `v3_approve` (ingest), `recon_ambiguous` / `need_rj_export` /
   `recon_review_contest` (reconcile_sink), `v2_close` (monthly_close).
-- Open: `ocr_decont_split` and `sys2_draft_rule` have no call site (no decont triage over HTTP;
-  `explained_rule` is not asked as its own question yet).
+- Open: `sys2_draft_rule` has no call site (`explained_rule` is not asked as its own question
+  yet). `ocr_decont_split` became the 9th shadow role with WP-28 (the expense-report upload).
 
 ### WP-27 reconcile_sink, POST stage
 - Built: `recon/post.py` `how_check` — for an `acked` Job, its posting's lines in the registru
@@ -412,6 +413,20 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   `ReconStore.get`; Postgres `put_once` returns the stored verdict as its own type.
 - Open: the storno itself is the person's in SAGA (the storno mouths wait on the copy firm);
   amounts per account are not compared (PRE and intent_check compare totals).
+
+### WP-28 Expense reports over HTTP
+- Built: `POST /decont/{cui}` (`filename`, `period`, `file_b64`, `tenant_on_doc`; `.pdf`,
+  `.xls`, `.xlsx`, `.msg`, `.eml`) → `folder_triage` on `batch:decont-{cui}-{hash}`. The report
+  is a container (A2): it never becomes a Job. Its identity gate is the operator's
+  `tenant_on_doc` (nothing reads the file yet); once the gates pass a person names the parts
+  (`decont_split`, `POST /triage/{batch_id}/resume` with `parts`), each a child Pack through
+  the same gates; a part that breaks the rules is asked again. `GET /triage/{batch_id}` shows
+  the question and the children (`emit`, `failed`, `job_id`). An emitted invoice part is a Job
+  with no thread until its SPV zip / UBL arrives on `POST /ingest` (same tenant + hash → the
+  same Job; its thread starts then). Re-uploading the report returns the same batch.
+  `ocr_decont_split` is a shadow role: `MODEL_CALLS=dry` records what Gemini would be given.
+- Open: parts are named by a person; the Gemini proposal waits on the live sender and model ids;
+  receipts and workings parts are evidence only (no mouth).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

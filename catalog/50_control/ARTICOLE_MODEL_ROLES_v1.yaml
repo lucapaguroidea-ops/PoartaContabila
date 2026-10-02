@@ -131,7 +131,7 @@ roles:
     pack: null
     hitl_kinds: [decont_split]
     output: "proposed parts of an expense report; a person confirms"
-    status: not_wired
+    status: shadow
     model: null
     card:
       task: >-

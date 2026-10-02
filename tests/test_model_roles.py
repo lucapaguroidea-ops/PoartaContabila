@@ -456,7 +456,7 @@ def test_only_shadow_roles_are_observed(cat):
     roles = _pinned(cat).model_roles
     gw = ModelGateway(roles=roles, calls=calls, mode="dry", synthetic=lambda cui: True)
     gw.observe("jev_v3_judge", {"tenant_cui": CUI}, CUI)  # wired: goes through Jev, not here
-    gw.observe("ocr_decont_split", {"tenant_cui": CUI}, CUI)  # not_wired
+    gw.observe("sys2_draft_rule", {"tenant_cui": CUI}, CUI)  # not_wired
     gw.observe("no_such_role", {"tenant_cui": CUI}, CUI)
     assert calls.rows == []
     ModelGateway(roles=roles, calls=calls, mode="off").observe("jev_our_role", {}, CUI)

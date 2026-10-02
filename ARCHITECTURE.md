@@ -184,6 +184,8 @@ Agent never devalidates. Agent never auto-restores. Archive metadata must includ
 PUT  /tenants/{cui}                 # name, firm folder, book of record, bank_accounts (IBAN → 5121.x)
 POST /tenants/{cui}/exports/{rj|balanta|spv_register}
 POST /ingest
+POST /decont/{cui}                  # an expense report → folder_triage (WP-28); a person names the parts
+GET  /triage/{batch_id}             # …/resume answers decont_split
 GET  /jobs/{id}
 POST /jobs/{id}/resume
 POST /recon/{cui}/{period}          # one reconcile_sink pass (WP-23); GET shows; …/resume answers

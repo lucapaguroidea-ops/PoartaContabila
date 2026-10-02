@@ -21,9 +21,16 @@ from poarta_contabila.registry import ExportKind, Product, Tenant
 from poarta_contabila.rules import ExplainedRule, RuleBody
 from poarta_contabila.runtime import IngestRefused, Runtime
 from poarta_contabila.sinks.exports import ExportError
-from poarta_contabila.types import Cui, Slug
+from poarta_contabila.types import Cui, Period, Slug
 
 _RAW = Body(..., media_type="application/octet-stream")
+
+
+class DecontUpload(BaseModel):
+    filename: str
+    period: Period
+    file_b64: str
+    tenant_on_doc: bool = False  # the operator states the tenant is on the report (fail closed)
 
 
 class StatementUpload(BaseModel):
@@ -161,6 +168,38 @@ def operator_router(
             return rt.filing_receipt(cui, period, filing_id, data, filename, submitted_by)
         except IngestRefused as exc:
             raise HTTPException(422, str(exc)) from exc
+
+    @router.post("/decont/{cui}")
+    def post_decont(
+        cui: str, body: DecontUpload, rt: Runtime = Depends(operator)
+    ) -> dict[str, Any]:
+        """An expense report: a container split into parts by a person (folder_triage, A2)."""
+        try:
+            data = base64.b64decode(body.file_b64, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise HTTPException(422, "file_b64 is not base64") from exc
+        try:
+            return rt.ingest_decont(
+                cui, data, body.filename, body.period, tenant_on_doc=body.tenant_on_doc
+            )
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.get("/triage/{batch_id}")
+    def get_batch(batch_id: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
+        try:
+            return rt.batch_view(batch_id)
+        except KeyError:
+            raise HTTPException(404, f"unknown batch {batch_id}") from None
+
+    @router.post("/triage/{batch_id}/resume")
+    def resume_batch(
+        batch_id: str, body: dict[str, Any], rt: Runtime = Depends(operator)
+    ) -> dict[str, Any]:
+        try:
+            return rt.resume_batch(batch_id, body)
+        except KeyError:
+            raise HTTPException(404, f"unknown batch {batch_id}") from None
 
     @router.get("/model-roles")
     def model_roles(rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
