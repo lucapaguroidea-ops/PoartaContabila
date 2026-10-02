@@ -31,7 +31,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-18 | parked | — | Take-on / year-end / D406 producer / FX engine |
 | WP-D3 | decision | WP-11 | Non-payer RC books: 4423 vs 446x on copy-firm note |
 | WP-19 | done | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (R1) |
-| WP-20 | in-progress | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; wire waits on R2 |
+| WP-20 | in-progress | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; R2 read, live sender not built |
 | WP-21 | done | WP-13 | Statement PDFs read by Google Document AI into the extract contract |
 | WP-22 | done | WP-19 | Bank line → the invoice it settles: a proposal on `v3_approve`, a person decides |
 | WP-23 | done | WP-05 | `reconcile_sink` graph, PRE stage: `need_rj_export`, `recon_ambiguous`, review contest |
@@ -96,9 +96,8 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   document; closed months held), `agent_api.py` (bearer `AGENT_SHARED_TOKEN`, 503 when unset),
   ingest node `wait_validare` (`acked` only with a key a stored snapshot shows validated;
   `validated: false` → `reopened`), `domain.agent_backups` / `domain.agent_snapshots`.
-- Open: the production runtime (Postgres checkpointer, S3 blob store, ingest runner) is not wired,
-  so the deployed agent routes answer 503 until it is. The Windows agent program itself is not in
-  this repo. A snapshot that stops showing an acked document is reported (`acked_not_shown`),
+- Open: the agent routes answer 503 only while the runtime's variables are unset (`/ready` says
+  which; the runtime itself is WP-06R). The Windows agent program itself is not in this repo. A snapshot that stops showing an acked document is reported (`acked_not_shown`),
   never acted on; `request_devalidare` stays a person's step.
 
 ### WP-06R Runtime
@@ -111,9 +110,9 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - `operator_api.py` (bearer `OPERATOR_TOKEN`, must differ from the agent token):
   `PUT /tenants/{cui}`, `POST /tenants/{cui}/exports/{kind}`, `POST /ingest` (SPV zip or UBL XML
   only, XML first), `GET /jobs/{id}`, `POST /jobs/{id}/resume`.
-- Open: Jev is wired only once its wire is read (WP-20); until then every document asks
-  `v3_approve`. No triage of other sources over HTTP yet (PDF, receipts, statements, expense
-  reports).
+- Open: Jev sends nothing until its live sender exists (WP-20, WP-24), so every document asks
+  `v3_approve`; `MODEL_CALLS=dry` records what it would be sent. Over HTTP: SPV / UBL invoices,
+  bank statements (WP-13); not expense reports, receipts or other PDFs.
 
 ### WP-07 SagaEye v1
 - Parse SAGA report pack / RJ-CM **headers only** first (harvest C-11). Column map lives in `sinks/saga_eye.py`, not in graph code.
@@ -168,8 +167,10 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   `v2_close` cannot `file` while material, and an `explained_rule` named must exist), `v4_codit`
   after `file` (answer recorded). Close kind from the axes (unknown → material).
   Operator: `POST /close/{cui}/{period}`, `GET /close/{cui}/{period}`, `POST …/resume`.
-- Open: Layer 2 is wired in WP-20 but sends nothing until its wire is read; the POST recon and Cartea Mare pull nodes are not
-  separate yet (the period diff reads the latest uploaded books); V4 writes CO.DiT (WP-11).
+- Open: Layer 2 sends nothing until Jev's live sender exists (WP-20, WP-24). The POST recon runs
+  on `reconcile_sink` (WP-27) and the close is material while it is open; there is no separate
+  Cartea Mare pull node (the period diff reads the latest uploaded books). V4 writes CO.DiT
+  (WP-11).
 
 ### WP-11 CO.DiT
 - Seed copies Pins. T1–T3 hard. New axes default null. Certainty required on write.
@@ -242,8 +243,8 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - `Numar` is the bank's reference (`maps.referinta`, from the statement's reference column) when
   no other line of the statement shares it, else the line's own number (`EXT-…`): with sync
   "Nr.+data" SAGA would skip a second document of the same number and date.
-- Open: both modules `draft` until the owner's copy-firm import (`docs/COPY_FIRM_TEST.md`);
-  nothing proposes the partner or the invoice (a person binds both).
+- Open: both modules `draft` until the owner's copy-firm import (`docs/COPY_FIRM_TEST.md`); the
+  partner and invoice are proposed on `v3_approve` (WP-22) but a person binds them.
 
 ### WP-20 Jev Layer 1 + Layer 2
 - `v3_judge` → `IngestDeps.judge`; `v2_declaration_gate` → `CloseDeps.jev_v2`. JSON only,
@@ -355,7 +356,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   `GET /model-calls?role=`.
 - Open: every `model:` is null until the owner sends the ids (`docs/OWNER_CHECKLIST.md`); the
   live sender is not built (this session was not permitted to write the outbound call); the
-  System Two, document-reading and other `not_wired` roles have no call site yet.
+  `shadow` roles (WP-26) record at their place but none has a sender either.
 
 ### WP-25 Role cards
 - Asked by the owner 2026-10-02: a card per role instead of a persona — who reads, what to do,
@@ -375,7 +376,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   question set) and is part of Jev's cache key with the role's model (`jev.role_pin`).
   `GET /model-roles` shows `card_hash` and the System Two `brief`.
 - Open: the wording is a first draft, to be compared on synthetic dry / live runs; the System Two
-  and document-reading cards have no call site yet.
+  and document-reading cards are recorded at their shadow call sites (WP-26), never sent yet.
 
 ### WP-26 Shadow roles at their place in the flow
 - Asked by the owner 2026-10-02: test each role's placement in the flow on Railway before any
