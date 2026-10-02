@@ -225,6 +225,19 @@ def operator_router(
         rows = rt.answers.recent(cui=cui, thread_id=thread, limit=limit)
         return [r.model_dump(mode="json") for r in rows]
 
+    @router.post("/ocr-eval/{cui}")
+    def ocr_eval(
+        cui: str,
+        case: str | None = Query(default=None, description="one case; all when omitted"),
+        model: str | None = Query(default=None, description="another AI Studio model"),
+        rt: Runtime = Depends(operator),
+    ) -> dict[str, Any]:
+        """WP-37: Gemini reads the synthetic evaluation statements; each is scored."""
+        try:
+            return rt.ocr_eval(cui, case, model)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
     @router.get("/model-roles")
     def model_roles(rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
         """Every model role (00_LAW §3.5): where it acts, its model, whether it may be called."""

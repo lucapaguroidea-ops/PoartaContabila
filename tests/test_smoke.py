@@ -28,9 +28,10 @@ def test_the_smoke_run_goes_through_every_graph():
         "ingest_source_doc.v3_classify",
         "monthly_close.layer2",
     } <= set(report.calls)
-    # no model ids yet: every role refuses, and says why
+    # only document reading has a model: it records what it would be sent; the rest refuse
     calls = [c for cs in report.calls.values() for c in cs]
-    assert {c["status"] for c in calls} == {"refused"}
+    assert {c["status"] for c in calls if not c["role_id"].startswith("ocr_")} == {"refused"}
+    assert {c["status"] for c in calls if c["role_id"].startswith("ocr_")} == {"recorded"}
     assert "no model chosen" in render(report)
 
     again = run(client)  # a second run answers nothing new
@@ -41,7 +42,7 @@ def test_the_smoke_run_goes_through_every_graph():
 
 
 def test_the_smoke_run_refuses_a_server_that_would_send():
-    with pytest.raises(SmokeRefused, match="needs off or dry"):
+    with pytest.raises(SmokeRefused, match="needs off, dry or live"):
         run(_local_client(), allow_mode=lambda mode: False)
 
 
@@ -60,3 +61,62 @@ def test_the_invoice_is_the_same_bytes_on_every_run(monkeypatch):
     real = time.localtime
     monkeypatch.setattr(time, "localtime", lambda *a: real(time.time() + 3600))
     assert spv_invoice() == first  # a rerun later finds the same Job, never a duplicate
+
+
+def test_the_ocr_step_has_the_server_read_a_synthetic_statement_pdf():
+    import dataclasses
+    import json
+
+    import httpx
+
+    from poarta_contabila.catalog import load_catalog
+    from poarta_contabila.extract.gemini import GeminiStatementReader
+    from poarta_contabila.smoke import synthetic_statement_pdf
+    from tests.test_runtime import _runtime
+
+    cat = load_catalog()
+    roles = dict(cat.model_roles)
+    roles["ocr_extract"] = roles["ocr_extract"].model_copy(update={"model": "gemini-test-001"})
+    rt = _runtime(dataclasses.replace(cat, model_roles=roles), model_mode="live")
+    answer = {
+        "header": {
+            "iban": "RO49 AAAA 1B31 0075 9384 0000",
+            "holder_cui": "RO1000009",
+            "currency": "RON",
+            "opening": "4.290,00",
+            "closing": "4.590,00",
+            "statement_date": "30.09.2026",
+        },
+        "tables": [
+            {
+                "headers": ["Data", "Descriere", "Referinta", "Debit", "Credit"],
+                "rows": [
+                    ["25.09.2026", "Incasare CLIENT TEST SRL FX-102", "OP-91", "", "300,00"],
+                    ["", "Total rulaje", "", "0,00", "300,00"],
+                ],
+            }
+        ],
+    }
+    sent = []
+
+    def google(request):
+        sent.append(request)
+        text = json.dumps(answer)
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": text}]}}]})
+
+    rt.gemini_reader = GeminiStatementReader(
+        role=roles["ocr_extract"],
+        key="k",
+        calls=rt.model_calls,
+        synthetic=rt._synthetic,
+        http=httpx.Client(transport=httpx.MockTransport(google)),
+    )
+    report = run(_local_client(rt), ocr=True)
+    step = _steps(report)["statement PDF read"]
+    assert step.ok and step.outcome.startswith("job reconcile_pre asks v3_approve")
+    assert len(sent) == 1 and b"FX-102" in synthetic_statement_pdf()
+    # the statement sent with its tables records what Gemini would be given; this one was sent
+    statuses = [c["status"] for c in report.calls["ingest_source_doc.extract"]]
+    assert sorted(statuses) == ["recorded", "sent"]
+    run(_local_client(rt), ocr=True)  # a rerun: the stored extract, no second call
+    assert len(sent) == 1

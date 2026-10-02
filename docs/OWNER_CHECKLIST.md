@@ -14,25 +14,27 @@ the answer and the session records it.
       (`JEV_BASE_URL`, `JEV_API_KEY`).
 - [ ] **Provider pins**: for each role, the provider(s) OpenRouter may use (`provider.only`);
       fallbacks stay off and data collection denied.
-- [x] **Gemini through OpenRouter BYOK**: the AI Studio key is in OpenRouter (2026-10-02).
-- [ ] **Gemini BYOK, remaining steps** (synthetic tests only):
-      1. In OpenRouter's BYOK settings for Google AI Studio, choose **"Always use this key"**.
-         The default, "Use shared capacity", falls back to OpenRouter's own Google endpoints
-         when your key fails.
-      2. In OpenRouter → Keys, create an OpenRouter key for document reading (e.g.
-         `poarta-ocr`) with a credit limit. BYOK costs 5 % of the usual price after the first
-         1M BYOK requests a month.
-      3. Railway → `faithful-mercy` → `PoartaContabila` → Variables: set it as
-         `OPENROUTER_OCR_API_KEY` (sealed), plus `OPENROUTER_BASE_URL` and `MODEL_CALLS=dry`.
-         The Google key itself never goes to Railway.
-      4. Send the exact Gemini model id from its OpenRouter page (no `:free`, no `latest`). It
-         goes into `ocr_extract` and `ocr_decont_split` with `provider.only:
-         [google-ai-studio]` and fallbacks off.
+- [x] **Gemini direct for synthetic data** (decided 2026-10-02, WP-36): the AI Studio key is
+      on Railway as `GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC`. It replaces the OpenRouter BYOK route
+      for document reading, so the BYOK key in OpenRouter can be removed.
+- [x] **Gemini model id for AI Studio**: `gemini-3.8-flash`, pinned on both document-reading
+      roles (2026-10-02).
+- [ ] **Turn it on**: set `MODEL_CALLS=live` on Railway (from `dry`). Only synthetic document
+      reading sends; every other role keeps recording. Check `GET /model-roles` shows
+      `ocr_extract` with `key_set: true`.
+- [ ] **Test it**: `OPERATOR_TOKEN=… uv run python -m poarta_contabila.smoke --base-url
+      https://<domain> --ocr`. The step "statement PDF read" should mint a job, and
+      `GET /model-calls?role=ocr_extract` should show `sent`.
+- [ ] **Reading evaluation** (after the `--ocr` smoke works):
+      `OPERATOR_TOKEN=… uv run python -m poarta_contabila.ocr_eval --base-url https://<domain>`.
+      Six known statements, scored. To compare a Pro model on the hard cases, add
+      `--model <bare id> --case two_pages --case dense`. `--write-pdfs ./eval-pdfs` saves the
+      PDFs to look at.
 - [ ] **Gemini API terms for the free tier** (Google's "Unpaid Services"): free tier for synthetic
       tests only; client documents only on the EU host (decided 2026-10-02).
 - [ ] **Railway variables** (project `faithful-mercy`):
       `OPENROUTER_BASE_URL`, `OPENROUTER_JEV_API_KEY`, `OPENROUTER_SYS2_API_KEY`,
-      `OPENROUTER_OCR_API_KEY`, `MODEL_CALLS=dry` to start. One OpenRouter key per role group,
+      `MODEL_CALLS=dry` to start (`live` for the Gemini step above). One OpenRouter key per role group,
       each with its own credit limit. `GET /model-roles` shows which keys are set (never values).
 - [ ] **Railway domain**: the `PoartaContabila` service has no public domain (checked
       2026-10-02), so the operator API cannot be reached from outside. Generate one (service →

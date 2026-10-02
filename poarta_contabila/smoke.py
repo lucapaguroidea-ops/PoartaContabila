@@ -15,13 +15,19 @@ model role was given at its place in the flow (``GET /model-calls``, ``MODEL_CAL
 8. ``monthly_close`` → ``v2_close`` → ``hold`` (nothing is filed);
 9. ``GET /model-calls`` for this firm, grouped by graph and node.
 
+``--ocr`` (WP-36) adds one step: a second statement, a real one-page PDF generated here
+(invented firm, invented movement), uploaded **without** its tables, so the server's reader
+reads it. With ``MODEL_CALLS=live`` and ``GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC`` set, that is
+Gemini through Google AI Studio; ``/model-calls`` then shows ``ocr_extract`` as ``sent``.
+
 Every answer is given only when the expected question is the one waiting, so a second run
 changes nothing and reports what is already there. The firm, partner and documents are
-invented (00_LAW: no client data); the run refuses a server whose ``MODEL_CALLS`` is neither
-``off`` nor ``dry``.
+invented (00_LAW: no client data); the run refuses a server whose ``MODEL_CALLS`` is not
+``off``, ``dry`` or ``live``.
 
     uv run python -m poarta_contabila.smoke --local                    # in memory, dry
     OPERATOR_TOKEN=… uv run python -m poarta_contabila.smoke --base-url https://….up.railway.app
+    OPERATOR_TOKEN=… uv run python -m poarta_contabila.smoke --base-url https://… --ocr
 
 Packaged documents wait on ``/agent/pull`` for an agent; with no agent connected they stay.
 """
@@ -82,7 +88,28 @@ RECEIPT_BINDING = {
 }
 REPORT = b"%PDF-1.4 synthetic expense report (smoke)"
 WORKINGS = b"synthetic workings (smoke)"
-SAFE_MODES = ("off", "dry")
+SAFE_MODES = ("off", "dry", "live")  # live: only synthetic document reading sends (WP-36)
+OCR_LINES = [
+    "BANCA TEST SA - EXTRAS DE CONT",
+    "Titular: FIRMA TEST SRL   CUI: RO1000009",
+    "IBAN: RO49 AAAA 1B31 0075 9384 0000   Moneda: RON",
+    "Data extras: 30.09.2026",
+    "Sold initial: 4.290,00",
+    "",
+    "Data        Descriere                          Referinta   Debit      Credit",
+    "25.09.2026  Incasare CLIENT TEST SRL FX-102    OP-91                  300,00",
+    "",
+    "Total rulaje                                               0,00       300,00",
+    "Sold final: 4.590,00",
+]
+OCR_META = {
+    "iban": IBAN,
+    "holder_cui": f"RO{CUI}",
+    "currency": "RON",
+    "opening": "4290.00",
+    "closing": "4590.00",
+    "statement_date": "2026-09-30",
+}
 
 
 class Client(Protocol):
@@ -176,7 +203,33 @@ def _answer_job(
     return after
 
 
-def run(c: Client, *, allow_mode: Callable[[str], bool] = SAFE_MODES.__contains__) -> Report:
+def synthetic_statement_pdf(lines: list[str] = OCR_LINES) -> bytes:
+    """A real one-page PDF of the invented statement (``synthetic_docs.text_pdf``): the same
+    bytes on every run, so a rerun reuses the stored extract instead of reading again."""
+    from poarta_contabila.synthetic_docs import text_pdf
+
+    return text_pdf([lines])
+
+
+def _ocr_step(c: Client, report: Report) -> None:
+    """--ocr: the server's reader reads a synthetic statement PDF (no tables are sent)."""
+    resp = c.post(
+        f"/extras/{CUI}",
+        json={"meta": OCR_META, "pdf_b64": base64.b64encode(synthetic_statement_pdf()).decode()},
+    )
+    out = _json(resp)
+    outcome = "; ".join(_outcome(j) for j in out.get("jobs", [])) or _outcome(out)
+    report.steps.append(
+        Step("statement PDF read", resp.status_code, outcome, resp.status_code < 400)
+    )
+
+
+def run(
+    c: Client,
+    *,
+    allow_mode: Callable[[str], bool] = SAFE_MODES.__contains__,
+    ocr: bool = False,
+) -> Report:
     """The smoke run against *c*; see the module docstring for the steps."""
     report = Report()
 
@@ -187,7 +240,7 @@ def run(c: Client, *, allow_mode: Callable[[str], bool] = SAFE_MODES.__contains_
     modes = {r["mode"] for r in roles.values()}
     report.mode = ",".join(sorted(modes))
     if not all(allow_mode(m) for m in modes):
-        raise SmokeRefused(f"MODEL_CALLS is {report.mode}: the smoke run needs off or dry")
+        raise SmokeRefused(f"MODEL_CALLS is {report.mode}: the smoke run needs off, dry or live")
     keys = sorted({f"{r['key_env']}={'set' if r['key_set'] else 'unset'}" for r in roles.values()})
     report.steps.append(Step("model roles", 200, f"mode {report.mode}; " + ", ".join(keys)))
     eu = [r for r in roles.values() if r.get("eu_route_set")]
@@ -250,6 +303,9 @@ def run(c: Client, *, allow_mode: Callable[[str], bool] = SAFE_MODES.__contains_
             "v3_approve",
             {"decision": "edit", "edit": RECEIPT_BINDING},
         )
+
+    if ocr:
+        _ocr_step(c, report)
 
     resp = c.post(
         f"/decont/{CUI}",
@@ -358,7 +414,7 @@ def render(report: Report) -> str:
     return "\n".join(lines)
 
 
-def _local_client() -> Client:
+def _local_client(rt: Any = None) -> Client:
     """An in-memory runtime (dry) behind the real app: the smoke run without a server."""
     from fastapi.testclient import TestClient
     from langgraph.checkpoint.memory import MemorySaver
@@ -372,7 +428,7 @@ def _local_client() -> Client:
     from poarta_contabila.registry import InMemoryRegistry
     from poarta_contabila.runtime import build_runtime
 
-    rt = build_runtime(
+    rt = rt or build_runtime(
         catalog=load_catalog(),
         jobs=InMemoryJobStore(),
         packages=InMemoryPackageStore(),
@@ -393,6 +449,9 @@ def main(argv: list[str] | None = None) -> int:
     where.add_argument("--base-url", help="the operator API, e.g. https://….up.railway.app")
     where.add_argument("--local", action="store_true", help="in-memory runtime, MODEL_CALLS=dry")
     ap.add_argument("--json", action="store_true", help="print the report as JSON")
+    ap.add_argument(
+        "--ocr", action="store_true", help="also upload a synthetic statement PDF to be read"
+    )
     args = ap.parse_args(argv)
 
     if args.local:
@@ -410,7 +469,7 @@ def main(argv: list[str] | None = None) -> int:
             timeout=60,
         )
     try:
-        report = run(client)
+        report = run(client, ocr=args.ocr)
     except SmokeRefused as exc:
         print(f"refused: {exc}")
         return 2

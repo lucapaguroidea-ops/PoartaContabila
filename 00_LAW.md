@@ -38,9 +38,15 @@ The domain store (Postgres, A1) may hold an expected set and witness snapshots. 
    an unset model means the role refuses and a person is asked). **System One = Jev**: routes and
    classifies JSON / normalized data. **System Two = DeepSeek or GLM**: explains and drafts for a
    person; never posts, never decides a gate. **Document reading = Gemini**: only where there is no
-   XML or text layer (`needs_ocr`), and its output is checked deterministically before use. Calls go
-   through OpenRouter, one key per role group. **Synthetic tenants only** until an EU host
-   (Scaleway) serves the roles; a client tenant's data never reaches another route.
+   XML or text layer (`needs_ocr`), and its output is checked deterministically before use. Bank
+   statement tables are the exception: a model may read them even from a text-layer PDF, because
+   every line must tie (opening − debits + credits = closing) and the holder CUI must be the
+   tenant's (owner, 2026-10-02). Calls go
+   through OpenRouter, one key per role group, except **document reading on synthetic data, which
+   goes directly to Google AI Studio** (`GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC`; owner, 2026-10-02).
+   That route refuses every tenant not marked `data_class: synthetic`, in code, before any request.
+   **Synthetic tenants only** until an EU host serves the roles (`eu_route`); a client tenant's
+   data never reaches another route.
 6. `interrupt()` resume re-enters the node from line 1. Side effects sit after the interrupt, behind domain-store idempotency (Postgres unique keys).
 7. One firm-period has one statutory sink: SAGA C.
 8. Compensation is SAGA-shaped: Anulează importul | Devalidare | Stornare. Backup/restore is firm-wide.
