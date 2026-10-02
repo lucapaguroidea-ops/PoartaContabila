@@ -50,7 +50,8 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-36 | done | WP-21, WP-24 | Gemini reads synthetic statement PDFs directly through Google AI Studio (live sender) |
 | WP-37 | done | WP-36 | Reading evaluation: six known synthetic statements, scored per model |
 | WP-38 | done | WP-34 | Token names `GRAPHUSERTOKEN_*`; the build agent's token, synthetic tenants only |
-| WP-39 | done | WP-36 | Gemini reader asks again when Google is busy (429/500/503/504), three tries at most |
+| WP-39 | done | WP-36 | Gemini reader asks again when Google is busy (500/503/504), three tries at most |
+| WP-40 | done | WP-39 | Free-tier rate limits in the catalog; one backup model while the main one is at its limit |
 
 ## WP details
 
@@ -632,10 +633,31 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Found 2026-10-02 by the build agent's live smoke run and evaluation: Google AI Studio
   answered `HTTP 503 UNAVAILABLE` on the statement PDF read and on 4 of the 6 evaluation
   cases; the other two read correctly, so the request was sound and the model was busy.
-- `_generate` now tries at most 3 times for 429, 500, 503, 504 or a transport error, waiting
+- `_generate` now tries at most 3 times for 500, 503, 504 or a transport error (429: WP-40), waiting
   2 s then 6 s. Any other answer (403, a bad body, a block) fails at once, as before.
 - One recorded call per read however many tries; the final reason names the attempts. The
   model, the synthetic-only guards and the key handling are unchanged.
+
+### WP-40 Free-tier rate limits and one backup model
+- Asked by the owner 2026-10-02 (00_LAW §8 A3): keep Google AI Studio until the owner moves
+  to the EU route; bake in the free tier's limits; read with a backup model when the main
+  one is at its limit.
+- Catalog: both document-reading roles pin `gemini-3.8-flash` with `backup_model:
+  gemini-3.7-flash` and `rate_limits` 5 RPM / 250 000 TPM for each (the owner's AI Studio
+  page). `load_roles` refuses a backup off the Google AI Studio route, a backup equal to the
+  model or not an exact `gemini-…` id, and a Google AI Studio model without a rate limit.
+  Fallback lists stay forbidden.
+- `extract/gemini.py`: a process-wide `RateLimiter` counts requests and tokens per model over
+  the last minute (a PDF is estimated at 258 tokens a page plus 1 000, then settled to
+  Google's `usageMetadata.totalTokenCount`). The reader takes the main model while it has a
+  slot, else the backup; a 429 blocks that model for a minute and moves to the other; both
+  full → wait for the first slot, at most 90 s, else the statement is refused. 503 retries
+  (WP-39) stay on the same model and take a slot each.
+- The model call records the model that read; a backup read says so (`output.backup`).
+- The evaluation never uses the backup: it scores the one model asked for (and a `--model`
+  override gets the main model's limits).
+- Open: the limits count only this process; Google's own count is per project, so another
+  client of the same key still shows as 429.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

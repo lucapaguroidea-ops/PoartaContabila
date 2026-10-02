@@ -34,7 +34,8 @@ The domain store (Postgres, A1) may hold an expected set and witness snapshots. 
 3. Posting = official SAGA path only: XML/DBF → Import date → Validare. Direct FDB write = `FORBIDDEN_FDB`.
 4. Graph edges read only stored fields or Jev answers already on state. No LLM on an edge.
 5. Models act only inside nodes, by **role**, and every role is pinned to one exact model in
-   `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (no alias, no auto-router, no fallback model;
+   `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (no alias, no auto-router, no fallback model
+   but the one rate-limit backup of §8 A3;
    an unset model means the role refuses and a person is asked). **System One = Jev**: routes and
    classifies JSON / normalized data. **System Two = DeepSeek or GLM**: explains and drafts for a
    person; never posts, never decides a gate. **Document reading = Gemini**: only where there is no
@@ -158,3 +159,15 @@ Decided by the owner on 2026-10-01.
 7. **Reading exports:** account codes are read through the cell's display format, never from the stored number (SAGA stores analytic `401.00010` as the number 401.0001). Matching invoice numbers between documents and the book's journal uses a normalisation rule recorded on the reconcile profile and stays `[de confirmat]` until checked on a real book.
 
 Changed by A2: sink product (adds NextUp as a read-only eye), interrupt kinds (adds `decont_split`). Not changed: FDB write policy, graph topology, watched accounts. Catalog `schema_version` is unchanged; every new row is `draft`.
+
+### A3 · 2026-10-02 — one rate-limit backup for Google AI Studio document reading
+
+Decided by the owner on 2026-10-02, while document reading stays on the Google AI Studio free tier (until the owner moves it to the EU route).
+
+1. **Rate limits are catalog values.** A Google AI Studio role names, per model it may use, the free tier's per-minute quota (`rate_limits: {model: {rpm, tpm}}`), as the owner's AI Studio page shows it. The sender keeps under it: it counts the requests and tokens it sent in the last minute, per model, for the whole process.
+2. **One backup model.** Such a role may pin exactly one `backup_model`: an exact `gemini-…` id, never an alias, never a list. It is read with only while the main model is at its rate limit (its own count is full, or Google answered 429). A busy main model (503) is retried on itself, not moved to the backup.
+3. **Both full:** the sender waits for the first free slot, at most 90 s; past that the statement is refused (fail closed).
+4. **Recorded.** Every call records the model that actually read; a backup read says so in its reason and output.
+5. **Not changed:** every other role keeps "no fallback model"; OpenRouter roles take no backup; the synthetic-only guard, the key and the client-data rules are untouched. The reading evaluation scores one model and never uses the backup.
+
+Not an amendment of: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` is unchanged.

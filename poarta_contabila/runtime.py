@@ -610,7 +610,13 @@ class Runtime:
         if model:
             if not ai_studio_model_ok(model):
                 raise IngestRefused(f"{model!r} is not a Google AI Studio model id (gemini-…)")
-            reader = replace(reader, role=reader.role.model_copy(update={"model": model}))
+            limits = {**reader.role.rate_limits}
+            limits.setdefault(model, reader.role.rate_limits[str(reader.role.model)])
+            reader = replace(
+                reader, role=reader.role.model_copy(update={"model": model, "rate_limits": limits})
+            )
+        # the evaluation scores one model: never the backup (00_LAW §8 A3)
+        reader = replace(reader, role=reader.role.model_copy(update={"backup_model": None}))
         chosen = [c for c in cases() if case is None or c.name == case]
         if not chosen:
             raise IngestRefused(f"unknown case {case!r}")

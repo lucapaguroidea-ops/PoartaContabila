@@ -19,6 +19,9 @@ the answer and the session records it.
       for document reading, so the BYOK key in OpenRouter can be removed.
 - [x] **Gemini model id for AI Studio**: `gemini-3.8-flash`, pinned on both document-reading
       roles (2026-10-02).
+- [x] **Backup and free-tier limits** (00_LAW §8 A3): `gemini-3.7-flash` while
+      `gemini-3.8-flash` is at its limit; 5 RPM / 250K TPM each (2026-10-02). If AI Studio's
+      rate-limit page changes, update `rate_limits` in the catalog.
 - [ ] **Turn it on**: set `MODEL_CALLS=live` on Railway (from `dry`). Only synthetic document
       reading sends; every other role keeps recording. Check `GET /model-roles` shows
       `ocr_extract` with `key_set: true`.

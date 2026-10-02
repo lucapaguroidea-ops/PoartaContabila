@@ -31,7 +31,9 @@ import hashlib
 import json
 import os
 import re
+import threading
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -39,15 +41,27 @@ from typing import Any
 import httpx
 
 from poarta_contabila.extract.contract import Extraction, ExtractMeta
-from poarta_contabila.model_roles import ModelRole, RouteRefused, brief, record, route_check
+from poarta_contabila.model_roles import (
+    ModelRole,
+    RateLimit,
+    RouteRefused,
+    brief,
+    record,
+    route_check,
+)
 
 KEY_ENV = "GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC"
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-# Google answers 503 UNAVAILABLE (and 429/500/504) when the model is busy; its guidance is to
+# Google answers 503 UNAVAILABLE (and 500/504) when the model is busy; its guidance is to
 # retry with backoff. Bounded: ATTEMPTS tries in all, BACKOFF seconds before each retry.
-TRANSIENT = frozenset({429, 500, 503, 504})
+# 429 is a rate limit, not a busy model: the reader moves to the backup instead (A3).
+TRANSIENT = frozenset({500, 503, 504})
 ATTEMPTS = 3
 BACKOFF = (2.0, 6.0)
+WINDOW = 60.0  # the quotas are per minute
+MAX_WAIT = 90.0  # longest wait for a free slot before the statement is refused
+PAGE_TOKENS = 258  # Google counts a PDF page as 258 input tokens
+BRIEF_TOKENS = 1_000  # the brief, the prompt and the schema, rounded up
 MAX_PDF_BYTES = 18 * 1024 * 1024  # inline data rides in a request Google caps at 20 MB
 PROMPT = (
     "Read this bank statement. Answer with one JSON object in the output shape of your "
@@ -83,6 +97,69 @@ answer is constrained to it, and ``parse_answer`` still checks it (fail closed).
 
 class GeminiError(ValueError):
     """The PDF was not read; nothing is emitted. Never carries the key."""
+
+
+class RateLimited(GeminiError):
+    """Google answered 429: this model's quota is spent for now."""
+
+
+def estimate_tokens(pdf: bytes) -> int:
+    """Input tokens a PDF will cost, before sending (its pages, plus the brief)."""
+    pages = len(re.findall(rb"/Type\s*/Page(?!s)", pdf)) or 1
+    return pages * PAGE_TOKENS + BRIEF_TOKENS
+
+
+@dataclass
+class RateLimiter:
+    """Requests and tokens per model over the last minute, shared by every reader in the
+    process (00_LAW §8 A3). Only counts what this process sent: Google stays the judge (429)."""
+
+    clock: Callable[[], float] = time.monotonic
+    _sent: dict[str, deque[list[float]]] = field(default_factory=dict)
+    _blocked: dict[str, float] = field(default_factory=dict)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def take(self, model: str, limit: RateLimit, tokens: int) -> float:
+        """0 and the slot is taken; else the seconds until one may be free."""
+        with self._lock:
+            now = self.clock()
+            sent = self._sent.setdefault(model, deque())
+            while sent and sent[0][0] <= now - WINDOW:
+                sent.popleft()
+            waits = [self._blocked.get(model, now) - now]
+            if len(sent) >= limit.rpm:
+                waits.append(sent[len(sent) - limit.rpm][0] + WINDOW - now)
+            used = sum(t for _, t in sent)
+            if sent and used + tokens > limit.tpm:  # alone over the limit: let Google judge
+                freed = used + tokens - limit.tpm
+                for at, spent in sent:
+                    freed -= spent
+                    if freed <= 0:
+                        waits.append(at + WINDOW - now)
+                        break
+                else:  # fits only alone: once the whole minute has passed
+                    waits.append(sent[-1][0] + WINDOW - now)
+            wait = max(waits)
+            if wait > 0:
+                return wait
+            sent.append([now, tokens])
+            return 0.0
+
+    def settle(self, model: str, estimated: int, actual: int) -> None:
+        """Replace the newest estimate for *model* with the tokens Google counted."""
+        with self._lock:
+            for entry in reversed(self._sent.get(model, ())):
+                if entry[1] == estimated:
+                    entry[1] = actual
+                    return
+
+    def exhaust(self, model: str) -> None:
+        """Google said 429: no request to *model* for a whole window."""
+        with self._lock:
+            self._blocked[model] = self.clock() + WINDOW
+
+
+LIMITER = RateLimiter()
 
 
 def _strings(value: Any, where: str) -> list[str]:
@@ -151,11 +228,15 @@ class GeminiStatementReader:
     http: httpx.Client = field(default_factory=lambda: httpx.Client(timeout=180.0))
     backend: str = "gemini"
     sleep: Callable[[float], None] = time.sleep
+    limiter: RateLimiter = field(default_factory=lambda: LIMITER)
 
-    def _record(self, payload: dict, cui: str, status: str, reason: str, output=None) -> None:
+    def _record(
+        self, payload: dict, cui: str, status: str, reason: str, output=None, model=None
+    ) -> None:
+        role = self.role if model is None else self.role.model_copy(update={"model": model})
         self.calls.add(
             record(
-                self.role,
+                role,
                 payload,
                 mode=self.mode,
                 tenant_cui=cui,
@@ -193,18 +274,23 @@ class GeminiStatementReader:
             self._record(payload, tenant_cui, "refused", "the PDF is over 18 MB")
             raise GeminiError("the PDF is over 18 MB; send its tables instead")
 
+        model = str(self.role.model)
         try:
-            header, tables, version = self._generate(pdf)
+            header, tables, version, model = self._read_within_limits(pdf)
         except GeminiError as exc:
             self._record(payload, tenant_cui, "failed", str(exc))
             raise
+        backup = model != self.role.model
         self._record(
             payload,
             tenant_cui,
             "sent",
-            "read by Gemini (Google AI Studio, synthetic)",
+            "read by Gemini (Google AI Studio, synthetic)"
+            + (f"; backup: {self.role.model} was at its rate limit" if backup else ""),
+            model=model,
             output={
                 "model_version": version,
+                "backup": backup,
                 "header": header,
                 "tables": len(tables),
                 "rows": sum(len(t["rows"]) for t in tables),
@@ -216,15 +302,59 @@ class GeminiStatementReader:
             meta=ExtractMeta(
                 backend="gemini",
                 source_hash=source_hash,
-                model_or_version=version or str(self.role.model),
+                model_or_version=version or model,
                 needs_ocr=False,  # Gemini did the reading
                 identity_ok=_holder_is(header, tenant_cui),
             ),
         )
         return extraction, header
 
-    def _generate(self, pdf: bytes) -> tuple[dict[str, str], list[dict[str, Any]], str]:
-        url = f"{BASE_URL}/models/{self.role.model}:generateContent"
+    def _models(self) -> list[str]:
+        return [m for m in (self.role.model, self.role.backup_model) if m]
+
+    def _slot(self, models: list[str], tokens: int) -> str:
+        """The first of *models* with a free slot, waiting (at most MAX_WAIT) when none has."""
+        waited = 0.0
+        while True:
+            waits = {}
+            for model in models:
+                limit = self.role.rate_limits.get(model)
+                wait = 0.0 if limit is None else self.limiter.take(model, limit, tokens)
+                if wait <= 0:
+                    return model
+                waits[model] = wait
+            wait = min(waits.values())
+            if waited + wait > MAX_WAIT:
+                raise GeminiError(
+                    f"rate limit: {', '.join(models)} full for another {wait:.0f} s"
+                    " (Google AI Studio free tier)"
+                )
+            self.sleep(wait)
+            waited += wait
+
+    def _read_within_limits(
+        self, pdf: bytes
+    ) -> tuple[dict[str, str], list[dict[str, Any]], str, str]:
+        """The main model while it has quota, else the backup (00_LAW §8 A3)."""
+        tokens = estimate_tokens(pdf)
+        models = self._models()
+        for _ in range(len(models) + 1):
+            model = self._slot(models, tokens)
+            try:
+                header, tables, version, used = self._generate(pdf, model, tokens)
+            except RateLimited:
+                self.limiter.exhaust(model)
+                continue
+            self.limiter.settle(model, tokens, used or tokens)
+            return header, tables, version, model
+        raise GeminiError(
+            f"Google AI Studio answered HTTP 429 RESOURCE_EXHAUSTED for {', '.join(models)}"
+        )
+
+    def _generate(
+        self, pdf: bytes, model: str, tokens: int
+    ) -> tuple[dict[str, str], list[dict[str, Any]], str, int]:
+        url = f"{BASE_URL}/models/{model}:generateContent"
         body = {
             "systemInstruction": {"parts": [{"text": brief(self.role)}]},
             "contents": [
@@ -260,6 +390,7 @@ class GeminiStatementReader:
                         f" (after {attempt} attempts)"
                     ) from None
                 self.sleep(BACKOFF[attempt - 1])
+                self._slot([model], tokens)
                 continue
             try:
                 data = response.json()
@@ -269,11 +400,14 @@ class GeminiStatementReader:
                 break
             status = ((data or {}).get("error") or {}).get("status") or ""
             message = f"Google AI Studio answered HTTP {response.status_code} {status}"
+            if response.status_code == 429:
+                raise RateLimited(message)
             if response.status_code not in TRANSIENT:
                 raise GeminiError(message)
             if last:
                 raise GeminiError(f"{message} (after {attempt} attempts)")
             self.sleep(BACKOFF[attempt - 1])
+            self._slot([model], tokens)
         blocked = (data.get("promptFeedback") or {}).get("blockReason")
         if blocked:
             raise GeminiError(f"Google AI Studio blocked the request: {blocked}")
@@ -285,7 +419,8 @@ class GeminiStatementReader:
             raise GeminiError(f"Gemini stopped early: {first.get('finishReason')}")
         text = "".join(p.get("text", "") for p in (first.get("content") or {}).get("parts") or [])
         header, tables = parse_answer(text)
-        return header, tables, str(data.get("modelVersion") or "")
+        used = int((data.get("usageMetadata") or {}).get("totalTokenCount") or 0)
+        return header, tables, str(data.get("modelVersion") or ""), used
 
 
 def gemini_reader_from_env(
