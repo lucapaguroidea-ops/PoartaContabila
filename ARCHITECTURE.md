@@ -280,6 +280,7 @@ OPENROUTER_JEV_API_KEY=        # Jev roles only (own credit limit on OpenRouter)
 OPENROUTER_SYS2_API_KEY=       # System Two roles (DeepSeek / GLM)
 OPENROUTER_OCR_API_KEY=        # document reading (Gemini; AI Studio key via OpenRouter BYOK)
 MODEL_CALLS=off                # off | dry (record what would be sent, send nothing)
+MAX_UPLOAD_MB=32               # request-body cap; over it → 413 (WP-34)
 DOCUMENT_AI_PROCESSOR=          # projects/{p}/locations/{eu}/processors/{id} (WP-21)
 DOCUMENT_AI_CREDENTIALS_JSON=   # service-account key; else Application Default Credentials
 AGENT_SHARED_TOKEN=

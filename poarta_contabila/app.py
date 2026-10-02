@@ -12,6 +12,7 @@ from typing import Any
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from poarta_contabila.agent import AgentService
 from poarta_contabila.agent_api import agent_router
@@ -22,6 +23,80 @@ from poarta_contabila.operator_api import operator_router
 
 def _database_url_from_env() -> str | None:
     return os.environ.get("DATABASE_URL") or None
+
+
+MAX_UPLOAD_MB = 32  # default request-body cap (WP-34); base64 adds a third, so ~24 MB files
+TOKEN_MIN_CHARS = 32
+
+
+def _max_upload_bytes() -> int:
+    try:
+        mb = int(os.environ.get("MAX_UPLOAD_MB", MAX_UPLOAD_MB))
+    except ValueError:
+        mb = MAX_UPLOAD_MB
+    return max(1, mb) * 1024 * 1024
+
+
+class BodyLimit:
+    """Refuse a request body over *max_bytes* with 413 before any route runs (WP-34).
+
+    A declared Content-Length over the cap is refused at once. Otherwise the body is read in
+    full first (routes read it whole anyway) and refused as soon as it passes the cap, so no
+    route ever sees part of a body.
+    """
+
+    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
+        self.app, self.max_bytes = app, max_bytes
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        length = dict(scope.get("headers") or []).get(b"content-length", b"")
+        if length.isdigit() and int(length) > self.max_bytes:
+            await self._refuse(scope, receive, send)
+            return
+        chunks: list[bytes] = []
+        seen = 0
+        while True:
+            message = await receive()
+            if message["type"] != "http.request":  # the client went away
+                return
+            chunk = message.get("body", b"")
+            seen += len(chunk)
+            if seen > self.max_bytes:
+                await self._refuse(scope, receive, send)
+                return
+            chunks.append(chunk)
+            if not message.get("more_body", False):
+                break
+        body = b"".join(chunks)
+        sent = False
+
+        async def replay() -> dict:
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return await receive()  # after the body: wait for a disconnect, as usual
+
+        await self.app(scope, replay, send)
+
+    async def _refuse(self, scope: Scope, receive: Receive, send: Send) -> None:
+        mb = self.max_bytes // (1024 * 1024)
+        body = JSONResponse({"detail": f"request body over {mb} MB (MAX_UPLOAD_MB)"}, 413)
+        await body(scope, receive, send)
+
+
+def token_check(value: str | None, other: str | None = None) -> str:
+    """How a bearer token looks, never what it is."""
+    if not value:
+        return "unset"
+    if other and value == other:
+        return "same as the other token"
+    if len(value) < TOKEN_MIN_CHARS:
+        return f"shorter than {TOKEN_MIN_CHARS} characters"
+    return "ok"
 
 
 def create_app(
@@ -58,6 +133,7 @@ def create_app(
         yield
 
     app = FastAPI(title="Poarta Primară", version="0.1.0", lifespan=lifespan)
+    app.add_middleware(BodyLimit, max_bytes=_max_upload_bytes())
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -81,6 +157,9 @@ def create_app(
             except Exception as exc:  # report, do not crash the probe
                 checks["database"] = f"error: {type(exc).__name__}"
         ok = all(v == "ok" for k, v in checks.items() if k != "runtime")
+        # reported, not gating: a weak token is the owner's to rotate (WP-34)
+        checks["operator_token"] = token_check(op_token, token)
+        checks["agent_token"] = token_check(token, op_token)
         return JSONResponse({"checks": checks}, status_code=200 if ok else 503)
 
     def current_runtime():

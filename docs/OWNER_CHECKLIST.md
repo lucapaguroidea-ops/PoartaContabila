@@ -37,6 +37,9 @@ the answer and the session records it.
 - [ ] **Railway domain**: the `PoartaContabila` service has no public domain (checked
       2026-10-02), so the operator API cannot be reached from outside. Generate one (service →
       Settings → Networking) before testing on Railway; it runs PR #5's code until PR #6 merges.
+- [ ] **Tokens before the domain goes public**: `GET /ready` must show `operator_token: ok`
+      and `agent_token: ok` (at least 32 characters each, and different). If not, rotate them in
+      Railway's variables; it never shows the values.
 - [ ] **Smoke run on Railway**, once the domain exists and `MODEL_CALLS=dry` is set:
       `OPERATOR_TOKEN=… uv run python -m poarta_contabila.smoke --base-url https://<domain>`.
       It writes only the invented firm `1000009`, and prints each step and what every model

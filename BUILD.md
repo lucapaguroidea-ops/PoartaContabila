@@ -45,6 +45,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-31 | done | WP-27 | POST stage compares the amounts on the partner and VAT accounts with the document |
 | WP-32 | done | WP-26 | `sys2_draft_rule` in shadow at `monthly_close.v2_gate`: every model role has a call site |
 | WP-33 | done | WP-06R | Answer log: every answer a person submits, its outcome and its author, append-only |
+| WP-34 | done | WP-06R | Request bodies capped (413, `MAX_UPLOAD_MB`); `/ready` reports weak or shared tokens |
 
 ## WP details
 
@@ -503,6 +504,15 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   log, newest first.
 - Open: one token per person instead of a self-declared name; the log keeps answers whole, so
   a client tenant's answers hold client data and fall under the same retention as its jobs.
+
+### WP-34 Before the operator API is public
+- Built: `app.BodyLimit` caps every request body at `MAX_UPLOAD_MB` (default 32 MB; base64
+  adds a third, so about 24 MB files). A declared Content-Length over the cap gets 413 at once.
+  Otherwise the body is read in full before any route runs and refused as soon as it passes the
+  cap, so no route sees part of a body. `/ready` adds `operator_token` and `agent_token`:
+  `ok`, `unset`, `shorter than 32 characters` or `same as the other token`. These are reported,
+  never the values, and do not gate readiness.
+- Open: no rate limit; per-person tokens (see WP-33).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
