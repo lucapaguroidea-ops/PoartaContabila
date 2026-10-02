@@ -19,10 +19,10 @@ import base64
 import binascii
 import hmac
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from poarta_contabila.answers import OPERATOR_NAME_MAX
 from poarta_contabila.codit import Codit, CoditError, CoditInput
@@ -61,6 +61,14 @@ class RuleRequest(RuleBody):
 
 SYSBUILDER = "claude-sysbuilder"
 _TENANTLESS = {"/model-roles", "/model-calls", "/answers", "/rules"}  # filtered or body-checked
+
+
+class ReadingChoiceBody(BaseModel):
+    choice: Literal["wait", "reserve"]
+
+
+class SkipBody(BaseModel):
+    reason: str = Field(min_length=1, max_length=300)
 
 
 def _builder(request: Request) -> bool:
@@ -237,6 +245,34 @@ def operator_router(
     def reading_waiting(cui: str, rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
         """WP-42: this tenant's parked statements (waiting, read, refused)."""
         return [w.model_dump(mode="json", exclude={"meta"}) for w in rt.reading_waits.list(cui)]
+
+    @router.post("/reading/{cui}/choice")
+    def reading_choice(
+        cui: str,
+        body: ReadingChoiceBody,
+        rt: Runtime = Depends(operator),
+        operator_name: str | None = Depends(who),
+    ) -> dict[str, Any]:
+        """WP-43 (00_LAW §8 A6): every tier spent — ``wait`` for the reset, or ``reserve``:
+        read with the catalog's reserve models until Pacific midnight. Recorded."""
+        try:
+            return rt.reading_choose(cui, body.choice, operator_name)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.post("/reading/{cui}/waiting/{wait_id}/skip")
+    def reading_skip(
+        cui: str,
+        wait_id: str,
+        body: SkipBody,
+        rt: Runtime = Depends(operator),
+        operator_name: str | None = Depends(who),
+    ) -> dict[str, Any]:
+        """WP-43: set a parked statement aside (then upload it with its tables)."""
+        try:
+            return rt.skip_waiting(cui, wait_id, body.reason, operator_name)
+        except IngestRefused as exc:
+            raise HTTPException(404, str(exc)) from exc
 
     @router.post("/reading/{cui}/retry")
     def reading_retry(cui: str, rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:

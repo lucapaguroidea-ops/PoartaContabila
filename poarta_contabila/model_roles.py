@@ -140,10 +140,12 @@ class Tiers(Closed):
 
     everyday: list[str] = Field(min_length=1)
     strong: list[str] = Field(min_length=1)
+    reserve: list[str] = Field(default_factory=list)
+    """00_LAW §8 A6: read with only on a day an operator chose them, after the other tiers."""
 
     @property
     def all(self) -> list[str]:
-        return [*self.everyday, *self.strong]
+        return [*self.everyday, *self.strong, *self.reserve]
 
 
 class ModelRole(Closed):

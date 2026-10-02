@@ -197,3 +197,159 @@ def test_the_background_retry_reads_what_is_due_and_can_be_turned_off(monkeypatc
     monkeypatch.setenv("READING_RETRY_SECONDS", "0.05")
     asyncio.run(run_briefly())
     assert Rt.rounds >= 2
+
+
+# ----- WP-43: the operator's choice when every tier is spent (00_LAW §8 A6) -----
+
+RES, RES2 = "gemini-reserve-a", "gemini-reserve-b"
+
+
+def _with_reserve(o):
+    from poarta_contabila.model_roles import RateLimit, Tiers
+
+    reader = o.rt.gemini_reader
+    tiers = reader.role.tiers
+    limits = {
+        **reader.role.rate_limits,
+        **{m: RateLimit(rpm=5, tpm=250_000, rpd=20) for m in (RES, RES2)},
+    }
+    reader.role = reader.role.model_copy(
+        update={
+            "tiers": Tiers(everyday=tiers.everyday, strong=tiers.strong, reserve=[RES, RES2]),
+            "rate_limits": limits,
+        }
+    )
+    return reader
+
+
+class OnlyReserve(Google):
+    """Google answering 429 to every model but the reserve ones."""
+
+    def __call__(self, request):
+        if _model_of(request) not in (RES, RES2):
+            self.requests.append(request)
+            return httpx.Response(429, json={"error": {"status": "RESOURCE_EXHAUSTED"}})
+        return super().__call__(request)
+
+
+def test_the_catalog_keeps_reserve_models_out_of_the_daily_order(cat):  # noqa: F811
+    role = cat.model_roles["ocr_extract"]
+    assert role.tiers.reserve == ["gemini-3.6-flash", "gemini-3.5-flash"]
+    for m in role.tiers.reserve:
+        assert role.rate_limits[m].rpd == 20
+    o = _ops(cat, Google(), tiers=True)
+    reader = _with_reserve(o)
+    assert RES not in reader.order(b"%PDF")
+
+
+def test_every_tier_spent_asks_and_reserve_reads_now(cat):  # noqa: F811
+    google = OnlyReserve()
+    o = _ops(cat, google, tiers=True)
+    _with_reserve(o)
+    resp = _upload(o)
+    assert resp.status_code == 202
+    ask = resp.json()["ask"]
+    assert set(ask["options"]) == {"wait", "skip", "reserve"}
+    assert RES not in {_model_of(r) for r in google.requests}  # never without a choice
+
+    who = {**o.op, "X-Operator-Name": "A. Popescu"}
+    out = o.http.post(f"/reading/{CUI}/choice", json={"choice": "reserve"}, headers=who).json()
+    assert out["choice"]["choice"] == "reserve" and out["choice"]["operator"] == "A. Popescu"
+    assert out["choice"]["released"] == 1
+    (read,) = out["read"]
+    assert read["status"] == "read" and read["result"]["lines"] == 2
+    calls = o.http.get("/model-calls", params={"role": "ocr_extract"}, headers=o.op).json()
+    assert calls[0]["model"] == RES and calls[0]["output"]["tier"] == "reserve"
+
+    budget = o.http.get(f"/reading/{CUI}/budget", headers=o.op).json()
+    assert budget["reserve_open_until"] and budget["ask"] is None
+    assert [c["choice"] for c in budget["choices_today"]] == ["reserve"]
+    rows = {m["model"]: m for m in budget["models"]}
+    assert rows[RES]["tier"] == "reserve" and rows[RES]["used_today"] == 1
+
+
+def test_the_reserve_closes_at_pacific_midnight(cat):  # noqa: F811
+    o = _ops(cat, OnlyReserve(), tiers=True)
+    reader = _with_reserve(o)
+    o.rt.reading_choose(CUI, "reserve", "A. Popescu")
+    assert reader.order(b"%PDF")[-2:] == [RES, RES2]
+    reader.limiter.clock.now += 24 * 3600  # the next Pacific day
+    o.rt._sync_reserve()
+    assert RES not in reader.order(b"%PDF")
+
+
+def test_wait_is_recorded_and_leaves_the_statement_waiting(cat):  # noqa: F811
+    o = _ops(cat, OnlyReserve(), tiers=True)
+    _with_reserve(o)
+    _upload(o)
+    out = o.http.post(f"/reading/{CUI}/choice", json={"choice": "wait"}, headers=o.op).json()
+    assert out["choice"]["released"] == 0 and out["read"] == []
+    assert [w.status for w in o.rt.reading_waits.list(CUI)] == ["waiting"]
+
+
+def test_no_reserve_in_the_catalog_refuses_the_reserve_choice(cat):  # noqa: F811
+    o = _ops(cat, Switch(), tiers=True)
+    resp = _upload(o)
+    assert "reserve" not in resp.json()["ask"]["options"]
+    bad = o.http.post(f"/reading/{CUI}/choice", json={"choice": "reserve"}, headers=o.op)
+    assert bad.status_code == 422 and "no reserve" in bad.json()["detail"]
+    odd = o.http.post(f"/reading/{CUI}/choice", json={"choice": "paid"}, headers=o.op)
+    assert odd.status_code == 422
+
+
+def test_a_parked_statement_can_be_set_aside(cat):  # noqa: F811
+    google = Switch()
+    o = _ops(cat, google, tiers=True)
+    wait_id = _upload(o).json()["wait_id"]
+    who = {**o.op, "X-Operator-Name": "A. Popescu"}
+    url = f"/reading/{CUI}/waiting/{wait_id}/skip"
+    done = o.http.post(url, json={"reason": "tables typed in"}, headers=who).json()
+    assert done["status"] == "skipped" and done["skipped_by"] == "A. Popescu"
+    google.open = True
+    assert o.rt.retry_waiting(now=_later(10)) == []  # never read again
+    again = o.http.post(url, json={"reason": "x"}, headers=o.op)
+    assert again.status_code == 404
+    assert o.http.post(url, json={"reason": ""}, headers=o.op).status_code == 422
+
+
+def _choice_contract(store):
+    from poarta_contabila.reading_waits import ReadingChoice
+
+    def choice(i, day, kind):
+        return ReadingChoice(
+            choice_id=f"{day}:{i}",
+            day=day,
+            choice=kind,
+            tenant_cui=CUI,
+            operator="A",
+            at=f"2026-10-02T2{i}:00:00+00:00",
+            until="2026-10-03T07:00:00+00:00",
+        )
+
+    assert store.latest("2026-10-02") is None
+    store.add(choice(1, "2026-10-02", "wait"))
+    store.add(choice(2, "2026-10-02", "reserve"))
+    store.add(choice(3, "2026-10-01", "wait"))
+    assert store.latest("2026-10-02").choice == "reserve"
+    assert [c.choice_id for c in store.recent(2)] == ["2026-10-01:3", "2026-10-02:2"]
+
+
+def test_in_memory_reading_choices():
+    from poarta_contabila.reading_waits import InMemoryReadingChoiceStore
+
+    _choice_contract(InMemoryReadingChoiceStore())
+
+
+def test_postgres_reading_choices_and_skipped_waits():
+    dsn = os.environ.get("POARTA_TEST_DSN")
+    if not dsn:
+        pytest.skip("set POARTA_TEST_DSN to a scratch Postgres")
+    from poarta_contabila.jobs import PostgresJobStore
+    from poarta_contabila.reading_waits import PostgresReadingChoiceStore, PostgresReadingWaitStore
+
+    PostgresJobStore(dsn, reset=True)
+    _choice_contract(PostgresReadingChoiceStore(dsn))
+    waits = PostgresReadingWaitStore(dsn)
+    waits.put(_wait(9))
+    waits.update(_wait(9).model_copy(update={"status": "skipped", "skipped_by": "A"}))
+    assert waits.list(CUI, "skipped")[0].skipped_by == "A"

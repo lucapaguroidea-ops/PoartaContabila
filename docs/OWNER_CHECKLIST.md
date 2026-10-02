@@ -24,6 +24,10 @@ the answer and the session records it.
       `gemini-3.7-flash` (5 RPM, 20 RPD). Update `rate_limits` if AI Studio's page changes.
 - [x] **Lite models confirmed** (AI Studio rate-limit table, 2026-10-02): 3.5 and 3.1 Flash
       Lite, 15 RPM, 250K TPM, 500 RPD each; `gemini-3.5-flash-lite` read 6/6 live.
+- [x] **Reserve models** (00_LAW §8 A6, 2026-10-02): `gemini-3.6-flash`, `gemini-3.5-flash`,
+      read with only on a day you choose `reserve` (`POST /reading/{cui}/choice`).
+- [ ] **Exact ids of Gemini 3 Flash and Gemini 2.5 Flash**: `gemini-3-flash` and
+      `gemini-2.5-flash` answer 404; AI Studio's "Get code" shows the id to use.
 - [ ] **Optional:** `READING_RETRY_SECONDS` on Railway (default 60) — how often parked
       statements are read again; 0 turns the background round off.
 - [ ] **Turn it on**: set `MODEL_CALLS=live` on Railway (from `dry`). Only synthetic document
