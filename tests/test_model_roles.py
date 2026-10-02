@@ -339,3 +339,35 @@ def test_dry_run_records_the_card_and_its_questions(cat):
     roles = {r["role_id"]: r for r in o.http.get("/model-roles", headers=o.op).json()}
     assert roles["jev_v3_judge"]["card_hash"] == role.card_hash
     assert roles["sys2_draft_rule"]["brief"].startswith("Reader:")
+
+
+def test_postgres_model_call_store(cat):
+    import os
+
+    dsn = os.environ.get("POARTA_TEST_DSN")
+    if not dsn:
+        pytest.skip("set POARTA_TEST_DSN to a scratch Postgres")
+    import psycopg
+
+    from poarta_contabila.db import schema_sql
+    from poarta_contabila.model_roles import PostgresModelCallStore, record
+
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        conn.execute(schema_sql())
+        conn.execute("DELETE FROM domain.model_calls")
+    store = PostgresModelCallStore(dsn)
+    roles = _pinned(cat).model_roles
+    judge, gate = roles["jev_v3_judge"], roles["jev_v2_gate"]
+    store.add(
+        record(
+            judge, {"tenant_cui": CUI}, mode="dry", tenant_cui=CUI, status="recorded", reason="r"
+        )
+    )
+    store.add(
+        record(
+            gate, {"diff": {"cui": CUI}}, mode="dry", tenant_cui=CUI, status="refused", reason="x"
+        )
+    )
+    (got,) = store.recent("jev_v3_judge")
+    assert got.card_hash == judge.card_hash and got.questions == judge.questions()
+    assert {c.role_id for c in store.recent()} == {"jev_v3_judge", "jev_v2_gate"}
