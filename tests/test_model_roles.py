@@ -438,6 +438,35 @@ def test_recon_and_close_questions_record_their_explainer(cat):
     assert close["input"]["kind"] == "v2_close"
 
 
+def test_unexplained_book_documents_record_the_rule_drafter(cat):
+    from poarta_contabila.rules import InMemoryRuleStore
+
+    o = Ops(_runtime(_pinned(cat), model_mode="dry", rules=InMemoryRuleStore()))
+    o.http.put(
+        f"/tenants/{CUI}",
+        json={"cui": CUI, "name": "F", "saga_firm_folder": FOLDER, "data_class": "synthetic"},
+        headers=o.op,
+    )
+    o.upload_rj()
+    rule = {
+        "cui": CUI,
+        "rule_id": "chirie-lunara",
+        "description": "Chiria lunară, factură fără SPV",
+        "scope": "document",
+        "document": {"partner_cui": "30000002"},
+    }
+    assert o.http.post("/rules", json=rule, headers=o.op).status_code == 200
+    out = o.http.post(f"/close/{CUI}/2026-09", params={"tva": "tva_platitor"}, headers=o.op)
+    unexplained = out.json()["question"]["unexplained"]
+    (call,) = _calls(o, "sys2_draft_rule")
+    assert call["status"] == "recorded" and call["input"]["kind"] == "explained_rule"
+    q = call["input"]["question"]
+    assert [d["saga_key"] for d in q["documents"]] == unexplained and unexplained
+    assert q["rules"] == [
+        {"rule_id": "chirie-lunara", "description": "Chiria lunară, factură fără SPV"}
+    ]
+
+
 def test_shadow_recording_never_blocks_the_flow(cat):
     o = _ops(cat)
 
@@ -453,7 +482,9 @@ def test_only_shadow_roles_are_observed(cat):
     from poarta_contabila.model_roles import InMemoryModelCallStore, ModelGateway
 
     calls = InMemoryModelCallStore()
-    roles = _pinned(cat).model_roles
+    roles = dict(_pinned(cat).model_roles)
+    unwired = roles["sys2_draft_rule"].model_copy(update={"status": "not_wired"})
+    roles["sys2_draft_rule"] = unwired  # every catalog role has a call site since WP-32
     gw = ModelGateway(roles=roles, calls=calls, mode="dry", synthetic=lambda cui: True)
     gw.observe("jev_v3_judge", {"tenant_cui": CUI}, CUI)  # wired: goes through Jev, not here
     gw.observe("sys2_draft_rule", {"tenant_cui": CUI}, CUI)  # not_wired

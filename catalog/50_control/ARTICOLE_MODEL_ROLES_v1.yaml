@@ -351,13 +351,15 @@ roles:
     pack: null
     hitl_kinds: [explained_rule]
     output: "a draft explained rule; a person approves it through POST /rules"
-    status: not_wired
+    status: shadow
     model: null
     card:
       task: >-
-        Draft the wording of an explained rule for the book lines the person selected: what
-        they are, in the accountant's words. Do not choose the rule's scope or accounts; the
-        person sets those.
+        For the book documents the month-close found with no source here (`documents`), draft
+        the wording of an explained rule: what they are, in the accountant's words, one draft
+        per kind of document. `rules` are the rules this firm already has: do not draft one
+        they already cover. Do not choose the rule's scope, matcher or accounts; the person
+        sets those and writes the rule through POST /rules.
 
 forbidden:
   - a model on a graph edge

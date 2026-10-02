@@ -49,6 +49,9 @@ THREAD_PREFIX = "close:"
 CloseStatus = Literal["opened", "locked", "sink_pulled", "v2_ready", "hold", "filed", "v4_done"]
 
 
+MAX_DRAFT = 20  # book documents shown to the rule drafter at once (WP-32)
+
+
 class V2CloseResume(Closed):
     action: Literal["file", "hold", "patch_maps", "reopen"]
     explained_rule: Slug | None = None
@@ -279,6 +282,19 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
             "jev": jev,
         }
         deps.observe_question("v2_close", question, cui)
+        unexplained = [b.sink for b in diff.inbound if b.kind == "unexplained"]
+        if unexplained:  # shadow (WP-32): what the rule drafter would be given
+            rules = deps.rules.active(cui) if deps.rules is not None else []
+            deps.observe_question(
+                "explained_rule",
+                {
+                    "cui": cui,
+                    "period": state["period"],
+                    "documents": [d.model_dump(mode="json") for d in unexplained[:MAX_DRAFT]],
+                    "rules": [{"rule_id": r.rule_id, "description": r.description} for r in rules],
+                },
+                cui,
+            )
         answer = ask("v2_close", question, V2CloseResume, check)
         status: CloseStatus = {"file": "filed", "reopen": "opened"}.get(answer.action, "hold")
         update: dict[str, Any] = {

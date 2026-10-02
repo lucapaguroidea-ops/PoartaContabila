@@ -43,6 +43,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-29 | done | WP-28 | Synthetic smoke run: one invented firm through every graph over HTTP, model calls by place |
 | WP-30 | done | WP-22 | Settlement proposals for partial payments, part-paid invoices and one payment for several |
 | WP-31 | done | WP-27 | POST stage compares the amounts on the partner and VAT accounts with the document |
+| WP-32 | done | WP-26 | `sys2_draft_rule` in shadow at `monthly_close.v2_gate`: every model role has a call site |
 
 ## WP details
 
@@ -394,8 +395,8 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   size, never its bytes, + the typed header); System Two explainers on the questions their
   HITL kinds name: `v3_approve` (ingest), `recon_ambiguous` / `need_rj_export` /
   `recon_review_contest` (reconcile_sink), `v2_close` (monthly_close).
-- Open: `sys2_draft_rule` has no call site (`explained_rule` is not asked as its own question
-  yet). `ocr_decont_split` became the 9th shadow role with WP-28 (the expense-report upload).
+- Open: `ocr_decont_split` became the 9th shadow role with WP-28 (the expense-report upload),
+  `sys2_draft_rule` the 10th with WP-32.
 
 ### WP-27 reconcile_sink, POST stage
 - Built: `recon/post.py` `how_check` — for an `acked` Job, its posting's lines in the registru
@@ -472,6 +473,17 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   before WP-31 is checked again on the next pass).
 - Open: class 6 / 7 (net, may be split across accounts) and reverse-charge postings (4426 and
   4427 on one line, WP-D3) are not compared; the map is `[de confirmat]` on the copy firm.
+
+### WP-32 The rule drafter's place
+- Built: `sys2_draft_rule` is `shadow` at `monthly_close.v2_gate`, where the catalog puts it:
+  when the close finds book documents with no source here (`unexplained`), the drafter's input
+  is recorded under `MODEL_CALLS=dry` as the `explained_rule` kind — those documents (the first
+  20) and the firm's active rules (id + description), so a draft would not repeat one. Its card
+  now says so: wording only, one draft per kind of document; scope, matcher and accounts stay
+  the person's, who writes the rule through `POST /rules`. Every role in the catalog now has a
+  call site.
+- Open: nothing is sent (no sender, no model ids); a draft would be shown with the `v2_close`
+  question, never written as a rule by itself.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
