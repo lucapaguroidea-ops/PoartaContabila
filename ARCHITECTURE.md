@@ -179,7 +179,7 @@ Agent never devalidates. Agent never auto-restores. Archive metadata must includ
 ## 10. HTTP
 
 ```
-PUT  /tenants/{cui}
+PUT  /tenants/{cui}                 # name, firm folder, book of record, bank_accounts (IBAN → 5121.x)
 POST /tenants/{cui}/exports/{rj|balanta|spv_register}
 POST /ingest
 GET  /jobs/{id}
@@ -230,6 +230,28 @@ snapshot_request → parse report pack or replica → POST /agent/snapshot
 ```
 
 AGENT: import only. No Devalidare, no închidere lună, no admin.
+
+In SAGA (RESEARCH_LOG R1, "Configurare utilizatori"), AGENT is **not** SAGA's user type
+"Agent": that type is a sales agent who sees only the clients, suppliers and invoices they
+entered. AGENT is an "Operare" (or "Standard") user with modificare, ștergere, devalidare and
+validare taken away (Validare is human in v1), no access to Închidere lună or to the
+listing menu beyond what the snapshot needs, and access to its tenant's firm only. A
+non-Admin user cannot operate on a closed month nor devalidate one, so SAGA itself enforces
+"month closed ⇒ agent writes 0" (00_LAW §3.9). Which right "Import date" itself needs is
+`[de confirmat]` on the copy firm.
+
+Running an import (R1, "Diverse → Import date"):
+
+- backup first ("Înainte de import, efectuați o salvare a bazei de date"). SAGA names the
+  archive `ZZ-LL-AAAA_N.ZIP` in `SAGA C.3.0\salv_bd\<firm folder>`. `POST /agent/ack-backup`
+  carries only the `{cui}:{folder}:{utc}` label, so the agent keeps label → archive file in its
+  own log. Restore stays a person's step (it replaces the firm's data).
+- sync mode **"Nr.+data"**, always: SAGA then skips a document whose number and date it
+  already holds, a second guard behind the `(tenant_cui, source_hash)` Job key and PRE.
+- one pull is one import folder: files keep the names SAGA expects (`F_…`, `I_<data>`,
+  `P_<data>`), so a second file of the same name waits for the next pull.
+- imported invoices arrive not validated; "Anulează importul" undoes an import, and once
+  validated a person must devalidate first (§9).
 
 Pull hands out packages per `(cui, saga_firm_folder)` with the module's backup rule; an import
 under a module that needs a backup is accepted only with an acknowledged label of that firm and
