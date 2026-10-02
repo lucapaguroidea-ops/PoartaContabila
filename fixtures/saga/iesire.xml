@@ -14,7 +14,6 @@
       <FacturaTaxareInversa>Nu</FacturaTaxareInversa>
       <FacturaTVAIncasare>Nu</FacturaTVAIncasare>
       <FacturaMoneda>RON</FacturaMoneda>
-      <FacturaCotaTVA>21</FacturaCotaTVA>
     </Antet>
     <Detalii>
       <Continut>
@@ -25,6 +24,7 @@
           <Cantitate>2</Cantitate>
           <Pret>50.00</Pret>
           <Valoare>100.00</Valoare>
+          <ProcTVA>21</ProcTVA>
           <TVA>21.00</TVA>
         </Linie>
         <Linie>
@@ -34,9 +34,11 @@
           <Cantitate>1</Cantitate>
           <Pret>50.50</Pret>
           <Valoare>50.50</Valoare>
+          <ProcTVA>21</ProcTVA>
           <TVA>10.61</TVA>
         </Linie>
       </Continut>
     </Detalii>
+    <FacturaID>fixture-iesire</FacturaID>
   </Factura>
 </Facturi>

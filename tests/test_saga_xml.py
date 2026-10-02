@@ -10,6 +10,7 @@ import pytest
 from poarta_contabila.catalog import load_catalog
 from poarta_contabila.sinks.saga_xml import (
     ANTET_TAGS,
+    FACTURA_TAGS,
     LINIE_TAGS,
     SagaXmlError,
     export_key,
@@ -38,7 +39,9 @@ def _tree(xml: bytes) -> ET.Element:
 
 
 def test_tag_vocabulary_is_closed():
-    # Changing these lists is a WP of its own: tags come only from a green copy-firm import.
+    # Changing these lists is a WP of its own: every tag is quoted in RESEARCH_LOG R1 (the SAGA
+    # manual's "Import date"), in the manual's order, and proven by a green copy-firm import.
+    assert FACTURA_TAGS == ("Antet", "Detalii", "FacturaID")
     assert ANTET_TAGS == (
         "FurnizorNume",
         "FurnizorCIF",
@@ -52,7 +55,6 @@ def test_tag_vocabulary_is_closed():
         "FacturaTaxareInversa",
         "FacturaTVAIncasare",
         "FacturaMoneda",
-        "FacturaCotaTVA",
     )
     assert LINIE_TAGS == (
         "LinieNrCrt",
@@ -61,8 +63,52 @@ def test_tag_vocabulary_is_closed():
         "Cantitate",
         "Pret",
         "Valoare",
+        "ProcTVA",
         "TVA",
     )
+
+
+def test_no_invented_tag_reaches_the_file(cat, docs):
+    # FacturaCotaTVA was written before R1 was read; the manual has no such tag.
+    for kind, module_id in (("iesire", "iesire_factura_xml"), ("intrare", "intrare_factura_xml")):
+        root = _tree(render_invoice(docs[kind], cat.write_modules[module_id], tenant_name="X").xml)
+        assert root.tag == "Facturi"
+        for factura in root:
+            assert tuple(child.tag for child in factura) == FACTURA_TAGS
+            assert tuple(child.tag for child in factura.find("Antet")) == ANTET_TAGS
+        assert root.find(".//FacturaCotaTVA") is None
+
+
+def test_each_line_carries_its_vat_rate(cat):
+    doc = fixture_documents()["iesire"]
+    lines = [
+        doc.lines[0],
+        doc.lines[1].model_copy(update={"vat_rate": "11", "vat": "5.56", "gross": "56.06"}),
+    ]
+    doc = doc.model_copy(
+        update={
+            "lines": lines,
+            "totals": doc.totals.model_copy(update={"vat": "26.56", "gross": "177.06"}),
+        }
+    )
+    rendered = render_invoice(doc, cat.write_modules["iesire_factura_xml"], tenant_name="X")
+    found = _tree(rendered.xml).findall("Factura/Detalii/Continut/Linie")
+    assert [line.findtext("ProcTVA") for line in found] == ["21", "11"]
+
+
+def test_line_without_vat_rate_is_refused(cat, docs):
+    line = docs["iesire"].lines[0].model_copy(update={"vat_rate": None})
+    bad = docs["iesire"].model_copy(update={"lines": [line, docs["iesire"].lines[1]]})
+    with pytest.raises(SagaXmlError, match="vat rate"):
+        render_invoice(bad, cat.write_modules["iesire_factura_xml"], tenant_name="X")
+
+
+def test_factura_id_is_the_job_id(cat, docs):
+    # SAGA keeps it with its own id, so a receipt or payment can name the invoice (R1).
+    rendered = render_invoice(
+        docs["intrare"], cat.write_modules["intrare_factura_xml"], tenant_name="X"
+    )
+    assert _tree(rendered.xml).findtext("Factura/FacturaID") == "fixture-intrare"
 
 
 def test_iesire_routes_tenant_as_furnizor(cat, docs):

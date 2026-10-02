@@ -55,6 +55,14 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Exporter in `sinks/saga_xml.py`. Tags only from a successful copy-firm import.
 - Record `fixture:` path and `approved_at` on the module row after human green. Still `status: draft` until that happens; then `active`.
 - Tests: XML well-formed; FurnizorCIF/ClientCIF routing documented in a unit test with synthetic CUIs.
+- Corrected 2026-10-02 from R1 (the manual's "Import date"): every tag written is quoted there, in
+  its order. `FacturaCotaTVA` (not in the manual) is gone; `ProcTVA` on every line (a line without
+  a rate is refused); `FacturaID` = the job id after `<Detalii>`, so a receipt or payment can name
+  the invoice (WP-19). Both fixtures regenerated from the renderer.
+- Open: the owner's copy-firm import of both fixtures (sync "Nr.+data"), and SAGA's own sample XML
+  (Ieșiri → Tipărire → "Formular PDF" → `TEMP\Facturi`, invented data) to settle date and decimal
+  formats and the `RO` prefix. `FacturaIndexSPV` waits for a source of the SPV upload index (the
+  SPV zip reader and the register do not keep one).
 
 ### WP-04 Ingest to packaged
 - Nodes as ARCHITECTURE.md §2. Jev mocked in tests.

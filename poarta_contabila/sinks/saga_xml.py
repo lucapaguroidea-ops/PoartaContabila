@@ -1,16 +1,21 @@
 """SAGA C "Import facturi XML" mouths: ``iesire_factura_xml`` and ``intrare_factura_xml`` (WP-03).
 
-One ``<Facturi><Factura><Antet/><Detalii><Continut><Linie/>…`` file per invoice. SAGA picks
-the journal from the CIFs: our CUI as ``FurnizorCIF`` → Ieșiri, as ``ClientCIF`` → Intrări.
+One ``<Facturi><Factura><Antet/><Detalii><Continut><Linie/>…</Detalii><FacturaID/>`` file per
+invoice. SAGA picks the journal from the CIFs: our CUI as ``FurnizorCIF`` → Ieșiri, as
+``ClientCIF`` → Intrări.
 
-The tag vocabulary below is the whole of what this module may write. It follows SAGA's
-documented import format and stays unproven until a fixture imports green on a copy firm;
-until then both WriteModules stay ``status: draft`` (AGENTS.md: do not invent tags; extend
-only from a successful copy-firm import). Money is read from the document's strings, checked
-(line net + VAT = gross, lines sum to totals) and never recomputed from floats.
+The tag vocabulary below is the whole of what this module may write. Every tag is quoted from
+SAGA's manual, "Import date" (RESEARCH_LOG R1), in the manual's order; the set stays unproven
+until a fixture imports green on a copy firm, and until then both WriteModules stay
+``status: draft`` (AGENTS.md: do not invent tags). ``FacturaID`` is the job id: SAGA keeps it
+so a receipt or payment can name the invoice. Money is read from the document's strings,
+checked (line net + VAT = gross, lines sum to totals, a VAT rate on every line) and never
+recomputed from floats.
 
-Open points, all ``[de confirmat]`` against a copy-firm import: CIF with or without ``RO``
-for VAT payers; price precision; non-RON invoices (refused here until FX lands).
+Open points, all ``[de confirmat]`` against a copy-firm import (SAGA's own sample XML from
+Ieșiri → Formular PDF settles the formats): date and decimal formats; a partner CIF with or
+without ``RO`` (SAGA stores the firm's own code without it); price precision; empty tags;
+non-RON invoices (refused here until FX lands).
 """
 
 from __future__ import annotations
@@ -44,7 +49,6 @@ ANTET_TAGS: tuple[str, ...] = (
     "FacturaTaxareInversa",
     "FacturaTVAIncasare",
     "FacturaMoneda",
-    "FacturaCotaTVA",
 )
 
 LINIE_TAGS: tuple[str, ...] = (
@@ -54,8 +58,11 @@ LINIE_TAGS: tuple[str, ...] = (
     "Cantitate",
     "Pret",
     "Valoare",
+    "ProcTVA",
     "TVA",
 )
+
+FACTURA_TAGS: tuple[str, ...] = ("Antet", "Detalii", "FacturaID")
 
 # module_id -> (doc_class it accepts, which side the tenant is on, batch folder)
 _MOUTHS = {
@@ -104,6 +111,8 @@ def _check_money(doc: CanonicalDocument) -> None:
     for n, line in enumerate(doc.lines, 1):
         if line.vat is None:
             raise SagaXmlError(f"line {n}: vat amount missing")
+        if line.vat_rate is None:
+            raise SagaXmlError(f"line {n}: vat rate missing")
         if _d(line.net) + _d(line.vat) != _d(line.gross):
             raise SagaXmlError(f"line {n}: net + vat != gross")
         if line.qty is not None and _d(line.qty) <= 0:
@@ -144,7 +153,6 @@ def render_invoice(
     tenant = (tenant_name, doc.tenant.cui)
     partner = (doc.partner.name, doc.partner.cui)
     furnizor, client = (tenant, partner) if tenant_side == "furnizor" else (partner, tenant)
-    rates = {line.vat_rate for line in doc.lines}
     maps = doc.maps
 
     antet = {
@@ -160,7 +168,6 @@ def render_invoice(
         "FacturaTaxareInversa": "Da" if maps.get("taxare_inversa") == "da" else "Nu",
         "FacturaTVAIncasare": "Da" if maps.get("tva_incasare") == "da" else "Nu",
         "FacturaMoneda": doc.currency,
-        "FacturaCotaTVA": next(iter(rates)) or "" if len(rates) == 1 else "",
     }
     assert tuple(antet) == ANTET_TAGS
 
@@ -179,11 +186,14 @@ def render_invoice(
             "Cantitate": str(qty),
             "Pret": _price(_d(line.net), qty),
             "Valoare": line.net,
+            "ProcTVA": line.vat_rate,
             "TVA": line.vat,
         }
         item = ET.SubElement(continut, "Linie")
         for tag in LINIE_TAGS:
             ET.SubElement(item, tag).text = values[tag]
+    ET.SubElement(factura, "FacturaID").text = doc.job_id
+    assert tuple(child.tag for child in factura) == FACTURA_TAGS
     ET.indent(root)
     xml = ET.tostring(root, encoding="utf-8", xml_declaration=True) + b"\n"
     return RenderedInvoice(
