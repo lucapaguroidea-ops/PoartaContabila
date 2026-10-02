@@ -258,10 +258,12 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   answer (test: a reject became `packaged`). On a material month Layer 2's `file`, a
   `gap_materiality` below material and `books_support_declaration: true` are dropped.
   `runtime_from_env` wires Jev when both env vars are set.
-- Open: the HTTP wire (endpoint, auth, request/response, mapping of Jev's primitives onto the
-  closed models) is not built: `docs.typesafe.ai` was denied by the build session's network
-  policy (R2), so `http_transport` refuses every call and a person is asked. `JEV_*` are not
-  set on Railway (the owner adds them). Layer 2 does not yet see the period's due filings.
+- Open: the HTTP wire is documented since 2026-10-02 (R2, read from the vendor's own SDK
+  `typesafe-sdk` 0.7.2: `POST /v1/systemone`, bearer key, Noul / Choice questions, the mapping
+  onto `V3Judge` / `V2Gate` with fail-closed thresholds) but **not built**: the build session was
+  not permitted to write the outbound call, so `http_transport` still refuses every call and a
+  person is asked. The owner chose to build it outside that session. `JEV_*` are not set on
+  Railway (the owner adds them). Layer 2 does not yet see the period's due filings.
 
 ### WP-21 Statement PDF reading backend
 - Decided by the owner on 2026-10-01: Google Document AI. Write the extract contract
