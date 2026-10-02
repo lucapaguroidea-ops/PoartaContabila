@@ -49,7 +49,7 @@ class Google:
         return httpx.Response(200, json=body)
 
 
-def _reader(cat, google, *, synthetic=True, model=MODEL, mode="live", key=KEY):
+def _reader(cat, google, *, synthetic=True, model=MODEL, mode="live", key=KEY, sleeps=None):
     role = cat.model_roles["ocr_extract"].model_copy(update={"model": model})
     return GeminiStatementReader(
         role=role,
@@ -58,6 +58,7 @@ def _reader(cat, google, *, synthetic=True, model=MODEL, mode="live", key=KEY):
         synthetic=lambda cui: synthetic,
         mode=mode,
         http=httpx.Client(transport=httpx.MockTransport(google)),
+        sleep=(sleeps if sleeps is not None else []).append,
     )
 
 
@@ -246,3 +247,48 @@ def test_the_model_roles_view_shows_the_direct_key_as_set_or_not(cat, monkeypatc
     role = {r["role_id"]: r for r in resp.json()}["ocr_extract"]
     assert role["key_env"] == "GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC" and role["key_set"] is True
     assert role["route"] == "google_ai_studio" and KEY not in resp.text
+
+
+class Busy(Google):
+    """Google answering ``statuses`` in turn (a transport error for 0), then a good answer."""
+
+    def __init__(self, *statuses):
+        super().__init__()
+        self.queue = list(statuses)
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if not self.queue:
+            return super().__call__(request)
+        self.requests.append(request)
+        code = self.queue.pop(0)
+        if code == 0:
+            raise httpx.ConnectError("reset", request=request)
+        return httpx.Response(code, json={"error": {"status": "UNAVAILABLE"}})
+
+
+@pytest.mark.parametrize("statuses", [(503,), (503, 429), (0,), (500, 504)])
+def test_a_busy_google_is_asked_again_and_the_statement_read(cat, statuses):
+    google, sleeps = Busy(*statuses), []
+    reader = _reader(cat, google, sleeps=sleeps)
+    extraction = reader(PDF, tenant_cui=CUI)
+    assert extraction.meta.backend == "gemini"
+    assert len(google.requests) == len(statuses) + 1
+    assert sleeps == [2.0, 6.0][: len(statuses)]
+    assert [c.status for c in reader.calls.rows] == ["sent"]  # one call, however many tries
+
+
+def test_a_google_busy_every_time_fails_after_three_tries(cat):
+    google, sleeps = Busy(503, 503, 503, 503), []
+    reader = _reader(cat, google, sleeps=sleeps)
+    with pytest.raises(GeminiError, match=r"HTTP 503 UNAVAILABLE \(after 3 attempts\)") as exc:
+        reader(PDF, tenant_cui=CUI)
+    assert KEY not in str(exc.value)
+    assert len(google.requests) == 3 and sleeps == [2.0, 6.0]
+    assert [c.status for c in reader.calls.rows] == ["failed"]
+
+
+def test_a_refusal_is_not_asked_again(cat):
+    google, sleeps = Google(status=403), []
+    with pytest.raises(GeminiError, match="HTTP 403"):
+        _reader(cat, google, sleeps=sleeps)(PDF, tenant_cui=CUI)
+    assert len(google.requests) == 1 and sleeps == []

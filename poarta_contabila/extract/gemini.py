@@ -31,6 +31,7 @@ import hashlib
 import json
 import os
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -42,6 +43,11 @@ from poarta_contabila.model_roles import ModelRole, RouteRefused, brief, record,
 
 KEY_ENV = "GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC"
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
+# Google answers 503 UNAVAILABLE (and 429/500/504) when the model is busy; its guidance is to
+# retry with backoff. Bounded: ATTEMPTS tries in all, BACKOFF seconds before each retry.
+TRANSIENT = frozenset({429, 500, 503, 504})
+ATTEMPTS = 3
+BACKOFF = (2.0, 6.0)
 MAX_PDF_BYTES = 18 * 1024 * 1024  # inline data rides in a request Google caps at 20 MB
 PROMPT = (
     "Read this bank statement. Answer with one JSON object in the output shape of your "
@@ -144,6 +150,7 @@ class GeminiStatementReader:
     mode: str = "live"
     http: httpx.Client = field(default_factory=lambda: httpx.Client(timeout=180.0))
     backend: str = "gemini"
+    sleep: Callable[[float], None] = time.sleep
 
     def _record(self, payload: dict, cui: str, status: str, reason: str, output=None) -> None:
         self.calls.add(
@@ -240,17 +247,33 @@ class GeminiStatementReader:
                 "responseSchema": STATEMENT_SCHEMA,
             },
         }
-        try:
-            response = self.http.post(url, json=body, headers={"x-goog-api-key": self.key})
-        except httpx.HTTPError as exc:
-            raise GeminiError(f"Google AI Studio unreachable: {type(exc).__name__}") from None
-        try:
-            data = response.json()
-        except ValueError:
-            data = {}
-        if response.status_code != 200:
+        data, attempt = {}, 0
+        while True:
+            attempt += 1
+            last = attempt >= ATTEMPTS
+            try:
+                response = self.http.post(url, json=body, headers={"x-goog-api-key": self.key})
+            except httpx.HTTPError as exc:
+                if last:
+                    raise GeminiError(
+                        f"Google AI Studio unreachable: {type(exc).__name__}"
+                        f" (after {attempt} attempts)"
+                    ) from None
+                self.sleep(BACKOFF[attempt - 1])
+                continue
+            try:
+                data = response.json()
+            except ValueError:
+                data = {}
+            if response.status_code == 200:
+                break
             status = ((data or {}).get("error") or {}).get("status") or ""
-            raise GeminiError(f"Google AI Studio answered HTTP {response.status_code} {status}")
+            message = f"Google AI Studio answered HTTP {response.status_code} {status}"
+            if response.status_code not in TRANSIENT:
+                raise GeminiError(message)
+            if last:
+                raise GeminiError(f"{message} (after {attempt} attempts)")
+            self.sleep(BACKOFF[attempt - 1])
         blocked = (data.get("promptFeedback") or {}).get("blockReason")
         if blocked:
             raise GeminiError(f"Google AI Studio blocked the request: {blocked}")

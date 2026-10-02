@@ -50,6 +50,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-36 | done | WP-21, WP-24 | Gemini reads synthetic statement PDFs directly through Google AI Studio (live sender) |
 | WP-37 | done | WP-36 | Reading evaluation: six known synthetic statements, scored per model |
 | WP-38 | done | WP-34 | Token names `GRAPHUSERTOKEN_*`; the build agent's token, synthetic tenants only |
+| WP-39 | done | WP-36 | Gemini reader asks again when Google is busy (429/500/503/504), three tries at most |
 
 ## WP details
 
@@ -626,6 +627,15 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   `GRAPHUSERTOKEN_CLAUDE_SYSBUILDER`, else the old name.
 - Open: for the build agent to run them against Railway, the service needs a public domain
   and the build session needs the token in its own environment (never in the chat).
+
+### WP-39 Gemini reader retries a busy Google
+- Found 2026-10-02 by the build agent's live smoke run and evaluation: Google AI Studio
+  answered `HTTP 503 UNAVAILABLE` on the statement PDF read and on 4 of the 6 evaluation
+  cases; the other two read correctly, so the request was sound and the model was busy.
+- `_generate` now tries at most 3 times for 429, 500, 503, 504 or a transport error, waiting
+  2 s then 6 s. Any other answer (403, a bad body, a block) fails at once, as before.
+- One recorded call per read however many tries; the final reason names the attempts. The
+  model, the synthetic-only guards and the key handling are unchanged.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
