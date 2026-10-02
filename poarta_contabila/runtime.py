@@ -810,6 +810,11 @@ class Runtime:
     def _batch_cfg(batch_id: str) -> dict:
         return {"configurable": {"thread_id": f"batch:{batch_id}"}}
 
+    def batch_tenant(self, batch_id: str) -> str | None:
+        """The tenant a triage batch belongs to; None for an unknown batch."""
+        values = self.triage.get_state(self._batch_cfg(batch_id)).values
+        return (values.get("pack") or {}).get("tenant_cui") if values else None
+
     def batch_view(self, batch_id: str) -> dict[str, Any]:
         state = self.triage.get_state(self._batch_cfg(batch_id))
         if not state.values:

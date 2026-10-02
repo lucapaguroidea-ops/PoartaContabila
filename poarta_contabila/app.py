@@ -88,12 +88,28 @@ class BodyLimit:
         await body(scope, receive, send)
 
 
-def token_check(value: str | None, other: str | None = None) -> str:
+# WP-38: the owner's variable names (2026-10-02); the old names are read only when the new
+# one is unset, so a service still on the old names keeps working.
+OPERATOR_ENV = ("GRAPHUSERTOKEN_OPERATOR", "OPERATOR_TOKEN")
+AGENT_ENV = ("GRAPHUSERTOKEN_AGENT_SHARED", "AGENT_SHARED_TOKEN")
+SYSBUILDER_ENV = ("GRAPHUSERTOKEN_CLAUDE_SYSBUILDER",)
+
+
+def env_token(names: tuple[str, ...]) -> str | None:
+    """The first of *names* that is set and not blank."""
+    for name in names:
+        value = (os.environ.get(name) or "").strip()
+        if value:
+            return value
+    return None
+
+
+def token_check(value: str | None, *others: str | None) -> str:
     """How a bearer token looks, never what it is."""
     if not value:
         return "unset"
-    if other and value == other:
-        return "same as the other token"
+    if any(other and value == other for other in others):
+        return "same as another token"
     if len(value) < TOKEN_MIN_CHARS:
         return f"shorter than {TOKEN_MIN_CHARS} characters"
     return "ok"
@@ -106,16 +122,20 @@ def create_app(
     agent_token: str | None | object = ...,
     runtime: Any = ...,
     operator_token: str | None | object = ...,
+    sysbuilder_token: str | None | object = ...,
 ) -> FastAPI:
     """Build the app. *database_url* defaults to ``$DATABASE_URL``; ``None`` disables the DB.
 
     *runtime* defaults to the production one built at startup from ``DATABASE_URL`` and
     ``S3_*`` (None if either is missing; the agent and operator routes then answer 503).
     *agent* overrides the runtime's agent service (tests). Tokens default to
-    ``$AGENT_SHARED_TOKEN`` and ``$OPERATOR_TOKEN``.
+    ``$GRAPHUSERTOKEN_AGENT_SHARED``, ``$GRAPHUSERTOKEN_OPERATOR`` (each falling back to its
+    old name) and ``$GRAPHUSERTOKEN_CLAUDE_SYSBUILDER`` (the build agent: synthetic tenants
+    only, WP-38).
     """
-    token = os.environ.get("AGENT_SHARED_TOKEN") if agent_token is ... else agent_token
-    op_token = os.environ.get("OPERATOR_TOKEN") if operator_token is ... else operator_token
+    token = env_token(AGENT_ENV) if agent_token is ... else agent_token
+    op_token = env_token(OPERATOR_ENV) if operator_token is ... else operator_token
+    builder = env_token(SYSBUILDER_ENV) if sysbuilder_token is ... else sysbuilder_token
     dsn = _database_url_from_env() if database_url is ... else database_url
 
     @asynccontextmanager
@@ -158,8 +178,9 @@ def create_app(
                 checks["database"] = f"error: {type(exc).__name__}"
         ok = all(v == "ok" for k, v in checks.items() if k != "runtime")
         # reported, not gating: a weak token is the owner's to rotate (WP-34)
-        checks["operator_token"] = token_check(op_token, token)
-        checks["agent_token"] = token_check(token, op_token)
+        checks["operator_token"] = token_check(op_token, token, builder)
+        checks["agent_token"] = token_check(token, op_token, builder)
+        checks["sysbuilder_token"] = token_check(builder, op_token, token)
         return JSONResponse({"checks": checks}, status_code=200 if ok else 503)
 
     def current_runtime():
@@ -173,7 +194,12 @@ def create_app(
 
     app.include_router(agent_router(current_agent, lambda: token or None))
     app.include_router(
-        operator_router(current_runtime, lambda: op_token or None, lambda: token or None)
+        operator_router(
+            current_runtime,
+            lambda: op_token or None,
+            lambda: token or None,
+            lambda: builder or None,
+        )
     )
     return app
 

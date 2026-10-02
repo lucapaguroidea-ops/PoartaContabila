@@ -159,7 +159,8 @@ def test_the_command_writes_the_pdfs_to_look_at(tmp_path, capsys):
 
 
 def test_the_command_needs_the_operator_token(monkeypatch, capsys):
-    monkeypatch.delenv("OPERATOR_TOKEN", raising=False)
+    for name in ("GRAPHUSERTOKEN_OPERATOR", "GRAPHUSERTOKEN_CLAUDE_SYSBUILDER", "OPERATOR_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
     assert main(["--base-url", "https://example.invalid"]) == 2
 
 

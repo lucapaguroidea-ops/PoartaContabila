@@ -47,9 +47,10 @@ def test_the_smoke_run_refuses_a_server_that_would_send():
 
 
 def test_the_command_needs_the_operator_token(monkeypatch, capsys):
-    monkeypatch.delenv("OPERATOR_TOKEN", raising=False)
+    for name in ("GRAPHUSERTOKEN_OPERATOR", "GRAPHUSERTOKEN_CLAUDE_SYSBUILDER", "OPERATOR_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
     assert main(["--base-url", "https://example.invalid"]) == 2
-    assert "OPERATOR_TOKEN" in capsys.readouterr().out
+    assert "GRAPHUSERTOKEN_OPERATOR" in capsys.readouterr().out
     assert main(["--local"]) == 0
     assert "monthly_close" in capsys.readouterr().out
 

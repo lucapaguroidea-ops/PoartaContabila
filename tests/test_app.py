@@ -58,7 +58,7 @@ def test_tokens_are_reported_never_shown():
         assert checks["agent_token"] == "ok"
         assert weak not in resp.text and strong not in resp.text
     assert token_check(None) == "unset"
-    assert token_check(strong, strong) == "same as the other token"
+    assert token_check(strong, strong) == "same as another token"
 
 
 def test_a_body_over_the_cap_is_refused_with_413(monkeypatch):

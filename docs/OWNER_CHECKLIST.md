@@ -22,11 +22,11 @@ the answer and the session records it.
 - [ ] **Turn it on**: set `MODEL_CALLS=live` on Railway (from `dry`). Only synthetic document
       reading sends; every other role keeps recording. Check `GET /model-roles` shows
       `ocr_extract` with `key_set: true`.
-- [ ] **Test it**: `OPERATOR_TOKEN=… uv run python -m poarta_contabila.smoke --base-url
+- [ ] **Test it**: `GRAPHUSERTOKEN_OPERATOR=… uv run python -m poarta_contabila.smoke --base-url
       https://<domain> --ocr`. The step "statement PDF read" should mint a job, and
       `GET /model-calls?role=ocr_extract` should show `sent`.
 - [ ] **Reading evaluation** (after the `--ocr` smoke works):
-      `OPERATOR_TOKEN=… uv run python -m poarta_contabila.ocr_eval --base-url https://<domain>`.
+      `GRAPHUSERTOKEN_OPERATOR=… uv run python -m poarta_contabila.ocr_eval --base-url https://<domain>`.
       Six known statements, scored. To compare a Pro model on the hard cases, add
       `--model <bare id> --case two_pages --case dense`. `--write-pdfs ./eval-pdfs` saves the
       PDFs to look at.
@@ -39,11 +39,18 @@ the answer and the session records it.
 - [ ] **Railway domain**: the `PoartaContabila` service has no public domain (checked
       2026-10-02), so the operator API cannot be reached from outside. Generate one (service →
       Settings → Networking) before testing on Railway; it runs PR #5's code until PR #6 merges.
+- [ ] **Let the build agent run the smoke and the evaluation** (WP-38):
+      1. Generate the service's public domain (service → Settings → Networking).
+      2. In this Claude Code cloud environment's settings (environment menu in the session's
+         title bar → Edit), add the variable `GRAPHUSERTOKEN_CLAUDE_SYSBUILDER` with the same
+         value as on Railway. Never paste it into the chat; a new session picks it up.
+      3. Make sure that environment's network access allows `*.up.railway.app`.
+      Its token opens synthetic tenants only; a client tenant answers 403.
 - [ ] **Tokens before the domain goes public**: `GET /ready` must show `operator_token: ok`
       and `agent_token: ok` (at least 32 characters each, and different). If not, rotate them in
       Railway's variables; it never shows the values.
 - [ ] **Smoke run on Railway**, once the domain exists and `MODEL_CALLS=dry` is set:
-      `OPERATOR_TOKEN=… uv run python -m poarta_contabila.smoke --base-url https://<domain>`.
+      `GRAPHUSERTOKEN_OPERATOR=… uv run python -m poarta_contabila.smoke --base-url https://<domain>`.
       It writes only the invented firm `1000009`, and prints each step and what every model
       role would have been sent, by graph and node. `--local` shows the same without a server.
 - [ ] **Test tenants** carry `"data_class": "synthetic"` (`PUT /tenants/{cui}`); any other tenant

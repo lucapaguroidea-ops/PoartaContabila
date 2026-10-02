@@ -1,7 +1,16 @@
 """Operator routes (ARCHITECTURE §10): register tenants, upload witnesses, ingest, answer.
 
-Bearer ``OPERATOR_TOKEN``. It must differ from the agent token: the agent imports, a
-person answers questions. Unset, equal to the agent token, or no runtime → 503.
+Bearer ``GRAPHUSERTOKEN_OPERATOR`` (old name ``OPERATOR_TOKEN``). It must differ from the
+agent token: the agent imports, a person answers questions. Unset, equal to the agent token,
+or no runtime → 503.
+
+WP-38: ``GRAPHUSERTOKEN_CLAUDE_SYSBUILDER`` is the build agent's token (Claude, acting for the
+owner): the same routes, **synthetic tenants only**. Every request must resolve to a tenant
+marked ``data_class: synthetic`` (by the path's ``cui``, the ``cui`` query, the job's or the
+batch's tenant), else 403; a tenant is never registered or turned into client data with it;
+the model-call and answer logs show it only synthetic tenants' rows; its answers are logged
+as ``claude-sysbuilder``. A route that names no tenant and is not listed is refused (default
+deny). A sysbuilder token equal to another token is ignored.
 """
 
 from __future__ import annotations
@@ -12,7 +21,7 @@ import hmac
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from poarta_contabila.answers import OPERATOR_NAME_MAX
@@ -48,22 +57,74 @@ class RuleRequest(RuleBody):
     rule_id: Slug
 
 
+SYSBUILDER = "claude-sysbuilder"
+_TENANTLESS = {"/model-roles", "/model-calls", "/answers", "/rules"}  # filtered or body-checked
+
+
+def _builder(request: Request) -> bool:
+    return getattr(request.state, "principal", None) == SYSBUILDER
+
+
+def _synthetic_only(rt: Runtime, request: Request) -> None:
+    """The build agent's scope (WP-38): this request's tenant must be synthetic."""
+    params, query = request.path_params, request.query_params
+    if "cui" in params:
+        cui = params["cui"]
+        existing = rt.registry.tenant(cui)
+        if request.method == "PUT" and request.url.path == f"/tenants/{cui}" and existing is None:
+            return  # a new tenant: the route checks it is synthetic
+    elif "cui" in query:
+        cui = query["cui"]
+    elif "job_id" in params:
+        try:
+            cui = rt.jobs.get(params["job_id"]).tenant.cui
+        except KeyError:
+            raise HTTPException(404, "unknown job") from None
+    elif "batch_id" in params:
+        cui = rt.batch_tenant(params["batch_id"])
+        if cui is None:
+            raise HTTPException(404, f"unknown batch {params['batch_id']}")
+    elif request.url.path in _TENANTLESS:
+        return
+    else:
+        raise HTTPException(403, "the build agent's token does not open this route")
+    if not rt._synthetic(cui):
+        raise HTTPException(
+            403, f"the build agent's token is for synthetic tenants only, not {cui}"
+        )
+
+
 def operator_router(
     runtime: Callable[[], Runtime | None],
     token: Callable[[], str | None],
     agent_token: Callable[[], str | None],
+    sysbuilder_token: Callable[[], str | None] = lambda: None,
 ) -> APIRouter:
-    def operator(authorization: str | None = Header(default=None)) -> Runtime:
+    def operator(request: Request, authorization: str | None = Header(default=None)) -> Runtime:
         expected, rt = token(), runtime()
         if not expected or rt is None or expected == agent_token():
             raise HTTPException(503, "operator API not configured")
-        given = (authorization or "").removeprefix("Bearer ").strip()
-        if not hmac.compare_digest(given.encode(), expected.encode()):
-            raise HTTPException(401, "operator token required")
-        return rt
+        given = (authorization or "").removeprefix("Bearer ").strip().encode()
+        if hmac.compare_digest(given, expected.encode()):
+            request.state.principal = "operator"
+            return rt
+        builder = sysbuilder_token()
+        if builder and builder not in (expected, agent_token()):
+            if hmac.compare_digest(given, builder.encode()):
+                request.state.principal = SYSBUILDER
+                _synthetic_only(rt, request)
+                return rt
+        raise HTTPException(401, "operator token required")
 
-    def who(x_operator_name: str | None = Header(default=None)) -> str | None:
-        """The person answering (WP-33): one shared token names nobody, so they say."""
+    def who(
+        request: Request,
+        rt: Runtime = Depends(operator),
+        x_operator_name: str | None = Header(default=None),
+    ) -> str | None:
+        """The person answering (WP-33): one shared token names nobody, so they say. The
+        build agent's answers are always its own (WP-38)."""
+        if _builder(request):
+            return SYSBUILDER
         if x_operator_name is None:
             return None
         name = x_operator_name.strip()
@@ -74,9 +135,13 @@ def operator_router(
     router = APIRouter(tags=["operator"])
 
     @router.put("/tenants/{cui}")
-    def put_tenant(cui: str, body: Tenant, rt: Runtime = Depends(operator)) -> Tenant:
+    def put_tenant(
+        cui: str, body: Tenant, request: Request, rt: Runtime = Depends(operator)
+    ) -> Tenant:
         if body.cui != cui:
             raise HTTPException(422, "body cui differs from the path")
+        if _builder(request) and body.data_class != "synthetic":
+            raise HTTPException(403, "the build agent's token registers synthetic tenants only")
         rt.registry.put_tenant(body)
         return body
 
@@ -216,13 +281,18 @@ def operator_router(
 
     @router.get("/answers")
     def answers(
+        request: Request,
         cui: str | None = Query(default=None),
         thread: str | None = Query(default=None, description="e.g. job:…, recon:{cui}:{period}"),
         limit: int = Query(default=50, ge=1, le=500),
         rt: Runtime = Depends(operator),
     ) -> list[dict[str, Any]]:
         """Every answer a person submitted, newest first (WP-33): what, when, who, outcome."""
-        rows = rt.answers.recent(cui=cui, thread_id=thread, limit=limit)
+        if _builder(request):  # WP-38: synthetic tenants' rows only
+            rows = rt.answers.recent(cui=cui, thread_id=thread, limit=500)
+            rows = [r for r in rows if r.tenant_cui and rt._synthetic(r.tenant_cui)][:limit]
+        else:
+            rows = rt.answers.recent(cui=cui, thread_id=thread, limit=limit)
         return [r.model_dump(mode="json") for r in rows]
 
     @router.post("/ocr-eval/{cui}")
@@ -245,12 +315,18 @@ def operator_router(
 
     @router.get("/model-calls")
     def model_calls(
+        request: Request,
         role: str | None = Query(default=None),
         limit: int = Query(default=50, ge=1, le=500),
         rt: Runtime = Depends(operator),
     ) -> list[dict[str, Any]]:
         """What each role was sent, or would be (MODEL_CALLS=dry), newest first."""
-        return [c.model_dump(mode="json") for c in rt.model_calls.recent(role, limit)]
+        if _builder(request):  # WP-38: synthetic tenants' rows only
+            rows = rt.model_calls.recent(role, 500)
+            rows = [c for c in rows if c.tenant_cui and rt._synthetic(c.tenant_cui)][:limit]
+        else:
+            rows = rt.model_calls.recent(role, limit)
+        return [c.model_dump(mode="json") for c in rows]
 
     @router.post("/recon/{cui}/{period}")
     def start_recon(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
@@ -300,8 +376,12 @@ def operator_router(
         return rt.resume_close(cui, period, body, name)
 
     @router.post("/rules")
-    def post_rule(body: RuleRequest, rt: Runtime = Depends(operator)) -> ExplainedRule:
+    def post_rule(
+        body: RuleRequest, request: Request, rt: Runtime = Depends(operator)
+    ) -> ExplainedRule:
         """A person writes a rule; a changed body is a new version, the old ones stay."""
+        if _builder(request) and not rt._synthetic(body.cui):
+            raise HTTPException(403, "the build agent's token is for synthetic tenants only")
         if rt.rules is None:
             raise HTTPException(503, "rule store not wired")
         if rt.registry.tenant(body.cui) is None:

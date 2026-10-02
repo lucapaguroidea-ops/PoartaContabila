@@ -49,6 +49,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-35 | done | WP-24 | `eu_route` is a checked structure: provider, EU region, exact model, credential variables |
 | WP-36 | done | WP-21, WP-24 | Gemini reads synthetic statement PDFs directly through Google AI Studio (live sender) |
 | WP-37 | done | WP-36 | Reading evaluation: six known synthetic statements, scored per model |
+| WP-38 | done | WP-34 | Token names `GRAPHUSERTOKEN_*`; the build agent's token, synthetic tenants only |
 
 ## WP details
 
@@ -103,7 +104,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Built: `agent.py` (`AgentService`: pull per firm folder within `max_docs_per_run`, backup
   label `{cui}:{folder}:{utc}` acknowledged per tenant, import report → `wait_validare` or
   `needs_human`, snapshot → resumes `wait_validare` with the SAGA key of the matching validated
-  document; closed months held), `agent_api.py` (bearer `AGENT_SHARED_TOKEN`, 503 when unset),
+  document; closed months held), `agent_api.py` (bearer `GRAPHUSERTOKEN_AGENT_SHARED`, 503 when unset),
   ingest node `wait_validare` (`acked` only with a key a stored snapshot shows validated;
   `validated: false` → `reopened`), `domain.agent_backups` / `domain.agent_snapshots`.
 - Open: the agent routes answer 503 only while the runtime's variables are unset (`/ready` says
@@ -117,7 +118,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - `registry.py`: tenants (`domain.tenants`) and uploaded witnesses (`domain.sink_exports`: SAGA /
   NextUp journal and balance, SPV register); a SAGA export naming another firm is refused. PRE
   reads the latest journal export (+ balance) and register per tenant.
-- `operator_api.py` (bearer `OPERATOR_TOKEN`, must differ from the agent token):
+- `operator_api.py` (bearer `GRAPHUSERTOKEN_OPERATOR`, must differ from the agent token):
   `PUT /tenants/{cui}`, `POST /tenants/{cui}/exports/{kind}`, `POST /ingest` (SPV zip or UBL XML
   only, XML first), `GET /jobs/{id}`, `POST /jobs/{id}/resume`.
 - Open: Jev sends nothing until its live sender exists (WP-20, WP-24), so every document asks
@@ -443,7 +444,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 ### WP-29 Synthetic smoke run
 - Asked by the owner 2026-10-02: test each role's place in the flow on Railway.
 - Built: `python -m poarta_contabila.smoke` (`--local`: an in-memory runtime, `MODEL_CALLS=dry`;
-  `--base-url …` with `OPERATOR_TOKEN` in the environment: the deployed service). One invented
+  `--base-url …` with `GRAPHUSERTOKEN_OPERATOR` in the environment: the deployed service). One invented
   firm (`1000009`, `data_class: synthetic`, one bank account) through every graph with
   scripted answers: the registru jurnal; an SPV invoice → `v3_approve` approve; a statement
   (header + tables) → the receipt bound to its partner and invoice; an expense report →
@@ -514,7 +515,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   adds a third, so about 24 MB files). A declared Content-Length over the cap gets 413 at once.
   Otherwise the body is read in full before any route runs and refused as soon as it passes the
   cap, so no route sees part of a body. `/ready` adds `operator_token` and `agent_token`:
-  `ok`, `unset`, `shorter than 32 characters` or `same as the other token`. These are reported,
+  `ok`, `unset`, `shorter than 32 characters` or `same as another token`. These are reported,
   never the values, and do not gate readiness.
 - Open: no rate limit; per-person tokens (see WP-33).
 
@@ -604,6 +605,27 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   a case whose closing balance went negative; the builder now refuses that.
 - Open: text-layer PDFs only (no scans, photos or rotations yet); receipts (WP-14) get their
   own cases when that WP is unparked.
+
+### WP-38 Token names and the build agent's token
+- Asked by the owner 2026-10-02: the tokens are `GRAPHUSERTOKEN_OPERATOR` and
+  `GRAPHUSERTOKEN_AGENT_SHARED`, read first, with the old names `OPERATOR_TOKEN` /
+  `AGENT_SHARED_TOKEN` only when the new one is unset or blank. The PR #7 deploy read only the
+  old names, so with the variables renamed the operator and agent routes answered 503 until
+  this ships.
+- `GRAPHUSERTOKEN_CLAUDE_SYSBUILDER`, the build agent's token (Claude acting for the owner):
+  - **Same routes, synthetic tenants only.** A request must resolve to a tenant marked
+    `data_class: synthetic` (the path's `cui`, the `cui` query, the job's or the batch's
+    tenant), else 403. A new tenant registered with it must be synthetic, and an existing
+    client tenant is never touched.
+  - **Logs:** `/model-calls` and `/answers` show it synthetic tenants' rows only; its answers
+    are logged as `claude-sysbuilder`.
+  - **Default deny:** a route that names no tenant and is not listed is closed to it.
+  - Never opens the agent routes. Ignored when equal to another token.
+  - `/ready` reports it like the other two, never its value.
+- The smoke run and the evaluation read `GRAPHUSERTOKEN_OPERATOR`, else
+  `GRAPHUSERTOKEN_CLAUDE_SYSBUILDER`, else the old name.
+- Open: for the build agent to run them against Railway, the service needs a public domain
+  and the build session needs the token in its own environment (never in the chat).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

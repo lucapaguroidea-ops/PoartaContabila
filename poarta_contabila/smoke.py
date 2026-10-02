@@ -26,8 +26,10 @@ invented (00_LAW: no client data); the run refuses a server whose ``MODEL_CALLS`
 ``off``, ``dry`` or ``live``.
 
     uv run python -m poarta_contabila.smoke --local                    # in memory, dry
-    OPERATOR_TOKEN=… uv run python -m poarta_contabila.smoke --base-url https://….up.railway.app
-    OPERATOR_TOKEN=… uv run python -m poarta_contabila.smoke --base-url https://… --ocr
+    GRAPHUSERTOKEN_OPERATOR=… uv run python -m poarta_contabila.smoke --base-url https://…
+    GRAPHUSERTOKEN_OPERATOR=… uv run python -m poarta_contabila.smoke --base-url https://… --ocr
+
+The build agent runs it with ``GRAPHUSERTOKEN_CLAUDE_SYSBUILDER`` instead (synthetic only).
 
 Packaged documents wait on ``/agent/pull`` for an agent; with no agent connected they stay.
 """
@@ -88,7 +90,21 @@ RECEIPT_BINDING = {
 }
 REPORT = b"%PDF-1.4 synthetic expense report (smoke)"
 WORKINGS = b"synthetic workings (smoke)"
-SAFE_MODES = ("off", "dry", "live")  # live: only synthetic document reading sends (WP-36)
+SAFE_MODES = ("off", "dry", "live")
+# who runs the smoke / evaluation against a server: a person with the operator token, or the
+# build agent with its synthetic-only token (WP-38); the old name last
+CALLER_ENV = ("GRAPHUSERTOKEN_OPERATOR", "GRAPHUSERTOKEN_CLAUDE_SYSBUILDER", "OPERATOR_TOKEN")
+
+
+def caller_token() -> str | None:
+    """The bearer token for --base-url: the first of ``CALLER_ENV`` that is set."""
+    for name in CALLER_ENV:
+        value = (os.environ.get(name) or "").strip()
+        if value:
+            return value
+    return None  # live: only synthetic document reading sends (WP-36)
+
+
 OCR_LINES = [
     "BANCA TEST SA - EXTRAS DE CONT",
     "Titular: FIRMA TEST SRL   CUI: RO1000009",
@@ -459,9 +475,9 @@ def main(argv: list[str] | None = None) -> int:
     else:
         import httpx
 
-        token = os.environ.get("OPERATOR_TOKEN")
+        token = caller_token()
         if not token:
-            print("set OPERATOR_TOKEN (the service's operator token) in the environment")
+            print(f"set {' or '.join(CALLER_ENV[:2])} in the environment")
             return 2
         client = httpx.Client(
             base_url=args.base_url.rstrip("/"),
