@@ -202,6 +202,15 @@ class RateLimiter:
             self._day[model] = (day, count + 1)
             return 0.0
 
+    def today(self) -> str:
+        with self._lock:
+            return self._today()[0]
+
+    def midnight(self) -> datetime:
+        """The next Pacific midnight, when the daily quotas reset."""
+        with self._lock:
+            return self.wall().astimezone(PACIFIC) + timedelta(seconds=self._today()[1])
+
     def to_midnight(self) -> float:
         with self._lock:
             return self._today()[1]
@@ -297,6 +306,23 @@ class GeminiStatementReader:
     backend: str = "gemini"
     sleep: Callable[[float], None] = time.sleep
     limiter: RateLimiter = field(default_factory=lambda: LIMITER)
+    reserve_until: datetime | None = None
+    """00_LAW §8 A6: until when an operator opened the reserve models (Pacific midnight)."""
+
+    def reserve_active(self) -> bool:
+        tiers = self.role.tiers
+        return bool(
+            tiers
+            and tiers.reserve
+            and self.reserve_until is not None
+            and self.limiter.wall() < self.reserve_until
+        )
+
+    def tier_of(self, model: str) -> str:
+        tiers = self.role.tiers
+        if tiers is not None and model in tiers.reserve:
+            return "reserve"
+        return "strong" if self.is_strong(model) else "everyday"
 
     def _record(
         self, payload: dict, cui: str, status: str, reason: str, output=None, model=None
@@ -356,7 +382,7 @@ class GeminiStatementReader:
         except GeminiError as exc:
             self._record(payload, tenant_cui, "failed", str(exc))
             raise
-        tier = "strong" if self.is_strong(model) else "everyday"
+        tier = self.tier_of(model)
         self._record(
             payload,
             tenant_cui,
@@ -394,11 +420,12 @@ class GeminiStatementReader:
         tiers = self.role.tiers
         if tiers is None:
             return [str(self.role.model)]
+        reserve = list(tiers.reserve) if self.reserve_active() else []
         if escalate:
-            return list(tiers.strong)
+            return [*tiers.strong, *reserve]
         if strong:
-            return [*tiers.strong, *tiers.everyday]
-        return [*tiers.everyday, *tiers.strong]
+            return [*tiers.strong, *tiers.everyday, *reserve]
+        return [*tiers.everyday, *tiers.strong, *reserve]
 
     def budget(self) -> list[dict[str, Any]]:
         """Each model in the order: its limits, what this process used today, what is left
@@ -413,7 +440,7 @@ class GeminiStatementReader:
             rows.append(
                 {
                     "model": model,
-                    "tier": "strong" if self.is_strong(model) else "everyday",
+                    "tier": self.tier_of(model),
                     "rpm": limit.rpm if limit else None,
                     "rpd": limit.rpd if limit else None,
                     "used_today": used,

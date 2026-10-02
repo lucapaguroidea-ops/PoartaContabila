@@ -54,6 +54,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-40 | done | WP-39 | Free-tier rate limits in the catalog; one backup model while the main one is at its limit |
 | WP-41 | done | WP-40 | Model tiers (Lite everyday, Flash strong), daily limits, second run on a read that does not tie |
 | WP-42 | done | WP-41 | Lite first always; a statement no model can read waits and is read later; reading budget |
+| WP-43 | done | WP-42 | The operator's choice when every tier is spent: wait, reserve models until midnight, or set aside |
 | WP-44 | done | WP-37 | The reading evaluation says why a read does not tie, and how many rows the model returned |
 
 ## WP details
@@ -706,6 +707,24 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   stops a spent model). The operator's on-the-fly choice when every tier is spent (reserve
   models, evaluated first) is the next WP.
 
+### WP-43 The operator's choice when every tier is spent
+- Asked by the owner 2026-10-02 (00_LAW §8 A6): reading must not stall until a procedure is
+  written.
+- Catalog: `tiers.reserve: [gemini-3.6-flash, gemini-3.5-flash]` (5 RPM, 20 RPD each) on
+  both document-reading roles. Evaluated 2026-10-02 against production: every statement they
+  answered was read right (3.6: `dense` 30/30; 3.5: `continuation` 9/9), the other five each
+  were Google 503s, so 6/6 stays `[de confirmat]`. `gemini-3-flash` and `gemini-2.5-flash`
+  answered 404: those ids are not the API's (the owner to read the exact ids in AI Studio).
+- Reader: `reserve_until`; the reserve models join the end of the order (and of a second
+  run) only while it holds; calls record `tier: reserve`; the budget lists them.
+- A parked upload's 202 and the budget carry `ask` (question + closed options) while the
+  reserve is not open. `POST /reading/{cui}/choice` (`wait` | `reserve`), recorded in
+  `domain.reading_choices` with the operator (`X-Operator-Name`, or `claude-sysbuilder`);
+  `reserve` opens until Pacific midnight, releases this tenant's waiting statements and
+  reads them at once. `POST /reading/{cui}/waiting/{wait_id}/skip {reason}` sets one aside
+  (status `skipped`, never read by a model).
+- Open: re-evaluate the reserve models after the 07:00 UTC reset for a clean 6/6; find the
+  real ids of Gemini 3 Flash and 2.5 Flash before listing them.
 ### WP-44 Why a read does not tie
 - Asked by the owner 2026-10-02: on the live evaluation `two_pages` read 60/60 lines and 6/6
   header fields but did not tie, twice; the score did not say why.
