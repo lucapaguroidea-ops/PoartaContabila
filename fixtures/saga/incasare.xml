@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Incasari>
+  <Linie>
+    <Data>20.09.2026</Data>
+    <Numar>EXT-0f0f0f0f-2</Numar>
+    <Suma>182.11</Suma>
+    <Cont>5121.01</Cont>
+    <Explicatie>Incasare CLIENT TEST SRL FX-101</Explicatie>
+    <FacturaID>fixture-iesire</FacturaID>
+    <FacturaNumar>FX-101</FacturaNumar>
+    <CodFiscal>20000005</CodFiscal>
+  </Linie>
+</Incasari>

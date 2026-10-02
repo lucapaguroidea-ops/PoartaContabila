@@ -45,12 +45,18 @@ from poarta_contabila.jev import unjudged
 from poarta_contabila.packages import BlobStore, PackageRow, PackageStore, write_once
 from poarta_contabila.period_diff import prefile_failures
 from poarta_contabila.recon.pre import PreResult
-from poarta_contabila.sinks.saga_xml import SagaXmlError, export_key, render_invoice
+from poarta_contabila.sinks.saga_xml import (
+    SagaXmlError,
+    export_key,
+    is_bank_mouth,
+    mouth_doc_class,
+    render_bank_line,
+    render_invoice,
+)
 from poarta_contabila.types import CanonicalDocument, Closed, JobRecord, Slug, WriteModule
 
 GRAPH_ID = "ingest_source_doc"
 THREAD_PREFIX = "job:"
-_INVOICE_MOUTHS = ("iesire_factura_xml", "intrare_factura_xml")
 _OUTBOUND = {"iesire", "storn_iesire"}
 _INBOUND = {"intrare", "storn_intrare"}
 
@@ -86,10 +92,16 @@ class IngestDeps:
     posted_doc: Callable[[str, str], dict[str, Any] | None] = lambda cui, saga_doc_key: None
     """(tenant cui, saga_doc_key) → what SAGA shows for it (gross; net, vat, partner_cui,
     doc_class when known), or None."""
+    treasury_account: Callable[[str, str], str | None] = lambda cui, iban: None
+    """(tenant cui, IBAN) → the SAGA treasury account it maps to (``5121.01``), or None."""
 
     def package(self, job: JobRecord, doc: CanonicalDocument, module: WriteModule) -> PackageRow:
         """Render and write once; set the job to `packaged`. Safe to replay."""
-        rendered = render_invoice(doc, module, tenant_name=self.tenant_name(doc.tenant.cui))
+        if is_bank_mouth(module.module_id):
+            cont = self.treasury_account(doc.tenant.cui, doc.maps.get("iban", ""))
+            rendered = render_bank_line(doc, module, cont=cont)
+        else:
+            rendered = render_invoice(doc, module, tenant_name=self.tenant_name(doc.tenant.cui))
         key = export_key(module.module_id, job.job_id, job.schema_version)
         t = job.tenant
         bucket_key = (
@@ -166,6 +178,14 @@ def _our_role(doc: CanonicalDocument) -> str | None:
     if doc.doc_class in _INBOUND:
         return "inbound"
     return None
+
+
+def _edited(doc: CanonicalDocument, edit: dict[str, Any]) -> CanonicalDocument:
+    """A person's edit over the document; ``maps`` keys are added or replaced, not dropped."""
+    data = {**doc.model_dump(), **edit}
+    if isinstance(edit.get("maps"), dict):
+        data["maps"] = {**doc.maps, **edit["maps"]}
+    return CanonicalDocument.model_validate(data)
 
 
 def _needs_question(deps: IngestDeps, job: JobRecord, articol: dict, verdict: dict) -> bool:
@@ -271,7 +291,7 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
                     if not answer.edit:
                         return "decision 'edit' needs an edit object"
                     try:
-                        CanonicalDocument.model_validate({**doc.model_dump(), **answer.edit})
+                        _edited(doc, answer.edit)
                     except ValidationError as exc:
                         return f"edit does not validate: {exc.errors(include_url=False)}"
                 elif answer.edit:
@@ -293,25 +313,17 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
                 deps.jobs.update(job.job_id, status="rejected")
                 return {"status": "rejected"}
             if answer.decision == "edit":
-                doc = CanonicalDocument.model_validate({**doc.model_dump(), **answer.edit})
+                doc = _edited(doc, answer.edit)
         deps.jobs.update(job.job_id, status="approved")
         return {"status": "approved", "canonical": doc.model_dump()}
 
     def package(state: IngestState) -> IngestState:
         job = deps.jobs.get(state["job_id"])
         doc = CanonicalDocument.model_validate(state["canonical"])
-        mouths = [
-            m
-            for m in cat.articol(state["articol_id"]).get("write_modules") or []
-            if m in _INVOICE_MOUTHS
-        ]
+        declared = cat.articol(state["articol_id"]).get("write_modules") or []
+        mouths = [m for m in declared if mouth_doc_class(m) == doc.doc_class]
         if len(mouths) != 1:
-            declared = cat.articol(state["articol_id"]).get("write_modules") or []
-            error = (
-                "bank mouths (incasare_xml / plata_xml) are not rendered yet: post it in SAGA"
-                if any(m in ("incasare_xml", "plata_xml") for m in declared)
-                else "no single invoice mouth"
-            )
+            error = f"no single rendered mouth for {doc.doc_class!r} among {declared}"
             deps.jobs.update(job.job_id, status="needs_human", error=error)
             return {"status": "needs_human", "error": error}
         failed = prefile_failures(cat, pre_verdict=(state.get("pre") or {}).get("verdict"))

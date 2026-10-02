@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Plati>
+  <Linie>
+    <Data>25.09.2026</Data>
+    <Numar>EXT-0f0f0f0f-1</Numar>
+    <Suma>242.00</Suma>
+    <Cont>5121.01</Cont>
+    <Explicatie>Plata FURNIZOR TEST SRL fact A-77</Explicatie>
+    <FacturaNumar>A-77</FacturaNumar>
+    <CodFiscal>20000005</CodFiscal>
+  </Linie>
+</Plati>

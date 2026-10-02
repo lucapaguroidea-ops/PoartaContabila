@@ -137,10 +137,10 @@ def test_a_two_line_statement_mints_two_movement_jobs(cat):
     pay, cash_in = out["jobs"]
     # the payment is in the SAGA journal (Banca, 15.09, 1210.00): already in the books
     assert pay["job"]["status"] == "already_in_sink"
-    # the receipt is not: a person approves, then the bank mouth is not rendered yet
+    # the receipt is not: approved as read, it names no partner, so a person posts it in SAGA
     assert cash_in["question"]["kind"] == "v3_approve"
     view = o.resume(cash_in["job"]["job_id"], {"decision": "approve", "edit": None})
-    assert view["job"]["status"] == "needs_human" and "incasare_xml" in view["job"]["error"]
+    assert view["job"]["status"] == "needs_human" and "partner" in view["job"]["error"]
     again = _post(o).json()
     assert [j["created"] for j in again["jobs"]] == [False, False]
 
@@ -163,3 +163,103 @@ def test_statement_lines_are_the_source_of_bank_movements(cat):
     assert by_number["1"] == "expected"  # the SAGA bank entry matches the statement line
     assert out["diff"]["synthetic_delta"]["5121:credit"]["delta"] == "0.00"
     assert out["diff"]["synthetic_delta"]["5121:debit"]["delta"] == "-500.00"  # not in SAGA
+
+
+# ----- WP-19: the bank mouths -----
+
+PARTNER = "20000005"  # invented, valid check digit
+BIND = {
+    "partner": {"cui": PARTNER, "name": "CLIENT TEST SRL", "role": "customer"},
+    "maps": {"factura_numar": "FX-101"},
+}
+
+
+def _bank_tenant(o, accounts=None):
+    body = {
+        "cui": CUI,
+        "name": "FIRMA TEST SRL",
+        "saga_firm_folder": "0001",
+        "bank_accounts": {"RO49 AAAA 1B31 0075 9384 0000": "5121.01"}
+        if accounts is None
+        else accounts,
+    }
+    return o.http.put(f"/tenants/{CUI}", json=body, headers=o.op)
+
+
+def _receipt(o):
+    return [j for j in _post(o).json()["jobs"] if j["job"]["status"] != "already_in_sink"][0]
+
+
+def test_a_bound_receipt_is_packaged_through_incasare_xml(cat):
+    o = _ops(cat)
+    assert _bank_tenant(o).status_code == 200
+    job_id = _receipt(o)["job"]["job_id"]
+    view = o.resume(job_id, {"decision": "edit", "edit": BIND})
+    assert view["job"]["status"] == "packaged"
+    assert view["job"]["module_id"] == "incasare_xml"
+    pulled = o.http.get("/agent/pull", headers=o.ag).json()
+    (item,) = [i for b in pulled["batches"] for i in b["items"]]
+    assert item["filename"] == "I_20-09-2026.xml"
+    xml = base64.b64decode(item["content_b64"]).decode()
+    for tag in (
+        "<Incasari>",
+        "<Data>20.09.2026</Data>",
+        "<Suma>500.00</Suma>",
+        "<Cont>5121.01</Cont>",
+        "<FacturaNumar>FX-101</FacturaNumar>",
+        f"<CodFiscal>{PARTNER}</CodFiscal>",
+    ):
+        assert tag in xml
+    assert "<FacturaID>" not in xml  # optional and unknown: not written
+    # the edit added keys to maps; the statement's IBAN stayed
+    assert o.rt.canonical(job_id).maps["iban"] == IBAN
+
+
+@pytest.mark.parametrize(
+    ("accounts", "edit", "match"),
+    [
+        ({}, BIND, "treasury account"),
+        (None, {**BIND, "maps": {}}, "name the invoice"),
+        (None, {"maps": {"factura_numar": "FX-101"}}, "partner"),
+    ],
+)
+def test_a_receipt_missing_a_binding_is_posted_by_a_person(cat, accounts, edit, match):
+    o = _ops(cat)
+    _bank_tenant(o, accounts)
+    job_id = _receipt(o)["job"]["job_id"]
+    view = o.resume(job_id, {"decision": "edit", "edit": edit})
+    assert view["job"]["status"] == "needs_human" and match in view["job"]["error"]
+    assert o.http.get("/agent/pull", headers=o.ag).json()["batches"] == []
+
+
+def test_bank_accounts_must_be_iban_to_a_class_5_account(cat):
+    o = _ops(cat)
+    assert _bank_tenant(o, {IBAN: "401"}).status_code == 422
+    assert _bank_tenant(o, {"not an iban": "5121"}).status_code == 422
+    assert _bank_tenant(o, {IBAN.lower(): "5121"}).status_code == 200
+    assert o.rt.registry.tenant(CUI).treasury_account(IBAN) == "5121"
+
+
+def test_two_receipts_of_one_day_go_in_two_runs(cat):
+    o = _ops(cat)
+    _bank_tenant(o)
+    tables = [
+        {
+            "headers": ["Data", "Descriere", "Debit", "Credit"],
+            "rows": [
+                ["20.09.2026", "Incasare CLIENT TEST SRL FX-101", "", "500,00"],
+                ["20.09.2026", "Incasare CLIENT TEST SRL FX-102", "", "210,00"],
+            ],
+        }
+    ]
+    out = _post(o, meta={**META, "closing": "5710.00"}, tables=tables).json()
+    for n, j in enumerate(out["jobs"], 1):
+        edit = {**BIND, "maps": {"factura_numar": f"FX-10{n}"}}
+        assert (
+            o.resume(j["job"]["job_id"], {"decision": "edit", "edit": edit})["job"]["status"]
+            == "packaged"
+        )
+    pulled = o.http.get("/agent/pull", headers=o.ag).json()
+    names = [i["filename"] for b in pulled["batches"] for i in b["items"]]
+    assert names == ["I_20-09-2026.xml"]
+    assert [h["reason"] for h in pulled["held"]] == ["I_20-09-2026.xml is already in this run"]

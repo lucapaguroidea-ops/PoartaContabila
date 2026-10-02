@@ -91,8 +91,8 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
   payment that names no partner and no invoice, negative quantities in an imported invoice
   (storno), the length and characters allowed in `FacturaID`. The sample file above settles
   the formats for invoices.
-- Code takes: WP-03 writes only tags listed above (`sinks/saga_xml.py`); WP-19 builds the
-  receipts and payments mouths from this item.
+- Code takes: WP-03 and WP-19 write only tags listed above (`sinks/saga_xml.py`: invoices;
+  receipts and payments without `ContClient` / `ContFurnizor` / `Moneda`).
 
 ## R2 · Jev (TypeSafe AI System One) API — WP-20
 
