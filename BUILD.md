@@ -30,7 +30,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-17 | parked | — | Engagement backlog / `chat:` face |
 | WP-18 | parked | — | Take-on / year-end / D406 producer / FX engine |
 | WP-D3 | decision | WP-11 | Non-payer RC books: 4423 vs 446x on copy-firm note |
-| WP-19 | todo | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (blocked: R1 unread) |
+| WP-19 | done | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (R1) |
 | WP-20 | in-progress | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; wire waits on R2 |
 | WP-21 | done | WP-13 | Statement PDFs read by Google Document AI into the extract contract |
 
@@ -55,6 +55,14 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Exporter in `sinks/saga_xml.py`. Tags only from a successful copy-firm import.
 - Record `fixture:` path and `approved_at` on the module row after human green. Still `status: draft` until that happens; then `active`.
 - Tests: XML well-formed; FurnizorCIF/ClientCIF routing documented in a unit test with synthetic CUIs.
+- Corrected 2026-10-02 from R1 (the manual's "Import date"): every tag written is quoted there, in
+  its order. `FacturaCotaTVA` (not in the manual) is gone; `ProcTVA` on every line (a line without
+  a rate is refused); `FacturaID` = the job id after `<Detalii>`, so a receipt or payment can name
+  the invoice (WP-19). Both fixtures regenerated from the renderer.
+- Open: the owner's copy-firm import of both fixtures (sync "Nr.+data"), and SAGA's own sample XML
+  (Ieșiri → Tipărire → "Formular PDF" → `TEMP\Facturi`, invented data) to settle date and decimal
+  formats and the `RO` prefix. `FacturaIndexSPV` waits for a source of the SPV upload index (the
+  SPV zip reader and the register do not keep one).
 
 ### WP-04 Ingest to packaged
 - Nodes as ARCHITECTURE.md §2. Jev mocked in tests.
@@ -188,19 +196,37 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   are witness documents, so PRE finds lines already booked (date + amount + side) and the period
   diff matches them; expected lines count on 5121. A bank entry whose journal lines all fall under a
   line rule is `explained_sink_only`. Operator `POST /extras/{cui}` (PDF + tables + header).
-- Open: Document AI reads the PDF since WP-21 (else the tables come with the upload); the bank mouths
-  (`incasare_xml` / `plata_xml`) are not rendered, so an unbooked line stops at `needs_human`; 5311
-  (cash) statements and foreign-currency accounts are not read.
+- Open: Document AI reads the PDF since WP-21 (else the tables come with the upload); an unbooked
+  line takes a bank mouth only once bound (WP-19), else it stops at `needs_human`; 5311 (cash)
+  statements and foreign-currency accounts are not read.
 
 ### WP-19 Bank mouths
-- Read the SAGA manual's receipts/payments import (`P_<data>.xml`, root `<Plati>`, receipts
-  counterpart) and quote it in `RESEARCH_LOG.md` R1 first; tags only from that page.
+- Tags only from `RESEARCH_LOG.md` R1: receipts `I_<data>.xml` `<Incasari><Linie>`, payments
+  `P_<data>.xml` `<Plati><Linie>`.
 - Render the statement-line documents (`incasare` / `plata`, `extract/statement.py`) next to the
   invoice renderer in `sinks/saga_xml.py`; write once per `export_key`; the ingest `package`
   node uses these mouths instead of stopping at `needs_human`. Fixtures
   `fixtures/saga/incasare.xml` / `plata.xml` (synthetic). Modules stay `draft` until a green
   copy-firm import, which the owner does.
-- Blocked 2026-10-01: the manual's host was denied by the build session's network policy (R1).
+- Blocked 2026-10-01 (the manual's host was denied); unblocked 2026-10-02: R1 read from the
+  owner's print of SAGA C's installed help.
+- Built: `sinks/saga_xml.py` `render_bank_line` — one `<Linie>` per Job (`Data`, `Numar`, `Suma`,
+  `Cont`, `Explicatie`, `FacturaID`?, `FacturaNumar`?, `CodFiscal`; optional tags only with a
+  value; `ContClient` / `ContFurnizor` / `Moneda` not written). Poartă (decided by the owner
+  2026-10-02): a line is packaged only with a partner CUI bound by a person, the invoice it
+  settles (`maps.factura_id` = the invoice Job's `FacturaID`, or `maps.factura_numar`), and a
+  class-5 treasury account for its IBAN (`Tenant.bank_accounts`, `PUT /tenants/{cui}`); fees,
+  taxes, salaries, transfers and unknown payers stay `needs_human` (posted in SAGA). The
+  `package` node picks the one declared mouth whose class is the document's; a `v3_approve`
+  edit adds `maps` keys instead of dropping the statement's. `/agent/pull` holds a second file
+  of the same name for the next run (two receipts of one day are both `I_<data>.xml`).
+  Fixtures `incasare.xml` (settles `iesire.xml`, by `FacturaID`) and `plata.xml` (settles
+  `intrare.xml`, by number), so one copy-firm session proves invoices and their settlement.
+- `Numar` is the bank's reference (`maps.referinta`, from the statement's reference column) when
+  no other line of the statement shares it, else the line's own number (`EXT-…`): with sync
+  "Nr.+data" SAGA would skip a second document of the same number and date.
+- Open: both modules `draft` until the owner's copy-firm import (`docs/COPY_FIRM_TEST.md`);
+  nothing proposes the partner or the invoice (a person binds both).
 
 ### WP-20 Jev Layer 1 + Layer 2
 - `v3_judge` → `IngestDeps.judge`; `v2_declaration_gate` → `CloseDeps.jev_v2`. JSON only,

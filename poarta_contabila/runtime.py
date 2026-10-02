@@ -126,6 +126,7 @@ class Runtime:
             checkpointer=self.checkpointer,
         )
         self.deps.posted_doc = self.agent.posted_doc
+        self.deps.treasury_account = self._treasury_account
 
     # -- helpers --
 
@@ -134,6 +135,10 @@ class Runtime:
         if tenant is None:
             raise IngestRefused(f"tenant {cui} is not registered")
         return tenant.name
+
+    def _treasury_account(self, cui: str, iban: str) -> str | None:
+        tenant = self.registry.tenant(cui)
+        return tenant.treasury_account(iban) if tenant else None
 
     @staticmethod
     def _cfg(job_id: str) -> dict:

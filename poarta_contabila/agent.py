@@ -262,6 +262,7 @@ class AgentService:
         backups: dict[tuple[str, str], set[str]] = {}
         held: list[HeldItem] = []
         counts: dict[tuple[str, str, str], int] = {}
+        names: dict[tuple[str, str], set[str]] = {}
         closed: dict[str, set[str]] = {}
         for job in self.jobs.by_status("packaged"):
             cui, folder = job.tenant.cui, job.tenant.saga_firm_folder
@@ -279,6 +280,14 @@ class AgentService:
                         HeldItem(job_id=job.job_id, reason=f"{module.module_id} run is full")
                     )
                     continue
+                filename = row.bucket_key.rsplit("/", 1)[-1]
+                if filename in names.setdefault((cui, folder), set()):
+                    # one import folder per run: two receipts of one day are both I_<data>.xml
+                    held.append(
+                        HeldItem(job_id=job.job_id, reason=f"{filename} is already in this run")
+                    )
+                    continue
+                names[(cui, folder)].add(filename)
                 counts[key] = counts.get(key, 0) + 1
                 groups.setdefault((cui, folder), []).append(
                     PullItem(
@@ -288,7 +297,7 @@ class AgentService:
                         saga_path=module.saga_path,
                         period=job.period,
                         bucket_key=row.bucket_key,
-                        filename=row.bucket_key.rsplit("/", 1)[-1],
+                        filename=filename,
                         content_b64=base64.b64encode(self.blobs.get(row.bucket_key)).decode(),
                     )
                 )

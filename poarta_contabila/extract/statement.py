@@ -231,5 +231,16 @@ def statement_line_document(
             content_type="application/pdf",
             source_hash=source_hash,
         ),
-        maps={"iban": statement.meta.iban, "statement_id": statement.statement_id},
+        maps={
+            "iban": statement.meta.iban,
+            "statement_id": statement.statement_id,
+            **({"referinta": line.reference} if _unique_reference(statement, line) else {}),
+        },
     )
+
+
+def _unique_reference(statement: Statement, line: StatementLine) -> bool:
+    """The bank's reference names this line only if no other line of the statement shares it
+    (SAGA's "Nr.+data" sync would skip a second document with the same number and date)."""
+    ref = (line.reference or "").strip()
+    return bool(ref) and sum((ln.reference or "").strip() == ref for ln in statement.lines) == 1

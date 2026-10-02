@@ -9,13 +9,14 @@ balance of the same product) and the latest SPV register.
 from __future__ import annotations
 
 import hashlib
+import re
 import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
 from poarta_contabila.packages import BlobStore
 from poarta_contabila.recon.pre import Witnesses
@@ -36,12 +37,35 @@ Product = Literal["saga", "nextup"]
 ExportKind = Literal["rj", "balanta", "spv_register", "jurnal_cumparari", "jurnal_vanzari"]
 
 
+def iban_key(raw: str) -> str:
+    """An IBAN as printed (spaces, lower case) → the compact form used as a key."""
+    return "".join(str(raw or "").split()).upper()
+
+
 class Tenant(Closed):
     cui: Cui
     name: str = Field(min_length=1)
     saga_firm_folder: str = Field(min_length=1)
     punct: str = "default"
     book_of_record: Product = "saga"
+    bank_accounts: dict[str, str] = Field(default_factory=dict)
+    """IBAN → the SAGA treasury account its lines post to (``5121.01``), for the bank mouths."""
+
+    @field_validator("bank_accounts")
+    @classmethod
+    def _bank_accounts(cls, value: dict[str, str]) -> dict[str, str]:
+        out = {}
+        for iban, cont in value.items():
+            key = iban_key(iban)
+            if not re.fullmatch(r"[A-Z]{2}\d{2}[A-Z0-9]{10,30}", key):
+                raise ValueError(f"not an IBAN: {iban!r}")
+            if not re.fullmatch(r"5\d{3}(\.[0-9A-Za-z]+)*", cont):
+                raise ValueError(f"{cont!r} is not a class-5 treasury account")
+            out[key] = cont
+        return out
+
+    def treasury_account(self, iban: str) -> str | None:
+        return self.bank_accounts.get(iban_key(iban))
 
     def ref(self) -> TenantRef:
         return TenantRef(cui=self.cui, punct=self.punct, saga_firm_folder=self.saga_firm_folder)
