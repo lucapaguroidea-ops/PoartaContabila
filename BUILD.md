@@ -38,6 +38,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-24 | done | WP-20 | Model roles: one pinned model per role, synthetic-only guard, dry-run trace |
 | WP-25 | done | WP-24 | Role cards: what each role is told, checked, hashed into the cache key |
 | WP-26 | done | WP-25 | Shadow roles: every model role observed at its place in the flow (dry) |
+| WP-27 | done | WP-23 | `reconcile_sink` POST stage: how SAGA posted an acked document (`recon_how_mismatch`) |
 
 ## WP details
 
@@ -330,9 +331,8 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - 2026-10-02: `monthly_close` locks a month with documents still waiting on a PRE answer as
   material (blocker `reconcile_sink: n document(s) wait on a PRE answer`, `CloseDeps.recon_open`):
   answered on the recon thread, never closed around.
-- Open: the POST stage (`recon_post_*`, `recon_how_mismatch`: which accounts SAGA used against
-  the expected ones); the review goes through the `jev_recon_review` role (WP-24), which sends
-  nothing until the live sender exists.
+- Open: the review goes through the `jev_recon_review` role (WP-24), which sends nothing until
+  the live sender exists. POST stage: WP-27.
 
 ### WP-24 Model roles (00_LAW §3.5, changed by the owner 2026-10-02)
 - Decided by the owner 2026-10-02: Jev = System One (routing, classification of JSON /
@@ -390,6 +390,26 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   `recon_review_contest` (reconcile_sink), `v2_close` (monthly_close).
 - Open: `ocr_decont_split` and `sys2_draft_rule` have no call site (no decont triage over HTTP;
   `explained_rule` is not asked as its own question yet).
+
+### WP-27 reconcile_sink, POST stage
+- Built: `recon/post.py` `how_check` — for an `acked` Job, its posting's lines in the registru
+  jurnal (invoice journal, same date, number at an accepted level other than `digits_core`)
+  and the synthetic accounts they use, against the articol's `reconcile.expect_accounts` (else
+  the POST profile's `fallback_accounts`), matched by prefix: `require_all_accounts: true` =
+  every one, `false` = at least one (`[de confirmat]`). `how_ok`; `how_mismatch` (no posting in a
+  covered month, accounts off, none expected, no single POST profile); `need_rj_export` (month
+  not covered, or no journal lines — the report pack's journals carry no accounts;
+  `registry.rj_eye` reads the latest journal upload). The snapshot is the profile + the
+  posting's own lines, so a verdict and a person's answer hold until that posting changes.
+  On `recon:{cui}:{period}` (`reconcile.PostDeps`): each pass checks the period's acked jobs;
+  `how_ok` is stored silently (stage `post`); missing months join `need_rj_export`; a mismatch
+  asks `recon_how_mismatch` after the PRE questions: `ack_mismatch` (the posting stands:
+  settled) or `open_storno` (correct it in SAGA: stays open, re-checked every pass, not asked
+  again for the same posting). `Runtime.post_open` → `monthly_close` is material while a
+  posting is unchecked, unanswered or waiting on its storno. `GET /recon/…` shows `post_open`.
+  `ReconStore.get`; Postgres `put_once` returns the stored verdict as its own type.
+- Open: the storno itself is the person's in SAGA (the storno mouths wait on the copy firm);
+  amounts per account are not compared (PRE and intent_check compare totals).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

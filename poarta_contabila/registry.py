@@ -225,6 +225,16 @@ def export_row(
     )
 
 
+def rj_eye(registry, blobs: BlobStore, cui: str) -> ExportEye | None:
+    """The tenant's latest registru jurnal as an eye with its account lines (POST reads
+    which accounts SAGA used; the report pack's journals carry none). None without one."""
+    rj = registry.latest_export(cui, "rj")
+    if rj is None or rj.product is None:
+        return None
+    lines = _with_file(blobs.get(rj.bucket_key), rj.bucket_key, _READERS[(rj.product, "rj")])
+    return ExportEye(product=rj.product, lines=lines, cui=cui, periods=rj.periods)
+
+
 def witnesses_provider(registry, blobs: BlobStore):
     """``Witnesses`` for a job's tenant, read fresh from the latest uploads."""
 

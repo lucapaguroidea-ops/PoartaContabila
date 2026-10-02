@@ -54,7 +54,8 @@ from poarta_contabila.jev import (
 from poarta_contabila.model_roles import InMemoryModelCallStore, ModelGateway, brief
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
-from poarta_contabila.recon.pre import PreResult, ReconStore, make_pre_check
+from poarta_contabila.recon.post import PostResult, how_check
+from poarta_contabila.recon.pre import PreResult, ReconStore, make_pre_check, pre_profile
 from poarta_contabila.recon.settle import (
     SETTLES,
     InvoiceJob,
@@ -62,13 +63,14 @@ from poarta_contabila.recon.settle import (
     propose_settlement,
     settle_key,
 )
-from poarta_contabila.reconcile import ReconDeps, WaitingJob, build_reconcile_graph
+from poarta_contabila.reconcile import PostDeps, ReconDeps, WaitingJob, build_reconcile_graph
 from poarta_contabila.registry import (
     ExportKind,
     Product,
     Tenant,
     check_export,
     export_row,
+    rj_eye,
     witnesses_provider,
 )
 from poarta_contabila.triage import Pack, decide_emit
@@ -179,9 +181,10 @@ class Runtime:
                 ),
                 codit_put=self.codits.put if self.codits is not None else None,
                 observe_question=self.gateway.observe_question,
-                recon_open=lambda cui, period: [
-                    w.job.job_id for w in self.recon_waiting(cui, period)
-                ],
+                recon_open=lambda cui, period: (
+                    [w.job.job_id for w in self.recon_waiting(cui, period)]
+                    + self.post_open(cui, period)
+                ),
             ),
             checkpointer=self.checkpointer,
         )
@@ -198,6 +201,12 @@ class Runtime:
                 export_months=self._rj_export_months,
                 review=make_recon_review(self.jev),
                 observe_question=self.gateway.observe_question,
+                post=PostDeps(
+                    waiting=lambda cui, period: self.post_waiting(cui, period),
+                    check=lambda w: self.post_check(w),
+                    known=self._post_known,
+                    settle=self._settle_post,
+                ),
             ),
             checkpointer=self.checkpointer,
         )
@@ -283,6 +292,64 @@ class Runtime:
             )
         return sorted(out, key=lambda w: (w.doc.date, w.job.job_id))
 
+    def _thread_job(self, job: JobRecord) -> WaitingJob | None:
+        values = self.ingest.get_state(self._cfg(job.job_id)).values
+        if "canonical" not in values:
+            return None
+        source = self.catalog.source_docs.get(values.get("source_doc_id")) or {}
+        return WaitingJob(
+            job=job,
+            doc=CanonicalDocument.model_validate(values["canonical"]),
+            fiscal_class=source.get("fiscal_class"),
+            axes=dict(values.get("axes") or {}),
+        )
+
+    def post_waiting(self, cui: str, period: str) -> list[WaitingJob]:
+        """The period's acked jobs: SAGA shows them validated, POST checks how (WP-27)."""
+        out = [
+            w
+            for job in self.jobs.for_period(cui, period)
+            if job.status == "acked" and (w := self._thread_job(job)) is not None
+        ]
+        return sorted(out, key=lambda w: (w.doc.date, w.job.job_id))
+
+    def post_check(self, w: WaitingJob) -> PostResult:
+        profile = pre_profile(
+            self.catalog, w.doc, fiscal_class=w.fiscal_class, axes=w.axes, stage="post"
+        )
+        articol = self.catalog.articole.get(w.job.articol_id or "") or {}
+        eye = rj_eye(self.registry, self.blobs, w.job.tenant.cui)
+        return how_check(w.doc, articol, profile, eye, w.job.tenant.cui)
+
+    def _post_known(self, job_id: str, snapshot_id: str) -> bool:
+        if self.recon is None:
+            return False
+        return any(
+            self.recon.get(job_id, "post", sid) is not None
+            for sid in (snapshot_id, f"{snapshot_id}:person")
+        )
+
+    def _settle_post(self, w: WaitingJob, result: PostResult) -> None:
+        if self.recon is not None:
+            self.recon.put_once(w.job.job_id, "post", result)
+
+    def post_open(self, cui: str, period: str) -> list[str]:
+        """Acked jobs whose posting is not settled: unchecked (no journal), an unanswered
+        mismatch, or a requested storno SAGA does not show yet."""
+        out = []
+        for w in self.post_waiting(cui, period):
+            res = self.post_check(w)
+            if res.verdict == "how_ok":
+                continue
+            answer = (
+                self.recon.get(w.job.job_id, "post", f"{res.snapshot_id}:person")
+                if self.recon is not None and res.verdict == "how_mismatch"
+                else None
+            )
+            if answer is None or str(answer.get("reason", "")).startswith("person: storno"):
+                out.append(w.job.job_id)
+        return out
+
     def _settle_pre(self, w: WaitingJob, result: PreResult) -> None:
         """Hand a final PRE verdict back to the job's own thread (glue = job id)."""
         if self.recon is not None:
@@ -319,6 +386,7 @@ class Runtime:
             "question": question,
             "settled": state.values.get("settled") or [],
             "waiting": [w.job.job_id for w in self.recon_waiting(cui, period)],
+            "post_open": self.post_open(cui, period),
         }
 
     def start_recon(self, cui: str, period: str) -> dict[str, Any]:

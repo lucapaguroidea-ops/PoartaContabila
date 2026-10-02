@@ -33,12 +33,13 @@ from pydantic import Field
 
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.hitl import ask
+from poarta_contabila.recon.post import PostResult
 from poarta_contabila.recon.pre import PreResult
 from poarta_contabila.types import CanonicalDocument, Closed, JobRecord
 
 GRAPH_ID = "reconcile_sink"
 THREAD_PREFIX = "recon:"
-_KINDS = ("need_rj_export", "recon_ambiguous", "recon_review_contest")
+_KINDS = ("need_rj_export", "recon_ambiguous", "recon_review_contest", "recon_how_mismatch")
 
 
 @dataclass(frozen=True)
@@ -75,10 +76,16 @@ class ContestResume(Closed):
     action: Literal["already_posted", "override_absent", "how_ok", "ack_mismatch"]
 
 
+class HowMismatchResume(Closed):
+    ack_mismatch: bool  # SAGA's posting stands as it is
+    open_storno: bool  # it must be corrected in SAGA (stays open until the posting changes)
+
+
 _MODELS = {
     "need_rj_export": NeedExportResume,
     "recon_ambiguous": AmbiguousResume,
     "recon_review_contest": ContestResume,
+    "recon_how_mismatch": HowMismatchResume,
 }
 
 
@@ -99,6 +106,21 @@ class ReconDeps:
         None
     )
     """(HITL kind, question, tenant cui): the System Two roles that would explain it."""
+    post: PostDeps | None = None  # the POST stage; None = PRE only
+
+
+@dataclass
+class PostDeps:
+    """POST stage (WP-27): how SAGA posted the period's acked documents."""
+
+    waiting: Callable[[str, str], list[WaitingJob]]
+    """(cui, period) → the period's acked jobs."""
+    check: Callable[[WaitingJob], PostResult]
+    """how_check against the registru jurnal as it is now."""
+    known: Callable[[str, str], bool]
+    """(job_id, snapshot_id) → a verdict (det how_ok or a person's answer) is stored for it."""
+    settle: Callable[[WaitingJob, PostResult], None]
+    """Store a POST verdict once per (job, post, snapshot)."""
 
 
 class ReconState(TypedDict, total=False):
@@ -108,7 +130,7 @@ class ReconState(TypedDict, total=False):
     job_id: str
     question: dict[str, Any]
     det: dict[str, Any]
-    settled: list[dict[str, str]]
+    settled: list[dict[str, str]]  # PRE entries; POST entries also carry "stage": "post"
     status: str
 
 
@@ -156,6 +178,21 @@ def build_reconcile_graph(deps: ReconDeps, *, checkpointer: Any):
             else:
                 ambiguous.append((w, det))
 
+        mismatches: list[tuple[WaitingJob, PostResult]] = []
+        for w in deps.post.waiting(cui, period) if deps.post is not None else []:
+            res = deps.post.check(w)
+            if deps.post.known(w.job.job_id, res.snapshot_id):
+                continue
+            if res.verdict == "how_ok":
+                deps.post.settle(w, res)
+                settled.append(
+                    {"job_id": w.job.job_id, "verdict": "how_ok", "by": "det", "stage": "post"}
+                )
+            elif res.verdict == "need_rj_export":
+                missing[w.job.job_id] = res.missing
+            else:
+                mismatches.append((w, res))
+
         if missing:
             months = sorted({m for ms in missing.values() for m in ms})
             question = {
@@ -198,6 +235,29 @@ def build_reconcile_graph(deps: ReconDeps, *, checkpointer: Any):
                 "question": question,
                 "settled": settled,
             }
+        if mismatches:
+            w, res = mismatches[0]
+            question = {
+                "job_id": w.job.job_id,
+                "document": _brief(w.doc),
+                "reason": res.reason,
+                "expected": res.expected,
+                "require_all": res.require_all,
+                "used": res.used,
+                "journal_rows": res.rows,
+                "choices": {
+                    "ack_mismatch": "SAGA's posting stands as it is",
+                    "open_storno": "it must be corrected in SAGA (stays open until it changes)",
+                },
+                "waiting": len(mismatches),
+            }
+            return {
+                "kind": "recon_how_mismatch",
+                "job_id": w.job.job_id,
+                "det": res.model_dump(),
+                "question": question,
+                "settled": settled,
+            }
         return {"kind": "", "status": "clear", "settled": settled}
 
     def ask_node(state: ReconState) -> ReconState:
@@ -223,6 +283,10 @@ def build_reconcile_graph(deps: ReconDeps, *, checkpointer: Any):
                 elif ids:
                     return "override_absent names no sink line"
                 return None
+            if kind == "recon_how_mismatch":
+                if answer.ack_mismatch == answer.open_storno:
+                    return "choose ack_mismatch (the posting stands) or open_storno (correct it)"
+                return None
             if answer.action in ("how_ok", "ack_mismatch"):
                 return "how_ok / ack_mismatch answer a POST question; this one is PRE"
             return None
@@ -237,6 +301,31 @@ def build_reconcile_graph(deps: ReconDeps, *, checkpointer: Any):
         if kind == "need_rj_export":
             return {"status": "export_named", "settled": settled}  # load_window reads it now
         answer = state["question"]["answer"]
+        if kind == "recon_how_mismatch":
+            post = deps.post
+            w = (
+                {x.job.job_id: x for x in post.waiting(state["cui"], state["period"])}
+                if post is not None
+                else {}
+            ).get(state["job_id"])
+            if w is None:
+                return {"status": "gone", "settled": settled}
+            res = PostResult.model_validate(state["det"])
+            storno = answer["open_storno"]
+            person = res.model_copy(
+                update={
+                    "reason": "person: storno requested: correct the posting in SAGA"
+                    if storno
+                    else "person: acknowledged: SAGA's posting stands",
+                    "snapshot_id": f"{res.snapshot_id}:person",
+                }
+            )
+            post.settle(w, person)
+            verdict = "storno_requested" if storno else "how_mismatch_acknowledged"
+            settled.append(
+                {"job_id": w.job.job_id, "verdict": verdict, "by": "person", "stage": "post"}
+            )
+            return {"status": "settled", "settled": settled}
         w = by_id(state["cui"], state["period"]).get(state["job_id"])
         if w is None:  # settled meanwhile (e.g. by another pass): nothing to hand back
             return {"status": "gone", "settled": settled}

@@ -78,16 +78,22 @@ class Witnesses:
 
 
 class ReconStore(Protocol):
-    def put_once(self, job_id: str, stage: str, result: PreResult) -> PreResult: ...
+    def put_once(self, job_id: str, stage: str, result: Any) -> Any: ...
+
+    def get(self, job_id: str, stage: str, snapshot_id: str) -> dict[str, Any] | None: ...
 
 
 @dataclass
 class InMemoryReconStore:
     rows: dict[tuple[str, str, str], PreResult] = field(default_factory=dict)
 
-    def put_once(self, job_id: str, stage: str, result: PreResult) -> PreResult:
+    def put_once(self, job_id: str, stage: str, result: Any) -> Any:
         """Store the verdict for this sink snapshot; a replay returns the first one."""
         return self.rows.setdefault((job_id, stage, result.snapshot_id), result)
+
+    def get(self, job_id: str, stage: str, snapshot_id: str) -> dict[str, Any] | None:
+        row = self.rows.get((job_id, stage, snapshot_id))
+        return row.model_dump() if row is not None else None
 
 
 class PostgresReconStore:
@@ -99,7 +105,8 @@ class PostgresReconStore:
         self._dsn = dsn
         self._psycopg = psycopg
 
-    def put_once(self, job_id: str, stage: str, result: PreResult) -> PreResult:
+    def put_once(self, job_id: str, stage: str, result: Any) -> Any:
+        """Store once; returns the stored verdict as *result*'s own type (PRE or POST)."""
         with self._psycopg.connect(self._dsn, autocommit=True) as conn:
             conn.execute(
                 "INSERT INTO domain.recon_verdicts (job_id, stage, sink_snapshot_id, body)"
@@ -111,7 +118,16 @@ class PostgresReconStore:
                 " WHERE job_id = %s AND stage = %s AND sink_snapshot_id = %s",
                 (job_id, stage, result.snapshot_id),
             ).fetchone()
-        return PreResult.model_validate(body, strict=False)
+        return type(result).model_validate(body, strict=False)
+
+    def get(self, job_id: str, stage: str, snapshot_id: str) -> dict[str, Any] | None:
+        with self._psycopg.connect(self._dsn) as conn:
+            row = conn.execute(
+                "SELECT body FROM domain.recon_verdicts"
+                " WHERE job_id = %s AND stage = %s AND sink_snapshot_id = %s",
+                (job_id, stage, snapshot_id),
+            ).fetchone()
+        return row[0] if row else None
 
 
 # ----- profile -----
@@ -142,8 +158,9 @@ def pre_profile(
     fiscal_class: str | None,
     axes: dict[str, str],
     allow_draft: bool = True,
+    stage: Literal["pre", "post"] = "pre",
 ) -> dict[str, Any] | None:
-    """The one PRE profile for this document, or None (no row, or a tie)."""
+    """The one profile of *stage* (PRE by default) for this document, or None."""
     role = "inbound" if doc.doc_class in _INBOUND else "outbound"
     ctx = MatchContext(
         graph_id=GRAPH_ID,
@@ -152,7 +169,7 @@ def pre_profile(
         is_storno=doc.is_storno,
         axes=axes,
         day=doc.date,
-        stage="pre",
+        stage=stage,
     )
     rows = match_articole(cat, ctx, allow_draft=allow_draft)
     if len(rows) != 1:
