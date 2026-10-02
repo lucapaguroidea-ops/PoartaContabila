@@ -20,7 +20,7 @@ from pydantic import Field
 
 from poarta_contabila.types import Closed
 
-Backend = Literal["document_ai", "ubl", "mt940", "docling", "none"]
+Backend = Literal["document_ai", "gemini", "ubl", "mt940", "docling", "none"]
 
 
 class ExtractMeta(Closed):

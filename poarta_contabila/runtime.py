@@ -34,6 +34,7 @@ from poarta_contabila.extract.contract import (
     write_extraction,
 )
 from poarta_contabila.extract.document_ai import DocumentAiError, shows_iban
+from poarta_contabila.extract.gemini import GeminiError, gemini_reader_from_env
 from poarta_contabila.extract.statement import (
     StatementError,
     StatementMeta,
@@ -54,7 +55,7 @@ from poarta_contabila.jev import (
     role_pin,
     role_transport,
 )
-from poarta_contabila.model_roles import InMemoryModelCallStore, ModelGateway, brief
+from poarta_contabila.model_roles import CALL_MODES, InMemoryModelCallStore, ModelGateway, brief
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
 from poarta_contabila.recon.post import PostResult, how_check
@@ -113,9 +114,10 @@ class Runtime:
     filings: Any = None  # InMemoryFilingStore | PostgresFilingStore
     jev: Any = None  # jev.Jev; None = not wired (fail closed)
     statement_reader: Any = None  # (pdf, *, tenant_cui) -> Extraction; DocumentAiReader
+    gemini_reader: Any = None  # GeminiStatementReader: synthetic tenants only (WP-36)
     extracts: Any = None  # InMemoryExtractStore | PostgresExtractStore
     model_calls: Any = None  # InMemoryModelCallStore | PostgresModelCallStore
-    model_mode: str = "off"  # MODEL_CALLS: off | dry (record, send nothing)
+    model_mode: str = "off"  # MODEL_CALLS: off | dry (record only) | live (WP-36)
     answers: Any = None  # InMemoryAnswerLog | PostgresAnswerLog (WP-33)
 
     def __post_init__(self) -> None:
@@ -123,13 +125,13 @@ class Runtime:
             self.model_calls = InMemoryModelCallStore()
         if self.answers is None:
             self.answers = InMemoryAnswerLog()
-        if self.model_mode not in ("off", "dry"):
+        if self.model_mode not in CALL_MODES:
             self.model_mode = "off"  # an unknown mode calls nothing
-        if self.jev is None and self.model_mode == "dry":
+        if self.jev is None and self.model_mode in ("dry", "live"):
             self.jev = Jev(
                 transport=role_transport(
                     self.catalog.model_roles,
-                    mode="dry",
+                    mode=self.model_mode,
                     calls=self.model_calls,
                     synthetic=self._synthetic,
                 ),
@@ -542,24 +544,52 @@ class Runtime:
         ``(source_hash, document_ai)``, reused after; returns it with the PDF's bucket key."""
         cui = tenant.cui
         source_hash = hashlib.sha256(pdf).hexdigest()
-        row = self.extracts.get(source_hash, "document_ai")
-        if row is not None:
+        for backend in ("document_ai", "gemini"):
+            row = self.extracts.get(source_hash, backend)
+            if row is None:
+                continue
             if not str(row["prefix"]).startswith(f"tenants/{cui}/"):
                 raise IngestRefused("this PDF was read for another tenant")
             return read_extraction(self.blobs, row["prefix"]), f"{row['prefix']}/statement.pdf"
-        if self.statement_reader is None:
+        reader = self.reader_for(cui)
+        if reader is None:
             raise IngestRefused(
-                "no statement reader is wired (DOCUMENT_AI_PROCESSOR): send the extract tables"
+                "no statement reader is wired (DOCUMENT_AI_PROCESSOR, or Gemini for synthetic"
+                " tenants with MODEL_CALLS=live): send the extract tables"
             )
         try:
-            extraction = self.statement_reader(pdf, tenant_cui=cui)
-        except DocumentAiError as exc:
+            extraction = reader(pdf, tenant_cui=cui)
+        except (DocumentAiError, GeminiError) as exc:
             raise IngestRefused(str(exc)) from exc
         prefix = f"tenants/{cui}/{tenant.punct}/{period}/extras/source/{source_hash}"
         self.blobs.put(f"{prefix}/statement.pdf", pdf)
         write_extraction(self.blobs, prefix, extraction)
         self.extracts.put(extraction.meta, prefix)  # the row after the files it proves
         return extraction, f"{prefix}/statement.pdf"
+
+    def _observe_reading(self, cui: str, pdf: bytes, meta: StatementMeta) -> None:
+        """Where the reader is not called: what Gemini would be given (the file by
+        fingerprint, never its bytes)."""
+        self.gateway.observe(
+            "ocr_extract",
+            {
+                "tenant_cui": cui,
+                "file": {
+                    "sha256": hashlib.sha256(pdf).hexdigest(),
+                    "bytes": len(pdf),
+                    "content_type": "application/pdf",
+                },
+                "header": meta.model_dump(),
+            },
+            cui,
+        )
+
+    def reader_for(self, cui: str) -> Any:
+        """Who reads this tenant's statement PDFs: Gemini direct for a synthetic tenant when
+        it is wired (WP-36), else Document AI; never Gemini for a client tenant."""
+        if self.gemini_reader is not None and self._synthetic(cui):
+            return self.gemini_reader
+        return self.statement_reader
 
     def ingest_statement(
         self,
@@ -580,19 +610,8 @@ class Runtime:
             raise IngestRefused("the statement source must be the bank's PDF")
         period = meta.statement_date[:7]
         pdf_key = None
-        self.gateway.observe(  # shadow: what Gemini would be given (the file by fingerprint)
-            "ocr_extract",
-            {
-                "tenant_cui": cui,
-                "file": {
-                    "sha256": hashlib.sha256(pdf).hexdigest(),
-                    "bytes": len(pdf),
-                    "content_type": "application/pdf",
-                },
-                "header": meta.model_dump(),
-            },
-            cui,
-        )
+        if tables is not None or self.reader_for(cui) is not self.gemini_reader:
+            self._observe_reading(cui, pdf, meta)
         if tables is None:
             extraction, pdf_key = self.read_statement(tenant, period, pdf)
             if not extraction.meta.identity_ok:
@@ -981,11 +1000,15 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         closes=PostgresCloseStore(dsn),
         codits=PostgresCoditStore(dsn),
         filings=PostgresFilingStore(dsn),
-        jev=None if model_mode == "dry" else jev_from_env(PostgresJevCache(dsn)),
+        jev=None if model_mode in ("dry", "live") else jev_from_env(PostgresJevCache(dsn)),
         model_calls=PostgresModelCallStore(dsn),
         model_mode=model_mode,
         statement_reader=document_ai_from_env(),
         extracts=PostgresExtractStore(dsn),
         answers=PostgresAnswerLog(dsn),
+    )
+    # WP-36: Gemini reads synthetic tenants' statements directly (MODEL_CALLS=live + key)
+    runtime.gemini_reader = gemini_reader_from_env(
+        catalog.model_roles, runtime.model_calls, runtime._synthetic, runtime.model_mode
     )
     return runtime, "ok"

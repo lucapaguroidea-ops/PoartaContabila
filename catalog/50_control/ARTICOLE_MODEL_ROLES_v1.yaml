@@ -22,8 +22,8 @@ valid_from: "2026-10-02"
 enums:
   system: [system_one, system_two, document_reading]
   status: [wired, shadow, not_wired]   # shadow: observed in the flow, decides nothing
-  route: [openrouter]
-  key_env: [OPENROUTER_JEV_API_KEY, OPENROUTER_SYS2_API_KEY, OPENROUTER_OCR_API_KEY]
+  route: [openrouter, google_ai_studio]   # google_ai_studio: document reading, synthetic only (WP-36)
+  key_env: [OPENROUTER_JEV_API_KEY, OPENROUTER_SYS2_API_KEY, GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC]
   question_type: [noul, choice, score]
 
 defaults:
@@ -78,7 +78,9 @@ systems:
 
   document_reading:
     family: gemini
-    key_env: OPENROUTER_OCR_API_KEY
+    # direct to Google AI Studio (owner, 2026-10-02): synthetic tenants only; its free tier may
+    # use what it is sent. Model ids are the bare form (gemini-…), not OpenRouter's google/….
+    key_env: GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC
     does: "read scans / PDFs without XML or text layer into the extract contract"
     cannot: [read_xml_documents, skip_deterministic_checks, emit, classify]
     card:
@@ -137,6 +139,7 @@ roles:
     hitl_kinds: [decont_split]
     output: "proposed parts of an expense report; a person confirms"
     status: shadow
+    route: google_ai_studio
     model: null
     card:
       task: >-
@@ -152,9 +155,12 @@ roles:
     system: document_reading
     pack: null
     output: "normalized/tables.json + markdown.md (EXTRACT.md), then the statement checks"
-    status: shadow
+    status: wired
+    route: google_ai_studio
     model: null
-    note: "Document AI (WP-21) stays the built reader until this role is wired."
+    note: >-
+      WP-36: reads a synthetic tenant's statement PDF when MODEL_CALLS=live and the key is set
+      (extract/gemini.py); Document AI (WP-21) reads otherwise. Never a client tenant's.
     card:
       task: >-
         This file is a Romanian bank statement (extras de cont) in RON. Read its header and

@@ -37,8 +37,9 @@ def test_every_model_call_site_has_one_role(cat):
         "jev_v3_judge",
         "jev_v2_gate",
         "jev_recon_review",
+        "ocr_extract",  # WP-36: reads synthetic statements directly (Google AI Studio)
     }
-    assert {r.pack for r in roles.values() if r.status == "wired"} == {
+    assert {r.pack for r in roles.values() if r.status == "wired" and r.pack} == {
         "v3_judge",
         "v2_declaration_gate",
         "recon_review",
@@ -232,7 +233,7 @@ def test_wired_jev_cards_fill_exactly_their_closed_model(cat):
     from poarta_contabila.jev import PACKS
 
     for role in cat.model_roles.values():
-        if role.status == "wired":
+        if role.status == "wired" and role.system == "system_one":
             assert set(role.card["fields"]) == set(PACKS[role.pack][1].model_fields)
             assert role.card["thresholds"] == {"noul_yes": 0.90, "choice": 0.80, "human": 0.10}
 

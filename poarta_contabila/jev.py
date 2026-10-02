@@ -237,7 +237,7 @@ def role_transport(
     from poarta_contabila.model_roles import RouteRefused, record, role_for_pack, route_check
 
     def call(pack: str, payload: dict[str, Any], timeout_s: float) -> Any:
-        if mode != "dry":
+        if mode not in ("dry", "live"):  # live: no Jev sender is built, so it records too
             raise JevError(f"{pack}: model calls are {mode!r}")
         try:
             role = role_for_pack(roles, pack)

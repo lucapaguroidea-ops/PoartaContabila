@@ -47,6 +47,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-33 | done | WP-06R | Answer log: every answer a person submits, its outcome and its author, append-only |
 | WP-34 | done | WP-06R | Request bodies capped (413, `MAX_UPLOAD_MB`); `/ready` reports weak or shared tokens |
 | WP-35 | done | WP-24 | `eu_route` is a checked structure: provider, EU region, exact model, credential variables |
+| WP-36 | done | WP-21, WP-24 | Gemini reads synthetic statement PDFs directly through Google AI Studio (live sender) |
 
 ## WP details
 
@@ -297,6 +298,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   show the tenant's CUI after `RO` or a fiscal-code label (`identity_ok`) and the header's
   IBAN; `parse_statement` then ties the lines to the typed header, so a misread cell refuses
   the statement. Tests mock the HTTP client.
+- Synthetic tenants: Gemini direct reads instead when wired (WP-36).
 - Open: no processor exists yet and `DOCUMENT_AI_PROCESSOR` /
   `DOCUMENT_AI_CREDENTIALS_JSON` are not set on Railway (the owner creates and adds them; an
   EU location keeps statements in the EU). Which processor type returns `pages[].tables` for
@@ -537,6 +539,37 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   timestamp.
 - Open: every `eu_route` stays null until the owner's EU-route decision; no EU transport is
   built (WP-20 / WP-24).
+
+### WP-36 Gemini direct for synthetic statements
+- Asked by the owner 2026-10-02: document reading on synthetic data goes straight to Google AI
+  Studio (key in `GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC`), not through OpenRouter; every other role
+  stays on OpenRouter. `00_LAW.md` §3 invariant 5 changed in place.
+- Built: `extract/gemini.py` `GeminiStatementReader`, the first live sender.
+  - **Guards, before any request:** the tenant must be `data_class: synthetic` (checked
+    again here, whatever the caller checked); `MODEL_CALLS=live`; a model on the role; the
+    key set. A refusal is recorded and nothing is sent.
+  - **The request:** Gemini API `v1beta/models/{model}:generateContent`, header
+    `x-goog-api-key`, the role card's brief as `systemInstruction`, the PDF as `inlineData`
+    (at most 18 MB), JSON out, temperature 0. The format matches Google's documented example
+    as quoted in search results; Google's docs site is blocked from this session.
+  - **The answer:** only the card's shape is taken (`header` of strings, `tables` of
+    `{headers, rows}` strings). Anything else refuses the statement. The holder CUI must be
+    the tenant's, the IBAN the typed one, then `parse_statement` makes every line tie.
+  - **Recording:** every call goes to `domain.model_calls` as `sent` / `failed` / `refused`,
+    with the PDF's sha256 and size and the answer's shape, never the bytes or the key.
+  - **Reuse:** the extract is stored once per `(sha256, gemini)`, and a re-upload reuses it.
+- Routing: `Runtime.reader_for(cui)` gives Gemini to a synthetic tenant when it is wired, else
+  Document AI. A client tenant never gets Gemini.
+- Mode `live`: synthetic document reading sends; every other role records as in `dry`,
+  because Jev and System Two have no sender yet.
+- Catalog: route `google_ai_studio` (document reading only; bare `gemini-…` ids, no
+  `google/`, no aliases, no provider pins); `ocr_extract` is `wired`, and `ocr_decont_split`
+  stays `shadow` on the same route.
+- The smoke run accepts `live`, and `--ocr` uploads a real generated one-page synthetic
+  statement PDF without tables.
+- Open: the model id (`ocr_extract.model`) is the owner's to send; until then the reader
+  refuses. A wrong field name in the request would show as `failed` with Google's HTTP status
+  on the first live run.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

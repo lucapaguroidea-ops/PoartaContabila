@@ -29,12 +29,20 @@ from pydantic import Field, field_validator, model_validator
 from poarta_contabila.types import Closed, Slug
 
 System = Literal["system_one", "system_two", "document_reading"]
-CallMode = Literal["off", "dry"]
+CallMode = Literal["off", "dry", "live"]
+"""``off``: nothing. ``dry``: every role records what it would be sent, nothing is sent.
+``live``: a role with a built sender sends (today only document reading, synthetic tenants
+only, WP-36); every other role records as in ``dry``."""
+CALL_MODES = ("off", "dry", "live")
+Route = Literal["openrouter", "google_ai_studio"]
 KEY_ENV = {
     "system_one": "OPENROUTER_JEV_API_KEY",
     "system_two": "OPENROUTER_SYS2_API_KEY",
-    "document_reading": "OPENROUTER_OCR_API_KEY",
+    "document_reading": "GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC",  # direct to AI Studio (WP-36)
 }
+# WP-36: Google AI Studio takes the bare Gemini id (``gemini-…``), never OpenRouter's
+# ``google/…`` form, and only for synthetic tenants (route_check).
+_AI_STUDIO_MODEL = re.compile(r"^gemini-[a-z0-9][a-z0-9.\-]*$")
 FAMILIES = {
     "system_one": {"jev"},
     "system_two": {"deepseek", "glm"},
@@ -130,7 +138,7 @@ class ModelRole(Closed):
     flow (MODEL_CALLS=dry records it) but its answer would decide nothing. not_wired: no call
     site yet."""
     model: str | None = None
-    route: Literal["openrouter"] = "openrouter"
+    route: Route = "openrouter"
     provider: ProviderPin = Field(default_factory=ProviderPin)
     data: Literal["synthetic_only"] = "synthetic_only"
     eu_route: EuRoute | None = None
@@ -242,7 +250,10 @@ def _non_string_key(value: Any) -> Any:
 
 
 def brief(role: ModelRole) -> str | None:
-    """System Two: the card rendered as the text the model would be given (deterministic)."""
+    """The card rendered as the text the model is given (deterministic): System Two and
+    document reading; System One sends its question set instead."""
+    if role.system == "document_reading":
+        return _reading_brief(role)
     if role.system != "system_two":
         return None
     c = role.card
@@ -253,6 +264,15 @@ def brief(role: ModelRole) -> str | None:
         lines.append("Terms:")
         lines += [f"- {t}" for t in c["terms"]]
     lines.append(f"Output: {c.get('output_rule', '').strip()}")
+    return "\n".join(lines)
+
+
+def _reading_brief(role: ModelRole) -> str:
+    c = role.card
+    lines = [f"Task: {str(c.get('task', '')).strip()}", "Rules:"]
+    lines += [f"- {rule}" for rule in c.get("instructions") or []]
+    lines.append("Output: one JSON object with exactly these keys:")
+    lines += [f"- {key}: {shape}" for key, shape in (c.get("output") or {}).items()]
     return "\n".join(lines)
 
 
@@ -279,13 +299,26 @@ def load_roles(doc: dict[str, Any]) -> dict[str, ModelRole]:
             raise ValueError(f"role {role.role_id!r}: a System Two role names its family")
         if family not in FAMILIES[role.system]:
             raise ValueError(f"role {role.role_id!r}: family {family!r} is not {role.system}")
-        if role.status == "wired" and role.pack is None:
+        jev_wired = role.status == "wired" and role.system == "system_one"
+        if jev_wired and role.pack is None:
             raise ValueError(f"role {role.role_id!r}: a wired role names its pack")
-        if role.status == "wired" and role.pack not in PACKS:
+        if jev_wired and role.pack not in PACKS:
             raise ValueError(f"role {role.role_id!r}: pack {role.pack!r} is not built")
+        if role.route == "google_ai_studio":
+            if role.system != "document_reading":
+                raise ValueError(
+                    f"role {role.role_id!r}: only document reading goes direct to Google AI Studio"
+                )
+            if role.provider.only:
+                raise ValueError(f"role {role.role_id!r}: provider pins are OpenRouter's")
+            if role.model is not None and not _AI_STUDIO_MODEL.match(role.model):
+                raise ValueError(
+                    f"role {role.role_id!r}: {role.model!r} is not a Google AI Studio model id"
+                    " (gemini-…, without google/)"
+                )
         if role.role_id in out:
             raise ValueError(f"duplicate role_id {role.role_id!r}")
-        pack_fields = set(PACKS[role.pack][1].model_fields) if role.status == "wired" else None
+        pack_fields = set(PACKS[role.pack][1].model_fields) if jev_wired else None
         check_card(role, pack_fields)
         out[role.role_id] = role
     return out
@@ -300,7 +333,7 @@ def role_for_pack(roles: dict[str, ModelRole], pack: str) -> ModelRole:
 
 def route_check(role: ModelRole, *, tenant_synthetic: bool, mode: str) -> None:
     """Raise :class:`RouteRefused` unless *role* may be called now (see module docstring)."""
-    if mode not in ("dry",):
+    if mode not in ("dry", "live"):
         raise RouteRefused(f"{role.role_id}: model calls are {mode!r}")
     if not tenant_synthetic:  # client data: the EU route or nothing
         if role.eu_route is None:
@@ -326,9 +359,10 @@ class ModelCall(Closed):
     input_hash: str
     input: dict[str, Any]
     questions: dict[str, Any] | None = None  # System One: the question set that would be asked
-    status: Literal["recorded", "refused"]
+    status: Literal["recorded", "refused", "sent", "failed"]
     reason: str
     at: str
+    output: dict[str, Any] | None = None  # a sent call: what came back (shape, not bytes)
 
 
 def record(
@@ -337,9 +371,10 @@ def record(
     *,
     mode: str,
     tenant_cui: str | None,
-    status: Literal["recorded", "refused"],
+    status: Literal["recorded", "refused", "sent", "failed"],
     reason: str,
     eu: bool = False,
+    output: dict[str, Any] | None = None,
 ) -> ModelCall:
     """*eu*: a client tenant's call, which goes by the role's ``eu_route`` (when set)."""
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
@@ -360,6 +395,7 @@ def record(
         status=status,
         reason=reason,
         at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        output=output,
     )
 
 
@@ -444,7 +480,11 @@ class ModelGateway:
 
     def _observe(self, role_id: str, payload: dict[str, Any], tenant_cui: str | None) -> None:
         role = self.roles.get(role_id)
-        if self.mode != "dry" or role is None or role.status != "shadow":
+        if self.mode not in ("dry", "live") or role is None:
+            return
+        # shadow roles; and a wired document-reading role where its reader is not called
+        reading = role.status == "wired" and role.system == "document_reading"
+        if role.status != "shadow" and not reading:
             return
         synthetic = self.synthetic(tenant_cui)
         try:
