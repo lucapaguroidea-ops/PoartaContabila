@@ -154,14 +154,14 @@ def test_dry_run_records_what_jev_would_get_and_a_person_is_asked(cat):
 def test_a_client_tenant_is_refused_and_the_refusal_recorded(cat):
     o = _ops(cat, data_class=None)  # data_class unset = client data
     o.ingest(NEW_INVOICE)
-    (call,) = _calls(o)
+    (call,) = _calls(o, "jev_v3_judge")
     assert call["status"] == "refused" and "EU route" in call["reason"]
 
 
 def test_a_role_without_a_model_is_refused(cat):
     o = _ops(cat, model=None)
     o.ingest(NEW_INVOICE)
-    (call,) = _calls(o)
+    (call,) = _calls(o, "jev_v3_judge")
     assert call["status"] == "refused" and "no model chosen" in call["reason"]
 
 
@@ -371,3 +371,93 @@ def test_postgres_model_call_store(cat):
     (got,) = store.recent("jev_v3_judge")
     assert got.card_hash == judge.card_hash and got.questions == judge.questions()
     assert {c.role_id for c in store.recent()} == {"jev_v3_judge", "jev_v2_gate"}
+
+
+# ----- shadow roles at their place in the flow (WP-26) -----
+
+
+def _roles_seen(o):
+    return {c["role_id"]: c for c in _calls(o)}
+
+
+def test_shadow_roles_record_at_triage_bind_and_the_approval_question(cat):
+    o = _ops(cat)
+    o.ingest(NEW_INVOICE)
+    seen = _roles_seen(o)
+    assert {"jev_source_doc", "jev_our_role", "jev_v3_classify", "sys2_explain_approve"} <= set(
+        seen
+    )
+    assert "jev_flux" not in seen  # one articol matched: Jev is skipped (JevAnnex)
+    for rid in ("jev_source_doc", "jev_our_role", "jev_v3_classify", "sys2_explain_approve"):
+        assert seen[rid]["status"] == "recorded" and seen[rid]["reason"].startswith("shadow")
+    assert seen["jev_our_role"]["input"]["supplier"]["cui"] == "20000005"
+    explain = seen["sys2_explain_approve"]
+    assert explain["input"]["kind"] == "v3_approve"
+    assert explain["input"]["question"]["document"]["number"] == "AB 0099"
+    assert explain["questions"] is None and explain["card_hash"]
+
+
+def test_a_question_asked_again_is_recorded_once(cat):
+    o = _ops(cat)
+    job_id = o.ingest(NEW_INVOICE).json()["job"]["job_id"]
+    o.resume(job_id, {"decision": "edit", "edit": None})  # refused: asked again
+    assert len(_calls(o, "sys2_explain_approve")) == 1
+
+
+def test_statement_upload_records_the_file_by_fingerprint_not_its_bytes(cat):
+    import base64
+
+    from tests.test_extras import META, PDF, TABLES
+
+    o = _ops(cat)
+    o.http.post(
+        f"/extras/{CUI}",
+        headers=o.op,
+        json={"meta": META, "tables": TABLES, "pdf_b64": base64.b64encode(PDF).decode()},
+    )
+    (call,) = _calls(o, "ocr_extract")
+    assert call["input"]["file"]["bytes"] == len(PDF) and len(call["input"]["file"]["sha256"]) == 64
+    assert "pdf_b64" not in str(call["input"]) and call["input"]["header"]["iban"] == META["iban"]
+
+
+def test_recon_and_close_questions_record_their_explainer(cat):
+    o = _ops(cat)
+    o.http.put(
+        f"/tenants/{CUI}",
+        json={"cui": CUI, "name": "F", "saga_firm_folder": FOLDER, "data_class": "synthetic"},
+        headers=o.op,
+    )
+    from tests.test_runtime import INVOICE, _spv_zip
+
+    o.ingest(_spv_zip(INVOICE))  # close to a journal line: waits at PRE
+    o.http.post(f"/recon/{CUI}/2026-09", headers=o.op)
+    (recon,) = _calls(o, "sys2_explain_recon")
+    assert recon["input"]["kind"] == "recon_ambiguous"
+    o.http.post(f"/close/{CUI}/2026-09", params={"tva": "tva_platitor"}, headers=o.op)
+    (close,) = _calls(o, "sys2_explain_close")
+    assert close["input"]["kind"] == "v2_close"
+
+
+def test_shadow_recording_never_blocks_the_flow(cat):
+    o = _ops(cat)
+
+    def broken(call):
+        raise RuntimeError("store down")
+
+    o.rt.model_calls.add = broken
+    out = o.ingest(NEW_INVOICE).json()
+    assert out["question"]["kind"] == "v3_approve"  # the flow went on
+
+
+def test_only_shadow_roles_are_observed(cat):
+    from poarta_contabila.model_roles import InMemoryModelCallStore, ModelGateway
+
+    calls = InMemoryModelCallStore()
+    roles = _pinned(cat).model_roles
+    gw = ModelGateway(roles=roles, calls=calls, mode="dry", synthetic=lambda cui: True)
+    gw.observe("jev_v3_judge", {"tenant_cui": CUI}, CUI)  # wired: goes through Jev, not here
+    gw.observe("ocr_decont_split", {"tenant_cui": CUI}, CUI)  # not_wired
+    gw.observe("no_such_role", {"tenant_cui": CUI}, CUI)
+    assert calls.rows == []
+    ModelGateway(roles=roles, calls=calls, mode="off").observe("jev_our_role", {}, CUI)
+    assert calls.rows == []

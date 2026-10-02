@@ -95,6 +95,10 @@ class ReconDeps:
     """(cui, export_id) → the months that upload covers, if it is this tenant's latest
     registru jurnal; else None."""
     review: Callable[[WaitingJob, PreResult], Review] = abstain
+    observe_question: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: (
+        None
+    )
+    """(HITL kind, question, tenant cui): the System Two roles that would explain it."""
 
 
 class ReconState(TypedDict, total=False):
@@ -223,6 +227,7 @@ def build_reconcile_graph(deps: ReconDeps, *, checkpointer: Any):
                 return "how_ok / ack_mismatch answer a POST question; this one is PRE"
             return None
 
+        deps.observe_question(kind, question, cui)
         answer = ask(kind, question, _MODELS[kind], check)
         return {"status": "answered", "question": {**question, "answer": answer.model_dump()}}
 

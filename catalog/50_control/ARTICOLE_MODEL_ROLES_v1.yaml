@@ -21,7 +21,7 @@ valid_from: "2026-10-02"
 
 enums:
   system: [system_one, system_two, document_reading]
-  status: [wired, not_wired]
+  status: [wired, shadow, not_wired]   # shadow: observed in the flow, decides nothing
   route: [openrouter]
   key_env: [OPENROUTER_JEV_API_KEY, OPENROUTER_SYS2_API_KEY, OPENROUTER_OCR_API_KEY]
   question_type: [noul, choice, score]
@@ -94,7 +94,7 @@ roles:
     decision_id: jev_source_doc
     pack: null
     output: "source_doc_id from the closed ArticoleSourceDoc list + confidence"
-    status: not_wired
+    status: shadow
     model: null
     card:
       questions:
@@ -111,7 +111,7 @@ roles:
     decision_id: jev_our_role
     pack: null
     output: "inbound | outbound | n/a"
-    status: not_wired
+    status: shadow
     model: null
     card:
       questions:
@@ -147,7 +147,7 @@ roles:
     system: document_reading
     pack: null
     output: "normalized/tables.json + markdown.md (EXTRACT.md), then the statement checks"
-    status: not_wired
+    status: shadow
     model: null
     note: "Document AI (WP-21) stays the built reader until this role is wired."
     card:
@@ -165,7 +165,7 @@ roles:
     system: system_one
     pack: v3_classify
     output: "doc_class, needs_ocr, needs_human, confidence"
-    status: not_wired
+    status: shadow
     model: null
     card:
       questions:
@@ -192,7 +192,7 @@ roles:
     decision_id: jev_flux
     pack: null
     output: "a ranking of the articole that already matched (v1: a person still picks)"
-    status: not_wired
+    status: shadow
     model: null
     card:
       questions:
@@ -242,7 +242,7 @@ roles:
     pack: null
     hitl_kinds: [v3_approve]
     output: "plain-language explanation shown with the question"
-    status: not_wired
+    status: shadow
     model: null
     card:
       task: >-
@@ -282,7 +282,7 @@ roles:
     pack: null
     hitl_kinds: [recon_ambiguous, need_rj_export, recon_review_contest]
     output: "plain-language explanation shown with the question"
-    status: not_wired
+    status: shadow
     model: null
     card:
       task: >-
@@ -336,7 +336,7 @@ roles:
     pack: null
     hitl_kinds: [v2_close, control_disposition]
     output: "plain-language explanation shown with the question"
-    status: not_wired
+    status: shadow
     model: null
     card:
       task: >-

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -39,6 +40,7 @@ FAMILIES = {
     "system_two": {"deepseek", "glm"},
     "document_reading": {"gemini"},
 }
+log = logging.getLogger(__name__)
 _ALIAS = re.compile(r"(^openrouter/auto$|latest|:free$|^auto$)", re.IGNORECASE)
 
 
@@ -64,7 +66,10 @@ class ModelRole(Closed):
     pack: str | None = None
     hitl_kinds: list[str] = Field(default_factory=list)
     output: str
-    status: Literal["wired", "not_wired"]
+    status: Literal["wired", "shadow", "not_wired"]
+    """wired: its answer feeds the node (fail closed). shadow: observed at its place in the
+    flow (MODEL_CALLS=dry records it) but its answer would decide nothing. not_wired: no call
+    site yet."""
     model: str | None = None
     route: Literal["openrouter"] = "openrouter"
     provider: ProviderPin = Field(default_factory=ProviderPin)
@@ -301,6 +306,9 @@ class InMemoryModelCallStore:
     def add(self, call: ModelCall) -> None:
         self.rows.append(call)
 
+    def seen(self, role_id: str, input_hash: str) -> bool:
+        return any(c.role_id == role_id and c.input_hash == input_hash for c in self.rows)
+
     def recent(self, role_id: str | None = None, limit: int = 50) -> list[ModelCall]:
         rows = [c for c in self.rows if role_id in (None, c.role_id)]
         return list(reversed(rows))[:limit]
@@ -322,6 +330,15 @@ class PostgresModelCallStore:
                 (call.call_id, call.role_id, call.at, call.model_dump_json()),
             )
 
+    def seen(self, role_id: str, input_hash: str) -> bool:
+        with self._psycopg.connect(self._dsn) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM domain.model_calls WHERE role_id = %s"
+                " AND body->>'input_hash' = %s LIMIT 1",
+                (role_id, input_hash),
+            ).fetchone()
+        return row is not None
+
     def recent(self, role_id: str | None = None, limit: int = 50) -> list[ModelCall]:
         with self._psycopg.connect(self._dsn) as conn:
             rows = conn.execute(
@@ -330,3 +347,60 @@ class PostgresModelCallStore:
                 (role_id, role_id, limit),
             ).fetchall()
         return [ModelCall.model_validate(r[0], strict=False) for r in rows]
+
+
+# ----- shadow roles: observed at their place in the flow (WP-26) -----
+
+
+@dataclass
+class ModelGateway:
+    """Where a ``shadow`` role would be called, record what it would be sent (dry only).
+
+    Never blocks the flow: any failure here is logged and the node goes on. Nothing is sent;
+    the role's answer would decide nothing. A node that runs again on resume records the same
+    input once (``seen``).
+    """
+
+    roles: dict[str, ModelRole]
+    calls: Any
+    mode: str = "off"
+    synthetic: Any = lambda cui: False  # Callable[[str | None], bool]
+
+    def observe(self, role_id: str, payload: dict[str, Any], tenant_cui: str | None) -> None:
+        try:
+            self._observe(role_id, payload, tenant_cui)
+        except Exception:
+            log.exception("model gateway: %s not recorded", role_id)
+
+    def observe_question(self, kind: str, payload: dict[str, Any], tenant_cui: str | None) -> None:
+        """The System Two roles that would explain a person's question of *kind*."""
+        for role in self.roles.values():
+            if role.system == "system_two" and kind in role.hitl_kinds:
+                self.observe(role.role_id, {"kind": kind, "question": payload}, tenant_cui)
+
+    def _observe(self, role_id: str, payload: dict[str, Any], tenant_cui: str | None) -> None:
+        role = self.roles.get(role_id)
+        if self.mode != "dry" or role is None or role.status != "shadow":
+            return
+        try:
+            route_check(role, tenant_synthetic=self.synthetic(tenant_cui), mode=self.mode)
+        except RouteRefused as exc:
+            call = record(
+                role,
+                payload,
+                mode=self.mode,
+                tenant_cui=tenant_cui,
+                status="refused",
+                reason=str(exc),
+            )
+        else:
+            call = record(
+                role,
+                payload,
+                mode=self.mode,
+                tenant_cui=tenant_cui,
+                status="recorded",
+                reason="shadow: recorded, not sent; its answer would decide nothing",
+            )
+        if not self.calls.seen(role_id, call.input_hash):
+            self.calls.add(call)

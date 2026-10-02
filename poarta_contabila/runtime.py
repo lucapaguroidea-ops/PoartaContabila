@@ -51,7 +51,7 @@ from poarta_contabila.jev import (
     role_pin,
     role_transport,
 )
-from poarta_contabila.model_roles import InMemoryModelCallStore, brief
+from poarta_contabila.model_roles import InMemoryModelCallStore, ModelGateway, brief
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
 from poarta_contabila.recon.pre import PreResult, ReconStore, make_pre_check
@@ -128,6 +128,12 @@ class Runtime:
                 cache=InMemoryJevCache(),
                 pin=role_pin(self.catalog.model_roles),
             )
+        self.gateway = ModelGateway(
+            roles=self.catalog.model_roles,
+            calls=self.model_calls,
+            mode=self.model_mode,
+            synthetic=self._synthetic,
+        )
         self.deps = IngestDeps(
             catalog=self.catalog,
             jobs=self.jobs,
@@ -138,6 +144,8 @@ class Runtime:
             ),
             judge=make_judge(self.jev),
             tenant_name=self._tenant_name,
+            observe=self.gateway.observe,
+            observe_question=self.gateway.observe_question,
         )
         self.ingest = build_ingest_graph(self.deps, checkpointer=self.checkpointer)
         self.agent = AgentService(
@@ -170,6 +178,7 @@ class Runtime:
                     self.codits.get(cui, period) if self.codits is not None else None
                 ),
                 codit_put=self.codits.put if self.codits is not None else None,
+                observe_question=self.gateway.observe_question,
             ),
             checkpointer=self.checkpointer,
         )
@@ -185,6 +194,7 @@ class Runtime:
                 settle=self._settle_pre,
                 export_months=self._rj_export_months,
                 review=make_recon_review(self.jev),
+                observe_question=self.gateway.observe_question,
             ),
             checkpointer=self.checkpointer,
         )
@@ -445,6 +455,19 @@ class Runtime:
             raise IngestRefused("the statement source must be the bank's PDF")
         period = meta.statement_date[:7]
         pdf_key = None
+        self.gateway.observe(  # shadow: what Gemini would be given (the file by fingerprint)
+            "ocr_extract",
+            {
+                "tenant_cui": cui,
+                "file": {
+                    "sha256": hashlib.sha256(pdf).hexdigest(),
+                    "bytes": len(pdf),
+                    "content_type": "application/pdf",
+                },
+                "header": meta.model_dump(),
+            },
+            cui,
+        )
         if tables is None:
             extraction, pdf_key = self.read_statement(tenant, period, pdf)
             if not extraction.meta.identity_ok:
@@ -630,6 +653,26 @@ class Runtime:
             doc = to_canonical(invoice, job=draft_job, source=source)
         except UblError as exc:
             raise IngestRefused(str(exc)) from exc
+        self.gateway.observe(  # shadow: what Jev would be asked at triage
+            "jev_source_doc",
+            {
+                "tenant_cui": cui,
+                "filename": filename,
+                "content_type": source.content_type,
+                "root": invoice.root,
+                "type_code": invoice.type_code,
+            },
+            cui,
+        )
+        self.gateway.observe(
+            "jev_our_role",
+            {
+                "tenant_cui": cui,
+                "supplier": invoice.supplier.model_dump(),
+                "customer": invoice.customer.model_dump(),
+            },
+            cui,
+        )
 
         pack = Pack(
             tenant_cui=cui,

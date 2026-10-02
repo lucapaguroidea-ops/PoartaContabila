@@ -37,6 +37,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-23 | done | WP-05 | `reconcile_sink` graph, PRE stage: `need_rj_export`, `recon_ambiguous`, review contest |
 | WP-24 | done | WP-20 | Model roles: one pinned model per role, synthetic-only guard, dry-run trace |
 | WP-25 | done | WP-24 | Role cards: what each role is told, checked, hashed into the cache key |
+| WP-26 | done | WP-25 | Shadow roles: every model role observed at its place in the flow (dry) |
 
 ## WP details
 
@@ -371,6 +372,21 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   `GET /model-roles` shows `card_hash` and the System Two `brief`.
 - Open: the wording is a first draft, to be compared on synthetic dry / live runs; the System Two
   and document-reading cards have no call site yet.
+
+### WP-26 Shadow roles at their place in the flow
+- Asked by the owner 2026-10-02: test each role's placement in the flow on Railway before any
+  model decides anything.
+- Built: role status `shadow` (observed, decides nothing) on 8 roles; `model_roles.ModelGateway`
+  (`observe`, `observe_question`) records, under `MODEL_CALLS=dry`, what each would be sent —
+  never blocks the flow (failures are logged), a re-entered node records the same input once
+  (`seen`). Places: `jev_source_doc` and `jev_our_role` at the SPV / UBL upload (the invoice's
+  root, type code, both parties); `jev_v3_classify` at `bind`, `jev_flux` at `bind` only when
+  more than one articol matched; `ocr_extract` at the statement upload (the PDF by sha256 and
+  size, never its bytes, + the typed header); System Two explainers on the questions their
+  HITL kinds name: `v3_approve` (ingest), `recon_ambiguous` / `need_rj_export` /
+  `recon_review_contest` (reconcile_sink), `v2_close` (monthly_close).
+- Open: `ocr_decont_split` and `sys2_draft_rule` have no call site (no decont triage over HTTP;
+  `explained_rule` is not asked as its own question yet).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

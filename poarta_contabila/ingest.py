@@ -98,6 +98,12 @@ class IngestDeps:
     treasury_account: Callable[[str, str], str | None] = lambda cui, iban: None
     """(tenant cui, IBAN) → the SAGA treasury account it maps to (``5121.01``), or None."""
     settlement: Callable[[CanonicalDocument], SettlementProposal | None] = lambda doc: None
+    observe: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: None
+    """(role_id, input, tenant cui): a shadow model role at its place (records only)."""
+    observe_question: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: (
+        None
+    )
+    """(HITL kind, question, tenant cui): the System Two roles that would explain it."""
     """An unbound bank line → the invoices it could settle (a proposal for the person)."""
 
     def package(self, job: JobRecord, doc: CanonicalDocument, module: WriteModule) -> PackageRow:
@@ -245,6 +251,13 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
             day=doc.date,
         )
         cands = match_articole(cat, ctx, allow_draft=deps.allow_draft)
+        seen = doc.model_dump(exclude={"job_id", "tenant", "source", "jev"})
+        cui = job.tenant.cui
+        deps.observe("jev_v3_classify", {"tenant_cui": cui, "document": seen}, cui)
+        if len(cands) > 1:
+            deps.observe(
+                "jev_flux", {"tenant_cui": cui, "document": seen, "candidates": cands}, cui
+            )
         if len(cands) == 1:
             articol_id = cands[0]
         else:
@@ -318,18 +331,15 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
                     return "edit is only allowed with decision 'edit'"
                 return None
 
-            answer = ask(
-                "v3_approve",
-                {
-                    "job_id": job.job_id,
-                    "articol_id": state["articol_id"],
-                    "judge": verdict,
-                    "document": doc.model_dump(),
-                    **_proposal(deps, doc),
-                },
-                V3ApproveResume,
-                check,
-            )
+            question = {
+                "job_id": job.job_id,
+                "articol_id": state["articol_id"],
+                "judge": verdict,
+                "document": doc.model_dump(),
+                **_proposal(deps, doc),
+            }
+            deps.observe_question("v3_approve", question, job.tenant.cui)
+            answer = ask("v3_approve", question, V3ApproveResume, check)
             if answer.decision == "reject":
                 deps.jobs.update(job.job_id, status="rejected")
                 return {"status": "rejected"}

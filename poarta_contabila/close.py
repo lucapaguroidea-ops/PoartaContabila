@@ -128,6 +128,10 @@ class CloseDeps:
     jev_v2: Callable[[PeriodDiff], Any] = lambda diff: None  # Layer 2 (jev.make_v2)
     codit: Callable[[str, str], Any] = lambda cui, period: None  # CO.DiT (WP-11)
     codit_put: Callable[[Any], None] | None = None  # V4 writes CO.DiT through this
+    observe_question: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: (
+        None
+    )
+    """(HITL kind, question, tenant cui): the System Two roles that would explain it."""
 
 
 class CloseState(TypedDict, total=False):
@@ -254,21 +258,18 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
                 return "no rule store wired"
             return None
 
-        answer = ask(
-            "v2_close",
-            {
-                "cui": cui,
-                "period": state["period"],
-                "material": material,
-                "hard_failures": diff.hard_failures,
-                "blockers": run.blockers,
-                "outbound_holes": diff.outbound_holes,
-                "unexplained": [b.sink.saga_key for b in diff.inbound if b.kind == "unexplained"],
-                "jev": jev,
-            },
-            V2CloseResume,
-            check,
-        )
+        question = {
+            "cui": cui,
+            "period": state["period"],
+            "material": material,
+            "hard_failures": diff.hard_failures,
+            "blockers": run.blockers,
+            "outbound_holes": diff.outbound_holes,
+            "unexplained": [b.sink.saga_key for b in diff.inbound if b.kind == "unexplained"],
+            "jev": jev,
+        }
+        deps.observe_question("v2_close", question, cui)
+        answer = ask("v2_close", question, V2CloseResume, check)
         status: CloseStatus = {"file": "filed", "reopen": "opened"}.get(answer.action, "hold")
         update: dict[str, Any] = {
             "status": status,
