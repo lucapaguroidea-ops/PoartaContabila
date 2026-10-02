@@ -195,7 +195,8 @@ roles:
     card:
       task: >-
         This file is a Romanian bank statement (extras de cont) in RON. Read its header and
-        every movement table.
+        every movement table. The tables hold movement lines only: the opening and closing
+        balance (Sold initial, Sold final) go in the header, never as a table row.
       output:
         header: "{iban, holder_cui, currency, opening, closing, statement_date}"
         tables: "[{headers: [..], rows: [[..]]}] — every table, its header row as printed"

@@ -170,3 +170,27 @@ def test_the_reader_override_keeps_every_guard(cat):
     reader = _reader(cat, lambda case: case.answer, synthetic=lambda cui: False)
     other = dataclasses.replace(reader, role=reader.role.model_copy(update={"model": "gemini-x"}))
     assert not score(cases()[0], other).read  # a client tenant is refused whatever the model
+
+
+def test_two_pages_ties_with_the_closing_balance_read_as_a_row(cat):
+    """WP-45, as seen live on 2026-10-02: 61 rows for 60 lines, the extra one the closing
+    balance with its label in the date column."""
+    case = next(c for c in cases() if c.name == "two_pages")
+
+    def with_balance_row(c):
+        answer = copy.deepcopy(c.answer)
+        width = len(answer["tables"][-1]["headers"])
+        row = [""] * width
+        row[0], row[-1] = "Sold final:", answer["header"]["closing"]
+        answer["tables"][-1]["rows"].append(row)
+        return answer
+
+    base = sum(len(t["rows"]) for t in case.answer["tables"])
+    s = score(case, _reader(cat, with_balance_row))
+    assert s.ties and s.tie_error is None and s.rows_read == base + 1 and s.lines_exact == 60
+
+
+def test_the_reading_brief_keeps_balances_out_of_the_tables(cat):
+    from poarta_contabila.model_roles import brief
+
+    assert "never as a table row" in brief(cat.model_roles["ocr_extract"])

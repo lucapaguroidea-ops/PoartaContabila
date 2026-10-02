@@ -6,7 +6,8 @@ backend (``document_ai``; EXTRACT.md), which hands over ``normalized/tables.json
 deterministically, and checks them before anything is emitted (fail closed):
 
 - the movement table is found by label (date + debit + credit columns);
-- every amount is a whole number of cents, and a line moves on exactly one side;
+- every amount is a whole number of cents, and a line moves on exactly one side (a row
+  labelled Sold … / Total … in any column is a balance or total, not a line);
 - ``opening − Σ debits + Σ credits = closing`` to the cent;
 - the account holder's CUI is the tenant's (identity before any line Job);
 - RON only in v1 (a foreign-currency account is another witness: CO.DiT ``fx_currencies``).
@@ -76,6 +77,9 @@ class Statement(Closed):
     meta: StatementMeta
     holder_cui: Cui
     lines: list[StatementLine]
+
+
+_SUMMARY = re.compile(r"^(total|sold)")  # Total rulaje, Sold initial / final (plain text)
 
 
 def _plain(text: str) -> str:
@@ -153,9 +157,9 @@ def parse_statement(
             cells = [str(c) if c is not None else "" for c in row] + [""] * len(headers)
             if not cells[cols["date"]].strip():
                 continue  # carried description line or a subtotal without a date
-            if re.match(
-                r"^\s*(total|sold)", _plain(cells[cols["desc"]] if cols["desc"] is not None else "")
-            ):
+            if any(_SUMMARY.match(_plain(c)) for c in cells):
+                # a balance or total row, whatever column its label landed in (WP-45): not a
+                # movement; were a real line skipped, the tie to the closing would fail
                 continue
             debit = _amount(cells[cols["debit"]], where)
             credit = _amount(cells[cols["credit"]], where)

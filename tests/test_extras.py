@@ -367,3 +367,31 @@ def test_an_invoice_paid_in_two_lines_is_proposed_for_what_stays_open(cat):
     (c,) = rest["candidates"]
     assert c["cover"] == "full" and c["factura_id"] == invoice_id and c["hits"] == ["amount"]
     assert rest["edit"]["maps"] == {"factura_numar": "AB 0099", "factura_id": invoice_id}
+
+
+# ----- WP-45: a balance row is not a line, whatever column its label is in -----
+
+
+def _with_rows(*extra):
+    return [TABLES[0], {**TABLES[1], "rows": [*TABLES[1]["rows"], *extra]}]
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        ["Sold final:", "", "", "", "4.290,00"],  # the label read into the date column
+        ["", "", "Sold final", "4.290,00", ""],  # into the reference column
+        ["30.09.2026", "Soldul final", "", "", "4.290,00"],  # Romanian article, dated
+        ["", "TOTAL", "", "1.210,00", "500,00"],
+    ],
+)
+def test_a_balance_or_total_row_is_not_a_line(row):
+    st = parse_statement(_with_rows(row), _meta(), CUI)
+    assert len(st.lines) == 2
+
+
+def test_a_real_line_labelled_as_a_balance_still_breaks_the_tie():
+    rows = [r[:] for r in TABLES[1]["rows"]]
+    rows[0][2] = "Sold"  # the 1 210,00 debit now looks like a balance row and is skipped
+    with pytest.raises(StatementError, match="closing"):
+        parse_statement([TABLES[0], {**TABLES[1], "rows": rows}], _meta(), CUI)
