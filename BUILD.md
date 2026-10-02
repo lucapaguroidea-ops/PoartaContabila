@@ -33,6 +33,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-19 | done | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (R1) |
 | WP-20 | in-progress | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; wire waits on R2 |
 | WP-21 | done | WP-13 | Statement PDFs read by Google Document AI into the extract contract |
+| WP-22 | done | WP-19 | Bank line → the invoice it settles: a proposal on `v3_approve`, a person decides |
 
 ## WP details
 
@@ -273,6 +274,23 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   EU location keeps statements in the EU). Which processor type returns `pages[].tables` for
   these banks, and the CUI-label rule, are to be checked on real statements. The header (IBAN,
   holder, balances, date) is still typed by a person; reading it from the PDF is not built.
+
+### WP-22 Settlement proposals for bank lines
+- Asked by the owner 2026-10-02: a statement line names no partner, so WP-19 waits for a person
+  to bind partner and invoice; propose them instead of leaving the person to search.
+- Built: `recon/settle.py` `propose_settlement` — deterministic, no model. Candidates from the
+  tenant's invoice Jobs (not rejected / failed) and the books' journals (covered months only), in
+  the line's month and the two before (`runtime.SETTLE_MONTHS`): the settled side (receipt →
+  sale, payment → purchase; no storno), the same gross to the cent, dated on or before the
+  line, not already named by another bound bank line (`FacturaID`, or partner + number). Ranked
+  by the bank description: invoice number as whole tokens (≥ 3 characters), then the partner's
+  name without legal forms, then the amount alone; a Job outranks the books for one invoice
+  (it carries `FacturaID`). `edit` (a ready `v3_approve` edit) only when one candidate leads
+  alone, else a list of ≤ 5 and why. The `v3_approve` question of an unbound bank line carries
+  it as `proposal`; a proposal that fails is left out, the question is asked all the same.
+- Open: partial payments and one payment for several invoices get no candidate; the books'
+  candidates carry no partner name (the journals' CUI only); the proposal is recomputed when
+  the node re-enters on resume (reads the books again).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

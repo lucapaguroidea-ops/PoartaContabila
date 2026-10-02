@@ -161,6 +161,7 @@ Kind ∈ ArticoleHITL ∪ HITL_ADD ∩ graph.allowed_hitl. Unknown kind = bug. R
 Core kinds:
 
 - `v3_approve` resume `{decision: approve|reject|edit, edit?}` — XOR, not three bools
+  (on an unbound bank line the question carries `proposal`: the invoices it could settle and, when one leads, a ready `edit`; WP-22)
 - `v2_close` resume `{action: file|hold|patch_maps|reopen, explained_rule?}`
 - `wait_validare`, `request_devalidare`, `define_articol`, `define_module`, `explained_rule`, `need_rj_export`
 - additive: `decision_menu` (client sends `option` only; server stamps confirmer/at), `codit_premise`, `filing_receipt`, `control_disposition`

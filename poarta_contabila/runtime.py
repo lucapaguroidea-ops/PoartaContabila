@@ -45,6 +45,13 @@ from poarta_contabila.jev import make_judge, make_v2
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
 from poarta_contabila.recon.pre import ReconStore, make_pre_check
+from poarta_contabila.recon.settle import (
+    SETTLES,
+    InvoiceJob,
+    SettlementProposal,
+    propose_settlement,
+    settle_key,
+)
 from poarta_contabila.registry import (
     ExportKind,
     Product,
@@ -55,6 +62,18 @@ from poarta_contabila.registry import (
 )
 from poarta_contabila.triage import Pack, decide_emit
 from poarta_contabila.types import CanonicalDocument, JobRecord, SourceRef, TenantRef
+
+SETTLE_MONTHS = 3
+"""A bank line looks for the invoice it settles in its own month and the two before it."""
+
+
+def _months_back(period: str, n: int) -> list[str]:
+    year, month = int(period[:4]), int(period[5:])
+    out = []
+    for _ in range(n):
+        out.append(f"{year:04d}-{month:02d}")
+        year, month = (year, month - 1) if month > 1 else (year - 1, 12)
+    return out
 
 
 class IngestRefused(ValueError):
@@ -127,6 +146,7 @@ class Runtime:
         )
         self.deps.posted_doc = self.agent.posted_doc
         self.deps.treasury_account = self._treasury_account
+        self.deps.settlement = self.settlement
 
     # -- helpers --
 
@@ -170,6 +190,42 @@ class Runtime:
                 doc = CanonicalDocument.model_validate(values["canonical"])
                 out.append(ExpectedJob(job=job, doc=doc))
         return out
+
+    def settlement(self, line: CanonicalDocument) -> SettlementProposal:
+        """The invoices an unbound bank line could settle (WP-22), from this tenant's invoice
+        Jobs and the books' journals in the line's month and the two before it."""
+        cui = line.tenant.cui
+        periods = _months_back(line.period, SETTLE_MONTHS)
+        jobs = [ej for p in periods for ej in self.expected(cui, p)]
+        invoices = [
+            InvoiceJob(job_id=ej.job.job_id, doc=ej.doc)
+            for ej in jobs
+            if ej.doc.doc_class in SETTLES.values() and ej.job.status not in ("rejected", "failed")
+        ]
+        books = []
+        for p in periods:
+            eye = self._eye(cui, p)
+            if eye.covers(cui, p):
+                books.extend(eye.documents(cui, p))
+        bound = [
+            ej.doc
+            for ej in jobs
+            if ej.doc.doc_class in SETTLES
+            and ej.doc.job_id != line.job_id
+            and ej.doc.partner.cui
+            and ej.job.status not in ("rejected", "failed")
+        ]
+        return propose_settlement(
+            line,
+            invoices,
+            books,
+            settled_ids=frozenset(d.maps["factura_id"] for d in bound if d.maps.get("factura_id")),
+            settled_numbers=frozenset(
+                settle_key(d.partner.cui, d.maps["factura_numar"])
+                for d in bound
+                if d.maps.get("factura_numar")
+            ),
+        )
 
     def _eye(self, cui: str, period: str):
         probe = JobRecord(

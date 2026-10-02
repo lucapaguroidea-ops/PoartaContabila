@@ -30,6 +30,7 @@ Edges read ``state["status"]`` only. Runs on ``job:`` threads only.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from decimal import Decimal
@@ -45,6 +46,7 @@ from poarta_contabila.jev import unjudged
 from poarta_contabila.packages import BlobStore, PackageRow, PackageStore, write_once
 from poarta_contabila.period_diff import prefile_failures
 from poarta_contabila.recon.pre import PreResult
+from poarta_contabila.recon.settle import SETTLES, SettlementProposal
 from poarta_contabila.sinks.saga_xml import (
     SagaXmlError,
     export_key,
@@ -56,6 +58,7 @@ from poarta_contabila.sinks.saga_xml import (
 from poarta_contabila.types import CanonicalDocument, Closed, JobRecord, Slug, WriteModule
 
 GRAPH_ID = "ingest_source_doc"
+log = logging.getLogger(__name__)
 THREAD_PREFIX = "job:"
 _OUTBOUND = {"iesire", "storn_iesire"}
 _INBOUND = {"intrare", "storn_intrare"}
@@ -94,6 +97,8 @@ class IngestDeps:
     doc_class when known), or None."""
     treasury_account: Callable[[str, str], str | None] = lambda cui, iban: None
     """(tenant cui, IBAN) → the SAGA treasury account it maps to (``5121.01``), or None."""
+    settlement: Callable[[CanonicalDocument], SettlementProposal | None] = lambda doc: None
+    """An unbound bank line → the invoices it could settle (a proposal for the person)."""
 
     def package(self, job: JobRecord, doc: CanonicalDocument, module: WriteModule) -> PackageRow:
         """Render and write once; set the job to `packaged`. Safe to replay."""
@@ -186,6 +191,21 @@ def _edited(doc: CanonicalDocument, edit: dict[str, Any]) -> CanonicalDocument:
     if isinstance(edit.get("maps"), dict):
         data["maps"] = {**doc.maps, **edit["maps"]}
     return CanonicalDocument.model_validate(data)
+
+
+def _proposal(deps: IngestDeps, doc: CanonicalDocument) -> dict[str, Any]:
+    """For a bank line with no partner: the invoices it could settle, under ``proposal``.
+
+    A proposal that cannot be built is left out; the question is asked all the same.
+    """
+    if doc.doc_class not in SETTLES or doc.partner.cui:
+        return {}
+    try:
+        proposal = deps.settlement(doc)
+    except Exception:  # a missing proposal never blocks the question
+        log.exception("settlement proposal failed for %s", doc.job_id)
+        return {}
+    return {"proposal": proposal.model_dump()} if proposal is not None else {}
 
 
 def _needs_question(deps: IngestDeps, job: JobRecord, articol: dict, verdict: dict) -> bool:
@@ -305,6 +325,7 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
                     "articol_id": state["articol_id"],
                     "judge": verdict,
                     "document": doc.model_dump(),
+                    **_proposal(deps, doc),
                 },
                 V3ApproveResume,
                 check,
