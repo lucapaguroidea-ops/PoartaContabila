@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: poarta
+          POSTGRES_PASSWORD: poarta
+          POSTGRES_DB: poarta_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U poarta"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # the database tests skip without it; here they run (scratch database, no real data)
+      POARTA_TEST_DSN: postgresql://poarta:poarta@localhost:5432/poarta_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.8.17"
+          python-version: "3.11"
+          enable-cache: true
+      - name: Install (locked)
+        run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format
+        run: uv run ruff format --check .
+      - name: Tests
+        run: uv run pytest -q
