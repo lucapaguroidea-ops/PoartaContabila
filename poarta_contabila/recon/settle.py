@@ -10,22 +10,32 @@ holds and the invoices the uploaded books show:
 
 - the right side: a receipt (``incasare``) settles a sale (``iesire``), a payment
   (``plata``) a purchase (``intrare``); storno documents are not candidates;
-- the same gross, to the cent (a partial payment gets no candidate);
 - dated on or before the line;
-- not already named by another bound bank line (by ``FacturaID`` or partner + number).
+- still open: its gross less what other bound bank lines already paid on it (``paid``, by
+  partner + number); an invoice those lines settled in full is no candidate;
+- ``full``: the open amount equals the line, to the cent;
+- ``partial`` (WP-30): the open amount is larger and the bank's description names the invoice
+  or its partner (an amount alone never proposes a partial payment); ``open_after`` is what
+  stays open.
 
 They are ranked by what the bank's description shows: the invoice number (strongest), then
-the partner's name, then the amount alone. ``edit`` is a ready ``v3_approve`` edit only when
-one candidate leads alone; otherwise the person picks from the list or posts it in SAGA.
+the partner's name, then a full cover over a partial one. ``edit`` is a ready ``v3_approve``
+edit only when one candidate leads alone; otherwise the person picks from the list or posts
+it in SAGA.
+
+``groups`` (WP-30): with no full candidate, two to four open invoices of one partner whose
+open amounts add up to the line. A bank mouth writes one invoice per line, so a group is never
+an edit: a person posts it in SAGA (or picks one invoice for a partial payment).
 """
 
 from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
+from itertools import combinations
 from typing import Any, Literal
 
 from poarta_contabila.recon.numbers import normalize
@@ -34,6 +44,9 @@ from poarta_contabila.types import CanonicalDocument, Closed, Cui, FiscalDate, M
 SETTLES = {"incasare": "iesire", "plata": "intrare"}
 ROLE = {"incasare": "customer", "plata": "supplier"}
 MAX_CANDIDATES = 5
+MAX_GROUP = 4  # invoices in one combined payment
+MAX_GROUP_POOL = 12  # newest open invoices of one partner searched for a group
+MAX_GROUPS = 3
 
 # legal forms and filler that say nothing about who the partner is
 _NOISE = frozenset(
@@ -51,10 +64,23 @@ class Candidate(Closed):
     date: FiscalDate
     gross: Money
     hits: list[Literal["amount", "number_in_text", "name_in_text"]]
+    cover: Literal["full", "partial"] = "full"
+    open_after: Money = "0.00"  # what stays open on the invoice after this line
+
+
+class CandidateGroup(Closed):
+    """One payment for several invoices of one partner (WP-30)."""
+
+    partner_cui: Cui
+    partner_name: str | None
+    invoices: list[Candidate]
+    total: Money
+    hits: list[Literal["number_in_text", "name_in_text"]]
 
 
 class SettlementProposal(Closed):
     candidates: list[Candidate]
+    groups: list[CandidateGroup] = []
     edit: dict[str, Any] | None
     reason: str
 
@@ -101,11 +127,13 @@ def propose_settlement(
     *,
     settled_ids: frozenset[str] = frozenset(),
     settled_numbers: frozenset[tuple[str, str]] = frozenset(),
+    paid: Mapping[tuple[str, str], Decimal] | None = None,
 ) -> SettlementProposal:
     """The invoices *line* could settle, ranked; see the module docstring for the rules.
 
     *settled_ids* are invoice Job ids and *settled_numbers* ``(partner_cui, number)`` pairs
-    that other bound bank lines already name.
+    settled in full elsewhere; *paid* is what other bound bank lines already paid, by
+    ``settle_key``.
     """
     side = SETTLES.get(line.doc_class)
     if side is None:
@@ -113,31 +141,38 @@ def propose_settlement(
     amount = Decimal(line.totals.gross)
     text = " ".join([*(ln.desc for ln in line.lines), line.partner.name or ""])
     settled = set(settled_numbers)
+    paid = paid or {}
 
-    found: dict[tuple[str, str], Candidate] = {}
+    pool: dict[tuple[str, str], tuple[Candidate, Decimal]] = {}  # key → (invoice, open)
 
     def consider(source, cui, name, number, factura_id, date, gross) -> None:
-        if not cui or Decimal(gross) != amount or date > line.date:
+        if not cui or date > line.date:
             return
         key = settle_key(cui, number)
         if key in settled or (factura_id and factura_id in settled_ids):
             return
-        if key in found and found[key].source == "job":
+        if key in pool and pool[key][0].source == "job":
             return  # the Job already stands for it, with its FacturaID
-        hits = ["amount"]
+        open_ = Decimal(gross) - paid.get(key, Decimal(0))
+        if open_ <= 0:
+            return
+        hits = []
         if number_in_text(number, text):
             hits.append("number_in_text")
         if name_in_text(name, text):
             hits.append("name_in_text")
-        found[key] = Candidate(
-            source=source,
-            partner_cui=cui,
-            partner_name=name,
-            factura_numar=number,
-            factura_id=factura_id,
-            date=date,
-            gross=gross,
-            hits=hits,
+        pool[key] = (
+            Candidate(
+                source=source,
+                partner_cui=cui,
+                partner_name=name,
+                factura_numar=number,
+                factura_id=factura_id,
+                date=date,
+                gross=gross,
+                hits=hits,
+            ),
+            open_,
         )
 
     for inv in invoices:
@@ -150,25 +185,56 @@ def propose_settlement(
         if s.doc_class == side:
             consider("books", s.partner_cui, None, s.number, None, s.date, s.gross)
 
-    def score(c: Candidate) -> tuple[int, int, str]:
-        return (
-            2 * ("number_in_text" in c.hits) + ("name_in_text" in c.hits),
-            c.source == "job",
-            c.date,
-        )
+    found: list[Candidate] = []
+    for c, open_ in pool.values():
+        if open_ == amount:
+            found.append(c.model_copy(update={"hits": ["amount", *c.hits]}))
+        elif open_ > amount and c.hits:
+            found.append(
+                c.model_copy(update={"cover": "partial", "open_after": f"{open_ - amount:.2f}"})
+            )
 
-    ranked = sorted(found.values(), key=score, reverse=True)[:MAX_CANDIDATES]
+    def text_score(hits: list[str]) -> int:
+        return 2 * ("number_in_text" in hits) + ("name_in_text" in hits)
+
+    def score(c: Candidate) -> tuple[int, bool, bool, str]:
+        return (text_score(c.hits), c.cover == "full", c.source == "job", c.date)
+
+    ranked = sorted(found, key=score, reverse=True)[:MAX_CANDIDATES]
+    groups = [] if any(c.cover == "full" for c in ranked) else _groups(pool, amount, text)
+    best_group = max((text_score(g.hits) for g in groups), default=-1)
+
     if not ranked:
+        if groups:
+            g = groups[0]
+            who = g.partner_name or g.partner_cui
+            return SettlementProposal(
+                candidates=[],
+                groups=groups,
+                edit=None,
+                reason=(
+                    f"one payment for {len(g.invoices)} invoices of {who}: a bank line names "
+                    "one invoice, so a person posts it in SAGA"
+                ),
+            )
         return SettlementProposal(
             candidates=[], edit=None, reason="no open invoice of this amount on this side"
         )
-    top = score(ranked[0])[0]
-    leaders = [c for c in ranked if score(c)[0] == top]
+    top = score(ranked[0])[:2]
+    leaders = [c for c in ranked if score(c)[:2] == top]
     if len(leaders) > 1:
         return SettlementProposal(
             candidates=ranked,
+            groups=groups,
             edit=None,
             reason=f"{len(leaders)} invoices fit equally: a person picks one or posts it in SAGA",
+        )
+    if text_score(leaders[0].hits) <= best_group:
+        return SettlementProposal(
+            candidates=ranked,
+            groups=groups,
+            edit=None,
+            reason="one invoice or several together fit as well: a person picks or posts it",
         )
     best = leaders[0]
     maps = {"factura_numar": best.factura_numar}
@@ -183,6 +249,54 @@ def propose_settlement(
         "maps": maps,
     }
     shown = ", ".join(h for h in best.hits if h in _HITS) or "the amount alone"
-    return SettlementProposal(
-        candidates=ranked, edit=edit, reason=f"one invoice leads ({shown}): confirm or correct"
+    if best.cover == "partial":
+        reason = (
+            f"a partial payment on {best.factura_numar} leads ({shown}); {best.open_after} "
+            "stays open: confirm or correct"
+        )
+    else:
+        reason = f"one invoice leads ({shown}): confirm or correct"
+    return SettlementProposal(candidates=ranked, groups=groups, edit=edit, reason=reason)
+
+
+def _groups(
+    pool: Mapping[tuple[str, str], tuple[Candidate, Decimal]], amount: Decimal, text: str
+) -> list[CandidateGroup]:
+    """Two to four open invoices of one partner whose open amounts add up to *amount*."""
+    by_partner: dict[str, list[tuple[Candidate, Decimal]]] = {}
+    for c, open_ in pool.values():
+        if open_ < amount:
+            by_partner.setdefault(c.partner_cui, []).append((c, open_))
+    out: list[CandidateGroup] = []
+    for cui, items in by_partner.items():
+        items = sorted(items, key=lambda x: x[0].date, reverse=True)[:MAX_GROUP_POOL]
+        name = next((c.partner_name for c, _ in items if c.partner_name), None)
+        for n in range(2, MAX_GROUP + 1):
+            for combo in combinations(items, n):
+                if sum(o for _, o in combo) != amount:
+                    continue
+                members = [
+                    c.model_copy(update={"hits": ["amount", *c.hits]})
+                    for c, _ in sorted(combo, key=lambda x: x[0].date)
+                ]
+                hits = []
+                if any("number_in_text" in c.hits for c in members):
+                    hits.append("number_in_text")
+                if name_in_text(name, text):
+                    hits.append("name_in_text")
+                out.append(
+                    CandidateGroup(
+                        partner_cui=cui,
+                        partner_name=name,
+                        invoices=members,
+                        total=f"{amount:.2f}",
+                        hits=hits,
+                    )
+                )
+    out.sort(
+        key=lambda g: (
+            -(2 * ("number_in_text" in g.hits) + ("name_in_text" in g.hits)),
+            len(g.invoices),
+        )
     )
+    return out[:MAX_GROUPS]

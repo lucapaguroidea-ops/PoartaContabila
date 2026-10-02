@@ -41,6 +41,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-27 | done | WP-23 | `reconcile_sink` POST stage: how SAGA posted an acked document (`recon_how_mismatch`) |
 | WP-28 | done | WP-06R | Expense reports over HTTP: `folder_triage` splits the container, a person names the parts |
 | WP-29 | done | WP-28 | Synthetic smoke run: one invented firm through every graph over HTTP, model calls by place |
+| WP-30 | done | WP-22 | Settlement proposals for partial payments, part-paid invoices and one payment for several |
 
 ## WP details
 
@@ -310,9 +311,9 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   (it carries `FacturaID`). `edit` (a ready `v3_approve` edit) only when one candidate leads
   alone, else a list of ≤ 5 and why. The `v3_approve` question of an unbound bank line carries
   it as `proposal`; a proposal that fails is left out, the question is asked all the same.
-- Open: partial payments and one payment for several invoices get no candidate; the books'
-  candidates carry no partner name (the journals' CUI only); the proposal is recomputed when
-  the node re-enters on resume (reads the books again).
+- Open: partial payments and one payment for several invoices: WP-30. The books' candidates
+  carry no partner name (the journals' CUI only); the proposal is recomputed when the node
+  re-enters on resume (reads the books again).
 
 ### WP-23 reconcile_sink, PRE stage
 - Asked by the owner 2026-10-02: the fourth graph (ARCHITECTURE §2), so a person can answer the
@@ -443,6 +444,20 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   server whose `MODEL_CALLS` is neither `off` nor `dry`; it never uses the agent token.
 - Open: the service needs a public domain first (`docs/OWNER_CHECKLIST.md`); packaged documents
   stay on `/agent/pull` while no agent is connected.
+
+### WP-30 Partial and combined payments
+- Built: `recon/settle.py` — an invoice is open for its gross less what other bound bank lines
+  already paid on it (`paid`, by partner + number; the runtime sums the bound lines), so a
+  second payment sees the rest and a fully paid invoice drops out. `cover: full` = the open
+  amount equals the line; `cover: partial` = it is larger and the description names the
+  invoice or its partner (an amount alone never proposes a partial payment), with
+  `open_after`. Ranking: the text first, then full over partial. `groups`: with no full
+  candidate, two to four open invoices of one partner (the newest 12 searched) adding up to
+  the line, ranked by the text; a group is never an `edit` (a bank mouth names one invoice per
+  line), and when a group fits as well as the leading invoice no `edit` is given either.
+- Open: what was paid is read from this system's bound lines only — a payment SAGA holds that
+  never came through here (or an earlier partial payment in the books) is not subtracted, so
+  the person still checks the open amount; a group is posted by a person in SAGA.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 from poarta_contabila.recon.settle import (
@@ -101,8 +103,73 @@ def test_an_invoice_that_cannot_be_settled_is_no_candidate(update, why):
 
 
 def test_another_amount_is_no_candidate():
-    p = propose_settlement(_unbound(gross="100.00"), [_invoice()])
+    p = propose_settlement(_unbound(desc="Incasare", gross="100.00"), [_invoice()])
     assert p.candidates == [] and p.edit is None and "no open invoice" in p.reason
+
+
+# ----- WP-30: partial payments, part-paid invoices, one payment for several invoices -----
+
+
+def test_a_partial_payment_is_proposed_when_the_text_names_the_invoice():
+    p = propose_settlement(_unbound(gross="100.00"), [_invoice()])
+    (c,) = p.candidates
+    assert c.cover == "partial" and c.open_after == "82.11" and "amount" not in c.hits
+    assert p.edit["maps"] == {"factura_numar": "FX-101", "factura_id": "job-iesire"}
+    assert "partial payment on FX-101" in p.reason and "82.11 stays open" in p.reason
+
+
+def test_more_than_the_invoice_is_never_a_partial_payment():
+    assert propose_settlement(_unbound(gross="200.00"), [_invoice()]).candidates == []
+
+
+def test_the_text_naming_an_invoice_beats_an_amount_alone():
+    line = _unbound(desc="Incasare fact BX-21", gross="100.00")
+    p = propose_settlement(line, [], [_book("BX-21", gross="300.00"), _book("Z-9", "100.00")])
+    assert [c.factura_numar for c in p.candidates] == ["BX-21", "Z-9"]
+    assert p.edit["maps"] == {"factura_numar": "BX-21"} and p.candidates[0].cover == "partial"
+
+
+def test_what_other_lines_paid_leaves_the_rest_open():
+    key = settle_key(PARTNER, "FX-101")
+    rest = propose_settlement(
+        _unbound(desc="Incasare", gross="82.11"), [_invoice()], paid={key: Decimal("100.00")}
+    )
+    assert rest.candidates[0].cover == "full" and rest.edit is not None
+    done = propose_settlement(_unbound(), [_invoice()], paid={key: Decimal("182.11")})
+    assert done.candidates == [] and done.edit is None
+
+
+def test_one_payment_for_several_invoices_is_a_group_and_never_an_edit():
+    line = _unbound(desc="Incasare CLIENT TEST fact BX-1 BX-2", gross="300.00")
+    books = [
+        _book("BX-1", gross="100.00"),
+        _book("BX-2", gross="200.00"),
+        _book("BX-3", gross="50.00", cui=OTHER),
+        _book("BX-4", gross="250.00", cui=OTHER),  # adds up too, but another partner …
+    ]
+    p = propose_settlement(line, [], books)
+    assert p.candidates == [] and p.edit is None
+    first = p.groups[0]
+    assert [c.factura_numar for c in first.invoices] == ["BX-1", "BX-2"]
+    assert first.hits == ["number_in_text"] and first.total == "300.00"
+    assert {g.partner_cui for g in p.groups} == {PARTNER, OTHER}  # … listed after
+    assert "one payment for 2 invoices" in p.reason and "posts it in SAGA" in p.reason
+
+
+def test_a_full_fit_leaves_no_groups():
+    books = [_book("B-1", gross="182.11"), _book("B-2", "100.00"), _book("B-3", "82.11")]
+    p = propose_settlement(_unbound(desc="Incasare"), [], books)
+    assert [c.factura_numar for c in p.candidates] == ["B-1"] and p.groups == []
+
+
+def test_an_invoice_and_a_group_that_fit_as_well_give_no_edit():
+    line = _unbound(desc="Incasare fact BX-1 BX-7 BX-8", gross="100.00")
+    books = [_book("BX-1", gross="150.00"), _book("BX-7", "60.00"), _book("BX-8", "40.00")]
+    p = propose_settlement(line, [], books)
+    assert p.candidates[0].cover == "partial" and p.groups
+    assert p.edit is None and "several together" in p.reason
+    alone = propose_settlement(_unbound(desc="Incasare fact BX-1", gross="100.00"), [], books)
+    assert alone.groups and alone.edit["maps"] == {"factura_numar": "BX-1"}  # the text decides
 
 
 def test_an_invoice_another_line_names_is_no_candidate():

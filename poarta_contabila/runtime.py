@@ -15,6 +15,7 @@ import os
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -417,8 +418,9 @@ class Runtime:
         return out
 
     def settlement(self, line: CanonicalDocument) -> SettlementProposal:
-        """The invoices an unbound bank line could settle (WP-22), from this tenant's invoice
-        Jobs and the books' journals in the line's month and the two before it."""
+        """The invoices an unbound bank line could settle (WP-22, WP-30), from this tenant's
+        invoice Jobs and the books' journals in the line's month and the two before it, less
+        what other bound bank lines already paid on each."""
         cui = line.tenant.cui
         periods = _months_back(line.period, SETTLE_MONTHS)
         jobs = [ej for p in periods for ej in self.expected(cui, p)]
@@ -440,17 +442,12 @@ class Runtime:
             and ej.doc.partner.cui
             and ej.job.status not in ("rejected", "failed")
         ]
-        return propose_settlement(
-            line,
-            invoices,
-            books,
-            settled_ids=frozenset(d.maps["factura_id"] for d in bound if d.maps.get("factura_id")),
-            settled_numbers=frozenset(
-                settle_key(d.partner.cui, d.maps["factura_numar"])
-                for d in bound
-                if d.maps.get("factura_numar")
-            ),
-        )
+        paid: dict[tuple[str, str], Decimal] = {}  # what bound lines paid per invoice (WP-30)
+        for d in bound:
+            if d.maps.get("factura_numar"):
+                key = settle_key(d.partner.cui, d.maps["factura_numar"])
+                paid[key] = paid.get(key, Decimal(0)) + Decimal(d.totals.gross)
+        return propose_settlement(line, invoices, books, paid=paid)
 
     def _eye(self, cui: str, period: str):
         probe = JobRecord(
