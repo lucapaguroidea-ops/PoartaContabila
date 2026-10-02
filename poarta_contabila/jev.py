@@ -293,9 +293,19 @@ def judge_input(doc: CanonicalDocument, articol: dict[str, Any]) -> dict[str, An
     }
 
 
-def v2_input(diff: PeriodDiff, axes: dict[str, str]) -> dict[str, Any]:
-    """What ``v2_declaration_gate`` sees: Layer 1's PeriodDiff and the period's CO.DiT axes."""
-    return {"diff": diff.model_dump(), "axes": dict(sorted(axes.items()))}
+def v2_input(
+    diff: PeriodDiff, axes: dict[str, str], filings: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
+    """What ``v2_declaration_gate`` sees: Layer 1's PeriodDiff, the period's CO.DiT axes and
+    the declarations due for them (``filing_id`` + the controls that gate each)."""
+    due = sorted(
+        (
+            {"filing_id": f["filing_id"], "books_gate": list(f.get("books_gate") or [])}
+            for f in filings or []
+        ),
+        key=lambda f: f["filing_id"],
+    )
+    return {"diff": diff.model_dump(), "axes": dict(sorted(axes.items())), "filings_due": due}
 
 
 def unjudged(reason: str) -> dict[str, Any]:
@@ -344,14 +354,17 @@ def make_recon_review(jev: Jev | None) -> Callable[[Any, Any], Any]:
 
 
 def make_v2(
-    jev: Jev | None, axes: Callable[[str, str], dict[str, str]]
+    jev: Jev | None,
+    axes: Callable[[str, str], dict[str, str]],
+    filings: Callable[[dict[str, str]], list[dict[str, Any]]] = lambda axes: [],
 ) -> Callable[[PeriodDiff], dict | None]:
     """``CloseDeps.jev_v2``: Jev's suggestion; raises :class:`JevError` when there is none."""
 
     def v2(diff: PeriodDiff) -> dict | None:
         if jev is None:
             return None
-        answer = jev.ask("v2_declaration_gate", v2_input(diff, axes(diff.cui, diff.period)))
+        period_axes = axes(diff.cui, diff.period)
+        answer = jev.ask("v2_declaration_gate", v2_input(diff, period_axes, filings(period_axes)))
         return answer.body.model_dump()
 
     return v2

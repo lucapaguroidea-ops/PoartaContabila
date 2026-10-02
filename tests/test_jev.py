@@ -308,3 +308,21 @@ def test_postgres_cache_keeps_the_first_answer():
     assert fresh.ask("v3_judge", {"x": 1}).cached  # another process: no second call
     PostgresJevCache(dsn).put("v3_judge", input_hash("v3_judge", {"x": 1}), {"risk": "high"})
     assert fresh.ask("v3_judge", {"x": 1}).body.risk == "low"
+
+
+def test_layer2_sees_the_declarations_due_for_the_period(cat):
+    from poarta_contabila.filings import due_filings
+
+    transport = FakeTransport(FILE_IT)
+    v2 = make_v2(
+        Jev(transport=transport),
+        lambda cui, period: {"tva": "tva_platitor", "impozit": "micro_1"},
+        lambda axes: due_filings(cat, axes),
+    )
+    m = _clean(cat, jev=v2)
+    m.start()
+    ((_, payload),) = transport.calls
+    due = {f["filing_id"]: f["books_gate"] for f in payload["filings_due"]}
+    assert "d300_platitor" in due and "d100_profit" not in due  # micro, not profit
+    assert "C0_synthetic_parity" in due["d300_platitor"]
+    assert list(due) == sorted(due)  # stable order: the same month asks the same question

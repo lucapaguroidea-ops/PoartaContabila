@@ -267,7 +267,8 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   onto `V3Judge` / `V2Gate` with fail-closed thresholds) but **not built**: the build session was
   not permitted to write the outbound call, so `http_transport` still refuses every call and a
   person is asked. The owner chose to build it outside that session. `JEV_*` are not set on
-  Railway (the owner adds them). Layer 2 does not yet see the period's due filings.
+  Railway (the owner adds them). Layer 2 sees the period's due filings (`filings_due`: id +
+  books_gate, from the CO.DiT axes) since 2026-10-02.
 
 ### WP-21 Statement PDF reading backend
 - Decided by the owner on 2026-10-01: Google Document AI. Write the extract contract

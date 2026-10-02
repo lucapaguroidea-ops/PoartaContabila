@@ -175,7 +175,7 @@ class Runtime:
                 eye=self._eye,
                 rules=self.rules,
                 period_store=self.periods,
-                jev_v2=make_v2(self.jev, self.axes),
+                jev_v2=make_v2(self.jev, self.axes, lambda axes: due_filings(self.catalog, axes)),
                 codit=lambda cui, period: (
                     self.codits.get(cui, period) if self.codits is not None else None
                 ),
