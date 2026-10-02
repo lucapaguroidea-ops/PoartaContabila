@@ -155,3 +155,36 @@ def test_an_acknowledged_posting_is_settled(cat):
     view = _recon(o, {"ack_mismatch": True, "open_storno": False})
     assert view["settled"][-1]["verdict"] == "how_mismatch_acknowledged"
     assert view["post_open"] == []
+
+
+# ----- WP-31: amounts per account -----
+
+
+def test_the_amounts_on_the_expected_accounts_are_checked(cat):
+    res = _check(cat, _eye(POSTED))
+    assert [(a.account, a.of, a.expected, a.posted, a.ok) for a in res.amounts] == [
+        ("401", "gross", "242.00", "242.00", True),
+        ("4426", "vat", "42.00", "42.00", True),
+    ]
+
+
+def test_vat_posted_at_another_amount_is_a_mismatch(cat):
+    off = [_ln(1, "628", "401.00001", "200.00"), _ln(2, "4426", "401.00001", "40.00")]
+    res = _check(cat, _eye(off))
+    assert res.verdict == "how_mismatch"
+    assert "401 posted 240.00, document gross 242.00" in res.reason
+    assert "4426 posted 40.00, document vat 42.00" in res.reason
+    assert _check(cat, _eye(off)).snapshot_id != _check(cat, _eye(POSTED)).snapshot_id
+
+
+def test_a_difference_within_the_tolerance_is_how_ok(cat):
+    near = [_ln(1, "628", "401.00001", "200.03"), _ln(2, "4426", "401.00001", "42.00")]
+    assert _check(cat, _eye(near)).verdict == "how_ok"  # catalog tolerance 0.05
+    assert _check(cat, _eye(near), tolerance="0.00").verdict == "how_mismatch"
+
+
+def test_accounts_the_profile_does_not_list_are_not_compared(cat):
+    # class 6 carries the net and may be split; only 401 / 4426 are listed
+    split = [*POSTED[:1], _ln(3, "6022", "401.00001", "0.00"), POSTED[1]]
+    res = _check(cat, _eye(split), expect_accounts=["401", "6"])
+    assert res.verdict == "how_ok" and [a.account for a in res.amounts] == ["401"]

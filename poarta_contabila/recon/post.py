@@ -11,27 +11,44 @@ POST profile's ``fallback_accounts``):
 
 An expected account matches a used one by prefix (``401`` ← ``401.00001``; class ``6`` ← ``628``).
 
+Amounts (WP-31): once the accounts fit, every expected account the profile's
+``account_amounts`` lists (``401`` / ``4111`` → the document's gross, ``4426`` / ``4427`` /
+``4428`` → its VAT) is checked: the amount the posting moves on it (each line once, on either
+side) against the document, within the articol's ``tolerance`` (else the profile's). Accounts
+not listed — class 6 / 7, where the net may be split — are not compared.
+
 Verdicts (``verdict_det``): ``how_ok``; ``how_mismatch`` (no posting found in a month the
-journal covers, the expected accounts are not used, no expected accounts at all, or no single
-POST profile); ``need_rj_export`` (the month is not covered, or the eye has no journal lines —
-the report pack's purchase / sales journals carry no accounts). The snapshot covers the
-profile and the posting's own lines, so a verdict (and a person's answer to it) holds until
-that posting changes in SAGA.
+journal covers, the expected accounts are not used, an amount differs, no expected accounts at
+all, or no single POST profile); ``need_rj_export`` (the month is not covered, or the eye has
+no journal lines — the report pack's purchase / sales journals carry no accounts). The snapshot
+covers the profile (incl. its amounts and tolerance) and the posting's own lines, so a verdict
+(and a person's answer to it) holds until that posting changes in SAGA.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from decimal import Decimal
 from typing import Any, Literal
 
 from pydantic import Field
 
 from poarta_contabila.recon.numbers import NumberLevel, match_level
 from poarta_contabila.sinks.exports import _INVOICE_JOURNALS, SinkLine, synthetic
-from poarta_contabila.types import CanonicalDocument, Closed, Slug
+from poarta_contabila.types import CanonicalDocument, Closed, Money, Slug
 
 PostVerdict = Literal["how_ok", "how_mismatch", "need_rj_export"]
+
+
+class AccountAmount(Closed):
+    """What the posting moved on one expected account, against the document (WP-31)."""
+
+    account: str
+    of: Literal["gross", "vat"]
+    expected: Money
+    posted: Money
+    ok: bool
 
 
 class PostResult(Closed):
@@ -44,6 +61,7 @@ class PostResult(Closed):
     require_all: bool = False
     rows: list[int] = Field(default_factory=list)  # registru jurnal rows of the posting
     missing: list[str] = Field(default_factory=list)  # months the journal does not cover
+    amounts: list[AccountAmount] = Field(default_factory=list)
 
 
 def posting_lines(
@@ -113,7 +131,18 @@ def how_check(
     levels = tuple(profile.get("number_match") or ("exact", "alnum"))
     rows = posting_lines(lines, eye.product, doc, levels)
     used = sorted({synthetic(a) for ln in rows for a in (ln.debit, ln.credit)})
-    snapshot = _snapshot(pid, rows, {"expected": expected, "require_all": require_all})
+    amount_of = dict(profile.get("account_amounts") or {})
+    tolerance = Decimal(str(reconcile.get("tolerance") or profile.get("tolerance") or "0"))
+    snapshot = _snapshot(
+        pid,
+        rows,
+        {
+            "expected": expected,
+            "require_all": require_all,
+            "amounts": amount_of,
+            "tolerance": str(tolerance),
+        },
+    )
     found = {
         "snapshot_id": snapshot,
         "used": used,
@@ -135,10 +164,56 @@ def how_check(
     hits = [e for e in expected if any(u.startswith(e) for u in used)]
     ok = len(hits) == len(expected) if require_all else bool(hits)
     if ok:
-        return PostResult(verdict="how_ok", reason=f"posted on {used}", **found)
+        amounts = account_amounts(doc, rows, hits, amount_of, tolerance)
+        off = [a for a in amounts if not a.ok]
+        if off:
+            shown = "; ".join(
+                f"{a.account} posted {a.posted}, document {a.of} {a.expected}" for a in off
+            )
+            return PostResult(
+                verdict="how_mismatch",
+                reason=f"posted on {used}, but the amounts differ: {shown}",
+                amounts=amounts,
+                **found,
+            )
+        return PostResult(verdict="how_ok", reason=f"posted on {used}", amounts=amounts, **found)
     want = "all of" if require_all else "any of"
     return PostResult(
         verdict="how_mismatch",
         reason=f"posted on {used}; expected {want} {expected}",
         **found,
     )
+
+
+def account_amounts(
+    doc: CanonicalDocument,
+    rows: list[SinkLine],
+    accounts: list[str],
+    amount_of: dict[str, str],
+    tolerance: Decimal,
+) -> list[AccountAmount]:
+    """For each of *accounts* that *amount_of* lists: the amount the posting moved on it."""
+    out = []
+    for acct in accounts:
+        of = amount_of.get(acct)
+        if of not in ("gross", "vat"):
+            continue
+        moved = sum(
+            (
+                Decimal(ln.amount)
+                for ln in rows
+                if synthetic(ln.debit).startswith(acct) or synthetic(ln.credit).startswith(acct)
+            ),
+            Decimal(0),
+        )
+        want = Decimal(getattr(doc.totals, of))
+        out.append(
+            AccountAmount(
+                account=acct,
+                of=of,
+                expected=f"{want:.2f}",
+                posted=f"{moved:.2f}",
+                ok=abs(moved - want) <= tolerance,
+            )
+        )
+    return out

@@ -42,6 +42,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-28 | done | WP-06R | Expense reports over HTTP: `folder_triage` splits the container, a person names the parts |
 | WP-29 | done | WP-28 | Synthetic smoke run: one invented firm through every graph over HTTP, model calls by place |
 | WP-30 | done | WP-22 | Settlement proposals for partial payments, part-paid invoices and one payment for several |
+| WP-31 | done | WP-27 | POST stage compares the amounts on the partner and VAT accounts with the document |
 
 ## WP details
 
@@ -414,7 +415,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   posting is unchecked, unanswered or waiting on its storno. `GET /recon/…` shows `post_open`.
   `ReconStore.get`; Postgres `put_once` returns the stored verdict as its own type.
 - Open: the storno itself is the person's in SAGA (the storno mouths wait on the copy firm);
-  amounts per account are not compared (PRE and intent_check compare totals).
+  amounts per account: WP-31.
 
 ### WP-28 Expense reports over HTTP
 - Built: `POST /decont/{cui}` (`filename`, `period`, `file_b64`, `tenant_on_doc`; `.pdf`,
@@ -458,6 +459,19 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Open: what was paid is read from this system's bound lines only — a payment SAGA holds that
   never came through here (or an earlier partial payment in the books) is not subtracted, so
   the person still checks the open amount; a group is posted by a person in SAGA.
+
+### WP-31 POST amounts per account
+- Built: POST profiles carry `account_amounts` (`ARTICOLE_RECONCILE_v1.yaml`, enum
+  `account_amount: [gross, vat]`): `401` / `4111` → the document's gross, `4426` / `4427` /
+  `4428` → its VAT. Once the accounts fit, `recon/post.py` `account_amounts` sums what the
+  posting moves on each expected account that was used and is listed (each journal line once,
+  either side) and compares it with the document within the articol's `tolerance` (else the
+  profile's). A difference is `how_mismatch` naming each account, posted vs document, and asks
+  `recon_how_mismatch` as before; `PostResult.amounts` carries every comparison. The snapshot
+  includes the map and the tolerance, so a catalog change re-checks (a stored `how_ok` from
+  before WP-31 is checked again on the next pass).
+- Open: class 6 / 7 (net, may be split across accounts) and reverse-charge postings (4426 and
+  4427 on one line, WP-D3) are not compared; the map is `[de confirmat]` on the copy firm.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
