@@ -204,35 +204,11 @@ def _answer_job(
 
 
 def synthetic_statement_pdf(lines: list[str] = OCR_LINES) -> bytes:
-    """A real one-page PDF (Courier text, no images, no timestamps): the same bytes on
-    every run, so a rerun reuses the stored extract instead of calling the reader again."""
+    """A real one-page PDF of the invented statement (``synthetic_docs.text_pdf``): the same
+    bytes on every run, so a rerun reuses the stored extract instead of reading again."""
+    from poarta_contabila.synthetic_docs import text_pdf
 
-    def esc(text: str) -> str:
-        return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-
-    shown = " ".join(f"({esc(line)}) '" for line in lines)
-    stream = f"BT /F1 9 Tf 14 TL 40 800 Td {shown} ET".encode("latin-1")
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
-        b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>",
-        b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
-    ]
-    out = bytearray(b"%PDF-1.4\n")
-    offsets = []
-    for n, body in enumerate(objects, 1):
-        offsets.append(len(out))
-        out += b"%d 0 obj\n" % n + body + b"\nendobj\n"
-    xref = len(out)
-    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
-    out += b"".join(b"%010d 00000 n \n" % off for off in offsets)
-    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
-        len(objects) + 1,
-        xref,
-    )
-    return bytes(out)
+    return text_pdf([lines])
 
 
 def _ocr_step(c: Client, report: Report) -> None:

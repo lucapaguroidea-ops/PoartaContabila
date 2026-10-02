@@ -591,6 +591,35 @@ class Runtime:
             return self.gemini_reader
         return self.statement_reader
 
+    def ocr_eval(self, cui: str, case: str | None, model: str | None) -> dict[str, Any]:
+        """WP-37: read the evaluation's synthetic statements with Gemini and score them.
+
+        Synthetic tenants only; nothing is minted or stored but the model-call records.
+        *model* reads with another Google AI Studio model, for comparison only.
+        """
+        from dataclasses import replace
+
+        from poarta_contabila.model_roles import ai_studio_model_ok
+        from poarta_contabila.ocr_eval import cases, score, summary
+
+        if not self._synthetic(cui):
+            raise IngestRefused(f"tenant {cui} is not a registered synthetic tenant")
+        if self.gemini_reader is None:
+            raise IngestRefused("the Gemini reader is not wired (MODEL_CALLS=live and the key)")
+        reader = self.gemini_reader
+        if model:
+            if not ai_studio_model_ok(model):
+                raise IngestRefused(f"{model!r} is not a Google AI Studio model id (gemini-…)")
+            reader = replace(reader, role=reader.role.model_copy(update={"model": model}))
+        chosen = [c for c in cases() if case is None or c.name == case]
+        if not chosen:
+            raise IngestRefused(f"unknown case {case!r}")
+        scores = [score(c, reader, cui) for c in chosen]
+        return {
+            "scores": [s.model_dump() for s in scores],
+            "summary": summary(scores),
+        }
+
     def ingest_statement(
         self,
         cui: str,

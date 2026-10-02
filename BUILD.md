@@ -48,6 +48,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-34 | done | WP-06R | Request bodies capped (413, `MAX_UPLOAD_MB`); `/ready` reports weak or shared tokens |
 | WP-35 | done | WP-24 | `eu_route` is a checked structure: provider, EU region, exact model, credential variables |
 | WP-36 | done | WP-21, WP-24 | Gemini reads synthetic statement PDFs directly through Google AI Studio (live sender) |
+| WP-37 | done | WP-36 | Reading evaluation: six known synthetic statements, scored per model |
 
 ## WP details
 
@@ -577,6 +578,32 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   A refused client call is recorded with no model (route `eu/none`).
 - Open: a wrong field name in the request would show as `failed` with Google's HTTP status on
   the first live run.
+
+### WP-37 Reading evaluation
+- Asked by the owner 2026-10-02: measure, don't guess, before any Pro escalation.
+- Built: `ocr_eval.py` has six invented statements, each a real PDF with its known answer
+  (`synthetic_docs.text_pdf`, deterministic, multi-page):
+  - `simple`;
+  - `ro_labels` (Data operatiunii / Detalii / Plati / Incasari, thousands separators);
+  - `continuation` (wrapped descriptions, a total row);
+  - `column_order` (credit before debit);
+  - `two_pages` (60 lines, the header row repeated);
+  - `dense` (30 near-equal amounts on few days).
+
+  Score per case: read (in the card's shape), identity, IBAN, header fields (out of 6),
+  ties (`parse_statement` accepts it), and lines with the right date, side and amount, in
+  order.
+- `POST /ocr-eval/{cui}?case=&model=`: the server's Gemini reader reads one case or all, for a
+  synthetic tenant only, with `MODEL_CALLS=live`. Nothing is minted; each read is a
+  model-call record. `model` reads with another bare AI Studio id for comparison only; the
+  catalog keeps one pinned model.
+- The command `python -m poarta_contabila.ocr_eval --base-url … [--model …] [--case …]`
+  sends one request per case and prints the table; `--write-pdfs DIR` saves the PDFs to look
+  at.
+- A test checks the answer key: a perfect reading scores full marks on every case. It caught
+  a case whose closing balance went negative; the builder now refuses that.
+- Open: text-layer PDFs only (no scans, photos or rotations yet); receipts (WP-14) get their
+  own cases when that WP is unparked.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

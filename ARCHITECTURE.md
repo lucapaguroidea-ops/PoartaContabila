@@ -187,6 +187,7 @@ POST /ingest
 POST /decont/{cui}                  # an expense report → folder_triage (WP-28); a person names the parts
 GET  /triage/{batch_id}             # …/resume answers decont_split
 GET  /answers                       # every submitted answer (WP-33); X-Operator-Name names its author
+POST /ocr-eval/{cui}                # the reading evaluation (WP-37): synthetic, live, scored
 GET  /jobs/{id}
 POST /jobs/{id}/resume
 POST /recon/{cui}/{period}          # one reconcile_sink pass (WP-23); GET shows; …/resume answers

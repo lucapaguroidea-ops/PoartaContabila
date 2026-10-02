@@ -25,6 +25,11 @@ the answer and the session records it.
 - [ ] **Test it**: `OPERATOR_TOKEN=… uv run python -m poarta_contabila.smoke --base-url
       https://<domain> --ocr`. The step "statement PDF read" should mint a job, and
       `GET /model-calls?role=ocr_extract` should show `sent`.
+- [ ] **Reading evaluation** (after the `--ocr` smoke works):
+      `OPERATOR_TOKEN=… uv run python -m poarta_contabila.ocr_eval --base-url https://<domain>`.
+      Six known statements, scored. To compare a Pro model on the hard cases, add
+      `--model <bare id> --case two_pages --case dense`. `--write-pdfs ./eval-pdfs` saves the
+      PDFs to look at.
 - [ ] **Gemini API terms for the free tier** (Google's "Unpaid Services"): free tier for synthetic
       tests only; client documents only on the EU host (decided 2026-10-02).
 - [ ] **Railway variables** (project `faithful-mercy`):
