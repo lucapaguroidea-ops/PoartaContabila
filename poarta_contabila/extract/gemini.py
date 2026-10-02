@@ -480,6 +480,8 @@ class GeminiStatementReader:
                 quotas = quota_ids(data)
                 daily = any("PerDay" in q for q in quotas)
                 raise RateLimited(message + (f" ({', '.join(quotas)})" if quotas else ""), daily)
+            if response.status_code == 404:  # no such model here: the next one in the order
+                raise Busy(message)
             if response.status_code not in TRANSIENT:
                 raise GeminiError(message)
             if last:

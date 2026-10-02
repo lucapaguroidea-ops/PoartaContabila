@@ -594,3 +594,17 @@ def test_the_evaluation_reads_with_one_model_only(cat):
     out = o.rt.ocr_eval(CUI, "simple", None)
     assert {_model_of(r) for r in google.requests} == {LITE}  # never another tier
     assert out["scores"][0]["read"] is False
+
+
+def test_an_unknown_model_id_hands_over_to_the_next(cat):
+    class Missing(Google):
+        def __call__(self, request):
+            if _model_of(request) == LITE:
+                self.requests.append(request)
+                return httpx.Response(404, json={"error": {"status": "NOT_FOUND"}})
+            return super().__call__(request)
+
+    google, sleeps = Missing(), []
+    reader = _reader(cat, google, tiers=True, sleeps=sleeps)
+    reader(PDF, tenant_cui=CUI)
+    assert [_model_of(r) for r in google.requests] == [LITE, LITE2] and sleeps == []
