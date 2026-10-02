@@ -21,7 +21,7 @@ import hmac
 from collections.abc import Callable
 from typing import Any
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 
 from poarta_contabila.answers import OPERATOR_NAME_MAX
@@ -204,17 +204,44 @@ def operator_router(
 
     @router.post("/extras/{cui}")
     def post_statement(
-        cui: str, body: StatementUpload, rt: Runtime = Depends(operator)
+        cui: str, body: StatementUpload, response: Response, rt: Runtime = Depends(operator)
     ) -> dict[str, Any]:
-        """A PDF statement (+ its extract tables, or read here) → one Job per movement line."""
+        """A PDF statement (+ its extract tables, or read here) → one Job per movement line.
+        202 ``{"status": "waiting"}``: no model can read it now; it is read again later."""
         try:
             pdf = base64.b64decode(body.pdf_b64, validate=True)
         except (binascii.Error, ValueError) as exc:
             raise HTTPException(422, "pdf_b64 is not base64") from exc
         try:
-            return rt.ingest_statement(cui, body.meta, body.tables, pdf, body.strong)
+            out = rt.ingest_statement(cui, body.meta, body.tables, pdf, body.strong)
         except IngestRefused as exc:
             raise HTTPException(422, str(exc)) from exc
+        if out.get("status") == "waiting":
+            response.status_code = 202
+        return out
+
+    @router.get("/reading/{cui}/budget")
+    def reading_budget(
+        cui: str,
+        documents: int = Query(default=0, ge=0, description="statements about to be uploaded"),
+        rt: Runtime = Depends(operator),
+    ) -> dict[str, Any]:
+        """WP-42: Gemini reads left today per model, what waits, and a warning before a batch
+        the budget does not cover."""
+        try:
+            return rt.reading_budget(cui, documents)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.get("/reading/{cui}/waiting")
+    def reading_waiting(cui: str, rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
+        """WP-42: this tenant's parked statements (waiting, read, refused)."""
+        return [w.model_dump(mode="json", exclude={"meta"}) for w in rt.reading_waits.list(cui)]
+
+    @router.post("/reading/{cui}/retry")
+    def reading_retry(cui: str, rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
+        """WP-42: read again now every parked statement of this tenant whose time has come."""
+        return rt.retry_waiting(cui)
 
     @router.post("/filings/{cui}/{period}")
     def open_filings(cui: str, period: str, rt: Runtime = Depends(operator)) -> list[dict]:

@@ -6,7 +6,10 @@ The catalog is law: if it does not load, the process does not start.
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -115,6 +118,26 @@ def token_check(value: str | None, *others: str | None) -> str:
     return "ok"
 
 
+log = logging.getLogger(__name__)
+
+
+async def _retry_parked_reads(runtime: Callable[[], Any]) -> None:
+    """WP-42: every ``READING_RETRY_SECONDS`` (default 60; 0 = off), read again the parked
+    statements whose time has come, so a statement waiting for model quota never stalls."""
+    every = float(os.environ.get("READING_RETRY_SECONDS", "60") or 0)
+    if every <= 0:
+        return
+    while True:
+        await asyncio.sleep(every)
+        rt = runtime()
+        if rt is None or rt.gemini_reader is None:
+            continue
+        try:
+            await asyncio.to_thread(rt.retry_waiting)
+        except Exception:  # a failed round is logged; the next one tries again
+            log.exception("retrying parked statement reads failed")
+
+
 def create_app(
     database_url: str | None | object = ...,
     *,
@@ -150,7 +173,9 @@ def create_app(
             from poarta_contabila.runtime import runtime_from_env
 
             app.state.runtime, app.state.runtime_reason = runtime_from_env(app.state.catalog, dsn)
+        retry = asyncio.create_task(_retry_parked_reads(current_runtime))
         yield
+        retry.cancel()
 
     app = FastAPI(title="Poarta Primară", version="0.1.0", lifespan=lifespan)
     app.add_middleware(BodyLimit, max_bytes=_max_upload_bytes())

@@ -191,6 +191,8 @@ def _outcome(view: dict[str, Any]) -> str:
         return str(view)[:120]
     if "detail" in view:
         return f"refused: {view['detail']}"
+    if view.get("status") == "waiting":  # WP-42: parked, read again from not_before
+        return f"waiting for model quota until {view.get('not_before')}: {view.get('reason')}"[:300]
     job = view.get("job") or {}
     parts = [f"job {job['status']}" if job.get("status") else None]
     if job.get("error"):
@@ -236,7 +238,7 @@ def _ocr_step(c: Client, report: Report) -> None:
     out = _json(resp)
     outcome = "; ".join(_outcome(j) for j in out.get("jobs", [])) or _outcome(out)
     report.steps.append(
-        Step("statement PDF read", resp.status_code, outcome, resp.status_code < 400)
+        Step("statement PDF read", resp.status_code, outcome, resp.status_code in (200, 201))
     )
 
 

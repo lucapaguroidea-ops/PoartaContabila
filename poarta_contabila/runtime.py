@@ -14,7 +14,7 @@ import io
 import os
 import zipfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -34,7 +34,7 @@ from poarta_contabila.extract.contract import (
     write_extraction,
 )
 from poarta_contabila.extract.document_ai import DocumentAiError, shows_iban
-from poarta_contabila.extract.gemini import GeminiError, gemini_reader_from_env
+from poarta_contabila.extract.gemini import GeminiError, OutOfQuota, gemini_reader_from_env
 from poarta_contabila.extract.statement import (
     StatementError,
     StatementMeta,
@@ -58,6 +58,7 @@ from poarta_contabila.jev import (
 from poarta_contabila.model_roles import CALL_MODES, InMemoryModelCallStore, ModelGateway, brief
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
+from poarta_contabila.reading_waits import InMemoryReadingWaitStore, ReadingWait
 from poarta_contabila.recon.post import PostResult, how_check
 from poarta_contabila.recon.pre import PreResult, ReconStore, make_pre_check, pre_profile
 from poarta_contabila.recon.settle import (
@@ -95,6 +96,14 @@ def _months_back(period: str, n: int) -> list[str]:
 
 class IngestRefused(ValueError):
     """The upload cannot become a Job; the message says which gate."""
+
+
+class ReadingDeferred(Exception):
+    """No model can read this statement now (00_LAW §8 A5): it waits, nothing is refused."""
+
+    def __init__(self, reason: str, retry_after: float):
+        super().__init__(reason)
+        self.reason, self.retry_after = reason, retry_after
 
 
 def statement_problem(
@@ -136,6 +145,7 @@ class Runtime:
     model_calls: Any = None  # InMemoryModelCallStore | PostgresModelCallStore
     model_mode: str = "off"  # MODEL_CALLS: off | dry (record only) | live (WP-36)
     answers: Any = None  # InMemoryAnswerLog | PostgresAnswerLog (WP-33)
+    reading_waits: Any = None  # InMemoryReadingWaitStore | PostgresReadingWaitStore (WP-42)
 
     def __post_init__(self) -> None:
         if self.model_calls is None:
@@ -192,6 +202,8 @@ class Runtime:
             self.closes = InMemoryCloseStore()
         if self.extracts is None:
             self.extracts = InMemoryExtractStore()
+        if self.reading_waits is None:
+            self.reading_waits = InMemoryReadingWaitStore()
         self.close = build_close_graph(
             CloseDeps(
                 catalog=self.catalog,
@@ -589,6 +601,8 @@ class Runtime:
                 extraction = self._read_until_it_ties(reader, pdf, meta, cui, strong)
             else:
                 extraction = reader(pdf, tenant_cui=cui)
+        except OutOfQuota as exc:
+            raise ReadingDeferred(str(exc), exc.retry_after) from exc
         except (DocumentAiError, GeminiError) as exc:
             raise IngestRefused(str(exc)) from exc
         prefix = f"tenants/{cui}/{tenant.punct}/{period}/extras/source/{source_hash}"
@@ -673,6 +687,103 @@ class Runtime:
         }
 
     def ingest_statement(
+        self,
+        cui: str,
+        meta: StatementMeta,
+        tables: list[dict[str, Any]] | None,
+        pdf: bytes,
+        strong: bool = False,
+    ) -> dict[str, Any]:
+        """A PDF statement → a pack and one Job per movement line; or, when no model can read
+        it now, ``{"status": "waiting", …}``: parked and read again later (WP-42)."""
+        try:
+            return self._ingest_statement(cui, meta, tables, pdf, strong)
+        except ReadingDeferred as exc:
+            return self._park(cui, meta, pdf, strong, exc)
+
+    def _park(
+        self, cui: str, meta: StatementMeta, pdf: bytes, strong: bool, exc: ReadingDeferred
+    ) -> dict[str, Any]:
+        tenant = self.registry.tenant(cui)
+        sha = hashlib.sha256(pdf).hexdigest()
+        key = f"tenants/{cui}/{tenant.punct}/{meta.statement_date[:7]}/extras/waiting/{sha}.pdf"
+        self.blobs.put(key, pdf)
+        now = datetime.now(UTC)
+        wait = self.reading_waits.put(
+            ReadingWait(
+                wait_id=f"{cui}:{sha}",
+                tenant_cui=cui,
+                meta=meta.model_dump(mode="json"),
+                pdf_key=key,
+                strong=strong,
+                reason=exc.reason,
+                not_before=(now + timedelta(seconds=exc.retry_after)).isoformat(),
+                created_at=now.isoformat(),
+            )
+        )
+        return {"status": "waiting", **wait.model_dump(include={"wait_id", "not_before", "reason"})}
+
+    def retry_waiting(self, cui: str | None = None, now: datetime | None = None) -> list[dict]:
+        """Read again every parked statement whose time has come (WP-42): minted when the read
+        confirms, parked again when no model can read yet, refused otherwise."""
+        now = now or datetime.now(UTC)
+        out = []
+        for wait in self.reading_waits.due(now):
+            if cui is not None and wait.tenant_cui != cui:
+                continue
+            meta = StatementMeta.model_validate(wait.meta)
+            update: dict[str, Any] = {"attempts": wait.attempts + 1}
+            try:
+                pdf = self.blobs.get(wait.pdf_key)
+                result = self._ingest_statement(wait.tenant_cui, meta, None, pdf, wait.strong)
+                update |= {"status": "read", "result": result, "reason": "read"}
+            except ReadingDeferred as exc:
+                later = now + timedelta(seconds=exc.retry_after)
+                update |= {"reason": exc.reason, "not_before": later.isoformat()}
+            except IngestRefused as exc:
+                update |= {"status": "refused", "reason": str(exc)}
+            done = wait.model_copy(update=update)
+            self.reading_waits.update(done)
+            out.append(done.model_dump(mode="json", exclude={"meta"}))
+        return out
+
+    def reading_budget(self, cui: str, documents: int = 0) -> dict[str, Any]:
+        """WP-42: what the Gemini reader may still send today, what waits, and — for a batch
+        of *documents* about to be uploaded — whether today's budget covers it."""
+        reader = self.gemini_reader
+        if reader is None:
+            raise IngestRefused("the Gemini reader is not wired (MODEL_CALLS=live and the key)")
+        models = reader.budget()
+        waiting = self.reading_waits.list(cui, "waiting")
+
+        def left(tier: str) -> int | None:
+            rows = [m["left_today"] for m in models if m["tier"] == tier]
+            return None if any(v is None for v in rows) else sum(rows)
+
+        everyday, strong = left("everyday"), left("strong")
+        need = documents + len(waiting)
+        warnings = []
+        if everyday is not None and need > everyday:
+            warnings.append(
+                f"{need} statements to read, {everyday} everyday reads left today:"
+                " the rest wait until Pacific midnight (or use the strong tier)"
+            )
+        if strong is not None and strong < need:
+            warnings.append(
+                f"{strong} strong reads left today: a second run for more than {strong}"
+                " statements waits until Pacific midnight"
+            )
+        return {
+            "models": models,
+            "everyday_left": everyday,
+            "strong_left": strong,
+            "resets_in_seconds": round(reader.limiter.to_midnight()),
+            "waiting": [w.model_dump(mode="json", exclude={"meta"}) for w in waiting],
+            "documents": documents,
+            "warnings": warnings,
+        }
+
+    def _ingest_statement(
         self,
         cui: str,
         meta: StatementMeta,
@@ -1062,6 +1173,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     from poarta_contabila.model_roles import PostgresModelCallStore
     from poarta_contabila.packages import PostgresPackageStore
     from poarta_contabila.period_diff import PostgresPeriodStore
+    from poarta_contabila.reading_waits import PostgresReadingWaitStore
     from poarta_contabila.recon.pre import PostgresReconStore
     from poarta_contabila.registry import PostgresRegistry
     from poarta_contabila.rules import PostgresRuleStore
@@ -1093,6 +1205,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         model_mode=model_mode,
         statement_reader=document_ai_from_env(),
         extracts=PostgresExtractStore(dsn),
+        reading_waits=PostgresReadingWaitStore(dsn),
         answers=PostgresAnswerLog(dsn),
     )
     # WP-36: Gemini reads synthetic tenants' statements directly (MODEL_CALLS=live + key)

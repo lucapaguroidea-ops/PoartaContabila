@@ -22,8 +22,10 @@ the answer and the session records it.
 - [x] **Model tiers and free-tier limits** (00_LAW §8 A4, 2026-10-02): everyday
       `gemini-3.5-flash-lite`, `gemini-3.1-flash-lite` (15 RPM); strong `gemini-3.8-flash`,
       `gemini-3.7-flash` (5 RPM, 20 RPD). Update `rate_limits` if AI Studio's page changes.
-- [ ] **Confirm the Lite models**: their exact ids and their RPD (the column after TPM on
-      AI Studio's rate-limit page); until then their `rpd` is `null` `[de confirmat]`.
+- [x] **Lite models confirmed** (AI Studio rate-limit table, 2026-10-02): 3.5 and 3.1 Flash
+      Lite, 15 RPM, 250K TPM, 500 RPD each; `gemini-3.5-flash-lite` read 6/6 live.
+- [ ] **Optional:** `READING_RETRY_SECONDS` on Railway (default 60) — how often parked
+      statements are read again; 0 turns the background round off.
 - [ ] **Turn it on**: set `MODEL_CALLS=live` on Railway (from `dry`). Only synthetic document
       reading sends; every other role keeps recording. Check `GET /model-roles` shows
       `ocr_extract` with `key_set: true`.

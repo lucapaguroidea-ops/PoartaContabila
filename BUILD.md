@@ -53,6 +53,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-39 | done | WP-36 | Gemini reader asks again when Google is busy (500/503/504), three tries at most |
 | WP-40 | done | WP-39 | Free-tier rate limits in the catalog; one backup model while the main one is at its limit |
 | WP-41 | done | WP-40 | Model tiers (Lite everyday, Flash strong), daily limits, second run on a read that does not tie |
+| WP-42 | done | WP-41 | Lite first always; a statement no model can read waits and is read later; reading budget |
 
 ## WP details
 
@@ -680,6 +681,29 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - The evaluation reads with one model (the first everyday one, or `--model`).
 - Open: the Lite models' daily limits and the ids `gemini-3.5-flash-lite` /
   `gemini-3.1-flash-lite` are to be confirmed on the owner's AI Studio page.
+
+### WP-42 Lite first, parked reads, reading budget
+- Asked by the owner 2026-10-02 (00_LAW §8 A5), from AI Studio's full rate-limit table: Lite
+  500 RPD each, Flash 20; the Lite model read all six evaluation statements correctly.
+- Catalog: `gemini-3.5-flash-lite` and `gemini-3.1-flash-lite` get `rpd: 500` (no longer
+  `[de confirmat]`).
+- `order()`: pages no longer send a statement to the strong tier first; only `strong: true`
+  does, and a second run.
+- No model can read now (`OutOfQuota`: every model at its limit, 429 or busy; it carries
+  when the first may read again) → the statement is parked in `domain.reading_waits` with its
+  PDF in the bucket, and `POST /extras/{cui}` answers **202** `{status: waiting, wait_id,
+  not_before, reason}`. No Job until a read confirms. A wrong read is still a 422.
+- Read again: a background task every `READING_RETRY_SECONDS` (default 60, 0 = off) and
+  `POST /reading/{cui}/retry`; a parked statement becomes `read` (with the ingest result),
+  waits longer (still no quota), or `refused` (the read did not confirm).
+- `GET /reading/{cui}/waiting`; `GET /reading/{cui}/budget?documents=N`: per model rpm, rpd,
+  used today, left today, spent by Google; tier totals; seconds to Pacific midnight; what
+  waits; warnings when N statements (plus those waiting) exceed today's everyday reads, or
+  the strong reads left could not give each a second run.
+- The smoke run reports a parked statement as `waiting for model quota until …`.
+- Open: the counts are this process's; a redeploy restarts them at 0 (Google's 429 still
+  stops a spent model). The operator's on-the-fly choice when every tier is spent (reserve
+  models, evaluated first) is the next WP.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

@@ -182,3 +182,14 @@ CREATE TABLE IF NOT EXISTS domain.sink_exports (
     product     text,
     body        jsonb NOT NULL
 );
+
+-- WP-42: synthetic statements waiting for model quota (00_LAW §8 A5); read again from
+-- not_before on. One row per (tenant, PDF).
+CREATE TABLE IF NOT EXISTS domain.reading_waits (
+    wait_id     text PRIMARY KEY,            -- {cui}:{sha256 of the PDF}
+    tenant_cui  text NOT NULL,
+    status      text NOT NULL CHECK (status IN ('waiting', 'read', 'refused')),
+    not_before  text NOT NULL,               -- UTC ISO
+    body        jsonb NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reading_waits_due ON domain.reading_waits (status, not_before);

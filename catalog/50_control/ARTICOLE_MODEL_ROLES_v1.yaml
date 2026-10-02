@@ -147,9 +147,9 @@ roles:
     tiers:
       everyday: [gemini-3.5-flash-lite, gemini-3.1-flash-lite]
       strong: [gemini-3.8-flash, gemini-3.7-flash]
-    rate_limits:   # AI Studio free tier, per project (owner, 2026-10-02)
-      gemini-3.5-flash-lite: {rpm: 15, tpm: 250000, rpd: null}   # rpd [de confirmat]
-      gemini-3.1-flash-lite: {rpm: 15, tpm: 250000, rpd: null}   # rpd [de confirmat]
+    rate_limits:   # AI Studio free tier, per project (owner's AI Studio page, 2026-10-02)
+      gemini-3.5-flash-lite: {rpm: 15, tpm: 250000, rpd: 500}
+      gemini-3.1-flash-lite: {rpm: 15, tpm: 250000, rpd: 500}
       gemini-3.8-flash: {rpm: 5, tpm: 250000, rpd: 20}
       gemini-3.7-flash: {rpm: 5, tpm: 250000, rpd: 20}
     card:
@@ -172,9 +172,9 @@ roles:
     tiers:
       everyday: [gemini-3.5-flash-lite, gemini-3.1-flash-lite]
       strong: [gemini-3.8-flash, gemini-3.7-flash]
-    rate_limits:   # AI Studio free tier, per project (owner, 2026-10-02)
-      gemini-3.5-flash-lite: {rpm: 15, tpm: 250000, rpd: null}   # rpd [de confirmat]
-      gemini-3.1-flash-lite: {rpm: 15, tpm: 250000, rpd: null}   # rpd [de confirmat]
+    rate_limits:   # AI Studio free tier, per project (owner's AI Studio page, 2026-10-02)
+      gemini-3.5-flash-lite: {rpm: 15, tpm: 250000, rpd: 500}
+      gemini-3.1-flash-lite: {rpm: 15, tpm: 250000, rpd: 500}
       gemini-3.8-flash: {rpm: 5, tpm: 250000, rpd: 20}
       gemini-3.7-flash: {rpm: 5, tpm: 250000, rpd: 20}
     note: >-

@@ -35,7 +35,7 @@ The domain store (Postgres, A1) may hold an expected set and witness snapshots. 
 4. Graph edges read only stored fields or Jev answers already on state. No LLM on an edge.
 5. Models act only inside nodes, by **role**, and every role is pinned to one exact model in
    `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (no alias, no auto-router, no fallback model
-   but the model tiers of Google AI Studio document reading, §8 A3–A4;
+   but the model tiers of Google AI Studio document reading, §8 A3–A5;
    an unset model means the role refuses and a person is asked). **System One = Jev**: routes and
    classifies JSON / normalized data. **System Two = DeepSeek or GLM**: explains and drafts for a
    person; never posts, never decides a gate. **Document reading = Gemini**: only where there is no
@@ -182,5 +182,17 @@ Decided by the owner on 2026-10-02, after the free tier's daily quota (20 reques
 4. **Moving on.** The next model in the order is taken at once on a 429 (a daily 429, as Google names its quota, skips the model until Pacific midnight), after one retry 10 s later on a busy answer (5xx, unreachable), or when this process's own count of that model is full. When every model is full the reader waits for the first free slot, at most 90 s, then refuses.
 5. **Recorded.** Every call records the model that read, its tier, whether it was the first choice, and whether it was a second run.
 6. **Not changed:** every other role keeps one model and no fallback; the synthetic-only guard, the key and the client-data rules are untouched. The reading evaluation reads with one model and never another tier.
+
+Not an amendment of: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` is unchanged.
+
+### A5 · 2026-10-02 — Lite first always; a statement no model can read waits
+
+Decided by the owner on 2026-10-02, after the free tier's limits were read in full (Lite: 500 requests a day each; Flash: 20) and the Lite model read every evaluation statement correctly, the two-page and dense ones included.
+
+1. **Pages do not decide.** A4 §2's "strong tier first for a statement of 2 pages or more" is withdrawn. Everyday models read first; the strong tier first only when the operator asks (`strong: true`), and alone for a second run.
+2. **Waiting is not refusing.** When no model in the order can read a statement now (every one at its limit, or busy), the statement is parked with its PDF (`domain.reading_waits`) and read again from the time the first model may read; it has no Job until a read confirms. A read that does not confirm is still refused (A4 §2). The same PDF uploaded while it waits is the same parked statement.
+3. **Read again** by a background round every `READING_RETRY_SECONDS` (default 60) and by `POST /reading/{cui}/retry`.
+4. **Budget.** `GET /reading/{cui}/budget` shows each model's reads left today (as counted by this process; Google's daily 429 also marks a model spent), what waits, and — with `documents=N` — a warning before a batch the day's budget does not cover.
+5. **Not changed:** the synthetic-only guard, the key and the client-data rules; no model is chosen at run time outside the catalog. A choice an operator makes when every tier is spent (reserve models) is a later amendment.
 
 Not an amendment of: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` is unchanged.
