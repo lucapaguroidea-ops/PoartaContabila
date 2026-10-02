@@ -158,8 +158,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   after `file` (answer recorded). Close kind from the axes (unknown → material).
   Operator: `POST /close/{cui}/{period}`, `GET /close/{cui}/{period}`, `POST …/resume`.
 - Open: Layer 2 is wired in WP-20 but sends nothing until its wire is read; the POST recon and Cartea Mare pull nodes are not
-  separate yet (the period diff reads the latest uploaded books); V4 records the answer, CO.DiT
-  itself is WP-11.
+  separate yet (the period diff reads the latest uploaded books); V4 writes CO.DiT (WP-11).
 
 ### WP-11 CO.DiT
 - Seed copies Pins. T1–T3 hard. New axes default null. Certainty required on write.
@@ -171,8 +170,14 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   `domain.codit`. The period diff, close and ingest take their axes from the period's CO.DiT
   (operator query axes only where no CO.DiT exists). `PUT/GET /codit/{cui}/{period}`; a filed
   period's CO.DiT is not rewritten.
-- Open: V4 records the answer but does not patch CO.DiT yet (`may_patch: auto, saf_t, exig`;
-  `seed_next_period_on`); R1 (identity join) is enforced at triage, not here.
+- V4 (2026-10-02): after `file`, `skip` writes nothing; `accept` may patch the filed period's
+  CO.DiT on `v4.may_patch` only (`edit`: `auto`, `saf_t`, `exig`; hard pairs run, nothing is saved
+  on a refusal and the question is asked again) and seed the next period (`seed_next`): the
+  profile carries forward whole, marked `seeded by V4 from <period>`, and only
+  `v4.seed_next_period_on` (`impozit`, `tva`) may change at the boundary (a default `exig`
+  follows a changed `tva`). An existing next CO.DiT is never overwritten; a replay of the
+  same seed is a no-op. The CloseRun records `patched_hash` / `seeded_period`.
+- Open: R1 (identity join) is enforced at triage, not here.
 
 ### WP-12 Filings
 - Rows from `ARTICOLE_FILING_v1.yaml`. Receipt closes item.

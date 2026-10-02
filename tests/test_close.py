@@ -190,3 +190,142 @@ def test_postgres_close_store(cat):
     store.put(CloseRun(cui=CUI, period=PERIOD, status="locked", expected_set_hash="h1"))
     store.put(CloseRun(cui=CUI, period=PERIOD, status="hold", expected_set_hash="h1"))
     assert store.get(CUI, PERIOD).status == "hold"
+
+
+# ----- V4 after file: patch the filed period on may_patch, seed the next -----
+
+
+def _filed_with_codit(cat):
+    from poarta_contabila.codit import AxisValue, CoditInput, InMemoryCoditStore, write_codit
+
+    def a(v):
+        return AxisValue(value=v, certainty="confirmed", as_of="2026-09-01", source="test")
+
+    codits = InMemoryCoditStore()
+    axes = {"forma": a("srl"), "impozit": a("micro_1"), "tva": a("tva_platitor")}
+    codits.put(write_codit(cat, CUI, PERIOD, CoditInput(axes=axes)))
+    m = _clean(cat)
+    m.graph = build_close_graph(
+        CloseDeps(
+            catalog=cat,
+            store=m.store,
+            expected=lambda cui, period: m.expected,
+            eye=lambda cui, period: CleanEye(m.sink),
+            codit=codits.get,
+            codit_put=codits.put,
+        ),
+        checkpointer=MemorySaver(),
+    )
+    m.start()
+    m.answer({"action": "file", "explained_rule": None})
+    assert m.question()["kind"] == "v4_codit"
+    return m, codits, a
+
+
+def test_v4_question_proposes_what_it_may_patch_and_seed(cat):
+    m, _, _ = _filed_with_codit(cat)
+    proposal = m.question()["proposal"]
+    assert proposal["may_patch"] == ["auto", "saf_t", "exig"]
+    assert set(proposal["seed_next"]) == {"impozit", "tva"}
+
+
+def test_v4_patches_the_filed_period_on_may_patch_only(cat):
+    m, codits, a = _filed_with_codit(cat)
+    m.answer(
+        {
+            "accept": True,
+            "skip": False,
+            "edit": {"tva": a("tva_neplatitor").model_dump()},
+            "seed_next": None,
+        }
+    )
+    assert "may patch only" in m.question()["error"]  # asked again, nothing written
+    assert codits.get(CUI, PERIOD).saf_t is None
+    m.answer({"accept": True, "skip": False, "edit": {"saf_t": True}, "seed_next": None})
+    doc = codits.get(CUI, PERIOD)
+    assert doc.saf_t is True and doc.derive()["tva"] == "tva_platitor"
+    assert m.run.status == "v4_done" and m.run.v4["patched_hash"] == doc.hash
+
+
+def test_v4_refuses_a_patch_a_hard_pair_forbids(cat):
+    m, codits, a = _filed_with_codit(cat)
+    m.answer(
+        {"accept": True, "skip": False, "edit": {"exig": a(None).model_dump()}, "seed_next": None}
+    )
+    assert "T3" in m.question()["error"]  # a payer with exig emptied
+    assert codits.get(CUI, PERIOD).derive()["exig"] == "tva_exig_livrare"
+
+
+def test_v4_seeds_the_next_period_once_and_never_overwrites(cat):
+    m, codits, a = _filed_with_codit(cat)
+    m.answer(
+        {
+            "accept": True,
+            "skip": False,
+            "edit": None,
+            "seed_next": {"impozit": a("profit_16").model_dump()},
+        }
+    )
+    nxt = codits.get(CUI, "2026-10")
+    assert {k: nxt.derive()[k] for k in ("exig", "impozit", "tva")} == {
+        "exig": "tva_exig_livrare",
+        "impozit": "profit_16",
+        "tva": "tva_platitor",
+    }
+    assert nxt.axes["tva"].source == f"seeded by V4 from {PERIOD}"
+    assert nxt.derive()["forma"] == "srl"  # the profile travels whole; impozit changed
+    assert m.run.v4["seeded_period"] == "2026-10"
+
+    other, codits2, a2 = _filed_with_codit(cat)
+    from poarta_contabila.codit import CoditInput, write_codit
+
+    codits2.put(write_codit(cat, CUI, "2026-10", CoditInput(axes={"tva": a2("tva_neplatitor")})))
+    other.answer({"accept": True, "skip": False, "edit": None, "seed_next": {}})
+    assert "does not overwrite" in other.question()["error"]
+    assert codits2.get(CUI, "2026-10").derive()["tva"] == "tva_neplatitor"
+
+
+@pytest.mark.parametrize(
+    ("body", "match"),
+    [
+        (
+            {"accept": False, "skip": False, "edit": None, "seed_next": None},
+            "choose accept or skip",
+        ),
+        ({"accept": True, "skip": True, "edit": None, "seed_next": None}, "choose accept or skip"),
+        (
+            {"accept": False, "skip": True, "edit": {"saf_t": True}, "seed_next": None},
+            "skip writes",
+        ),
+    ],
+)
+def test_v4_answer_must_be_one_clear_choice(cat, body, match):
+    m, codits, _ = _filed_with_codit(cat)
+    before = codits.get(CUI, PERIOD).hash
+    m.answer(body)
+    assert match in m.question()["error"] and codits.get(CUI, PERIOD).hash == before
+
+
+def test_v4_skip_writes_nothing(cat):
+    m, codits, _ = _filed_with_codit(cat)
+    before = codits.get(CUI, PERIOD).hash
+    m.answer({"accept": False, "skip": True, "edit": None, "seed_next": None})
+    assert m.run.status == "v4_done" and codits.get(CUI, PERIOD).hash == before
+    assert codits.get(CUI, "2026-10") is None
+
+
+def test_v4_seed_carries_a_micro_firm_and_its_default_exig_follows_tva(cat):
+    m, codits, a = _filed_with_codit(cat)
+    m.answer({"accept": True, "skip": False, "edit": None, "seed_next": {}})
+    nxt = codits.get(CUI, "2026-10")
+    assert nxt.derive()["impozit"] == "micro_1" and nxt.derive()["forma"] == "srl"
+    other, codits2, a2 = _filed_with_codit(cat)
+    other.answer(
+        {
+            "accept": True,
+            "skip": False,
+            "edit": None,
+            "seed_next": {"tva": a2("tva_neplatitor").model_dump()},
+        }
+    )
+    assert "exig" not in codits2.get(CUI, "2026-10").derive()  # the default followed tva

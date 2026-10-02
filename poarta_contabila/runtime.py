@@ -141,6 +141,7 @@ class Runtime:
                 codit=lambda cui, period: (
                     self.codits.get(cui, period) if self.codits is not None else None
                 ),
+                codit_put=self.codits.put if self.codits is not None else None,
             ),
             checkpointer=self.checkpointer,
         )
