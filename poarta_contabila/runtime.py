@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import uuid
 import zipfile
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -58,7 +59,12 @@ from poarta_contabila.jev import (
 from poarta_contabila.model_roles import CALL_MODES, InMemoryModelCallStore, ModelGateway, brief
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
-from poarta_contabila.reading_waits import InMemoryReadingWaitStore, ReadingWait
+from poarta_contabila.reading_waits import (
+    InMemoryReadingChoiceStore,
+    InMemoryReadingWaitStore,
+    ReadingChoice,
+    ReadingWait,
+)
 from poarta_contabila.recon.post import PostResult, how_check
 from poarta_contabila.recon.pre import PreResult, ReconStore, make_pre_check, pre_profile
 from poarta_contabila.recon.settle import (
@@ -146,6 +152,7 @@ class Runtime:
     model_mode: str = "off"  # MODEL_CALLS: off | dry (record only) | live (WP-36)
     answers: Any = None  # InMemoryAnswerLog | PostgresAnswerLog (WP-33)
     reading_waits: Any = None  # InMemoryReadingWaitStore | PostgresReadingWaitStore (WP-42)
+    reading_choices: Any = None  # InMemoryReadingChoiceStore | Postgres… (WP-43)
 
     def __post_init__(self) -> None:
         if self.model_calls is None:
@@ -204,6 +211,8 @@ class Runtime:
             self.extracts = InMemoryExtractStore()
         if self.reading_waits is None:
             self.reading_waits = InMemoryReadingWaitStore()
+        if self.reading_choices is None:
+            self.reading_choices = InMemoryReadingChoiceStore()
         self.close = build_close_graph(
             CloseDeps(
                 catalog=self.catalog,
@@ -696,6 +705,7 @@ class Runtime:
     ) -> dict[str, Any]:
         """A PDF statement → a pack and one Job per movement line; or, when no model can read
         it now, ``{"status": "waiting", …}``: parked and read again later (WP-42)."""
+        self._sync_reserve()
         try:
             return self._ingest_statement(cui, meta, tables, pdf, strong)
         except ReadingDeferred as exc:
@@ -721,12 +731,90 @@ class Runtime:
                 created_at=now.isoformat(),
             )
         )
-        return {"status": "waiting", **wait.model_dump(include={"wait_id", "not_before", "reason"})}
+        out = {"status": "waiting", **wait.model_dump(include={"wait_id", "not_before", "reason"})}
+        ask = self._reading_question()
+        return {**out, "ask": ask} if ask else out
+
+    # -- WP-43: the operator's choice when every tier is spent (00_LAW §8 A6) --
+
+    def _sync_reserve(self) -> None:
+        """The Gemini reader reads with the reserve models while today's choice says so."""
+        reader = self.gemini_reader
+        if reader is None or reader.role.tiers is None or not reader.role.tiers.reserve:
+            return
+        latest = self.reading_choices.latest(reader.limiter.today())
+        on = latest is not None and latest.choice == "reserve"
+        reader.reserve_until = datetime.fromisoformat(latest.until) if on else None
+
+    def _reading_question(self) -> dict[str, Any] | None:
+        """The question for a person, when statements wait and the reserve is not open."""
+        reader = self.gemini_reader
+        if reader is None or reader.role.tiers is None or reader.reserve_active():
+            return None
+        reserve = list(reader.role.tiers.reserve)
+        options = {
+            "wait": "read the waiting statements after Pacific midnight, when the quotas reset",
+            "skip": "set one waiting statement aside (POST …/waiting/{wait_id}/skip) and send"
+            " its tables with the upload instead",
+        }
+        if reserve:
+            options["reserve"] = f"read with the reserve models until Pacific midnight: {reserve}"
+        return {
+            "question": "Every model the catalog reads with now is spent or busy. What next?",
+            "options": options,
+            "answer_at": "POST /reading/{cui}/choice {choice: wait | reserve}",
+        }
+
+    def reading_choose(self, cui: str, choice: str, operator: str | None) -> dict[str, Any]:
+        """Record today's choice; ``reserve`` opens the reserve models until Pacific midnight
+        and sends this tenant's waiting statements to be read again now."""
+        reader = self.gemini_reader
+        if reader is None:
+            raise IngestRefused("the Gemini reader is not wired (MODEL_CALLS=live and the key)")
+        if choice not in ("wait", "reserve"):
+            raise IngestRefused("choice is wait or reserve")
+        if choice == "reserve" and not (reader.role.tiers and reader.role.tiers.reserve):
+            raise IngestRefused("the catalog lists no reserve models")
+        now = datetime.now(UTC)
+        released = 0
+        if choice == "reserve":
+            for wait in self.reading_waits.list(cui, "waiting"):
+                self.reading_waits.update(wait.model_copy(update={"not_before": now.isoformat()}))
+                released += 1
+        day = reader.limiter.today()
+        record = ReadingChoice(
+            choice_id=f"{day}:{uuid.uuid4().hex[:12]}",
+            day=day,
+            choice=choice,
+            tenant_cui=cui,
+            operator=operator,
+            at=now.isoformat(),
+            until=reader.limiter.midnight().astimezone(UTC).isoformat(),
+            released=released,
+        )
+        self.reading_choices.add(record)
+        self._sync_reserve()
+        read = self.retry_waiting(cui, now) if released else []
+        return {"choice": record.model_dump(mode="json"), "read": read}
+
+    def skip_waiting(
+        self, cui: str, wait_id: str, reason: str, operator: str | None
+    ) -> dict[str, Any]:
+        """Set a parked statement aside: it is never read by a model (send its tables)."""
+        found = [w for w in self.reading_waits.list(cui, "waiting") if w.wait_id == wait_id]
+        if not found:
+            raise IngestRefused(f"no statement of {cui} waits as {wait_id}")
+        done = found[0].model_copy(
+            update={"status": "skipped", "reason": reason or "set aside", "skipped_by": operator}
+        )
+        self.reading_waits.update(done)
+        return done.model_dump(mode="json", exclude={"meta"})
 
     def retry_waiting(self, cui: str | None = None, now: datetime | None = None) -> list[dict]:
         """Read again every parked statement whose time has come (WP-42): minted when the read
         confirms, parked again when no model can read yet, refused otherwise."""
         now = now or datetime.now(UTC)
+        self._sync_reserve()
         out = []
         for wait in self.reading_waits.due(now):
             if cui is not None and wait.tenant_cui != cui:
@@ -753,6 +841,7 @@ class Runtime:
         reader = self.gemini_reader
         if reader is None:
             raise IngestRefused("the Gemini reader is not wired (MODEL_CALLS=live and the key)")
+        self._sync_reserve()
         models = reader.budget()
         waiting = self.reading_waits.list(cui, "waiting")
 
@@ -781,6 +870,15 @@ class Runtime:
             "waiting": [w.model_dump(mode="json", exclude={"meta"}) for w in waiting],
             "documents": documents,
             "warnings": warnings,
+            "reserve_open_until": (
+                reader.reserve_until.isoformat() if reader.reserve_active() else None
+            ),
+            "choices_today": [
+                c.model_dump(mode="json")
+                for c in self.reading_choices.recent()
+                if c.day == reader.limiter.today()
+            ],
+            "ask": self._reading_question() if waiting else None,
         }
 
     def _ingest_statement(
@@ -1173,7 +1271,10 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
     from poarta_contabila.model_roles import PostgresModelCallStore
     from poarta_contabila.packages import PostgresPackageStore
     from poarta_contabila.period_diff import PostgresPeriodStore
-    from poarta_contabila.reading_waits import PostgresReadingWaitStore
+    from poarta_contabila.reading_waits import (
+        PostgresReadingChoiceStore,
+        PostgresReadingWaitStore,
+    )
     from poarta_contabila.recon.pre import PostgresReconStore
     from poarta_contabila.registry import PostgresRegistry
     from poarta_contabila.rules import PostgresRuleStore
@@ -1206,6 +1307,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         statement_reader=document_ai_from_env(),
         extracts=PostgresExtractStore(dsn),
         reading_waits=PostgresReadingWaitStore(dsn),
+        reading_choices=PostgresReadingChoiceStore(dsn),
         answers=PostgresAnswerLog(dsn),
     )
     # WP-36: Gemini reads synthetic tenants' statements directly (MODEL_CALLS=live + key)

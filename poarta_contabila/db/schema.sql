@@ -188,8 +188,21 @@ CREATE TABLE IF NOT EXISTS domain.sink_exports (
 CREATE TABLE IF NOT EXISTS domain.reading_waits (
     wait_id     text PRIMARY KEY,            -- {cui}:{sha256 of the PDF}
     tenant_cui  text NOT NULL,
-    status      text NOT NULL CHECK (status IN ('waiting', 'read', 'refused')),
+    status      text NOT NULL CHECK (status IN ('waiting', 'read', 'refused', 'skipped')),
     not_before  text NOT NULL,               -- UTC ISO
     body        jsonb NOT NULL
 );
 CREATE INDEX IF NOT EXISTS reading_waits_due ON domain.reading_waits (status, not_before);
+-- WP-42 → WP-43: a parked statement may be set aside by a person.
+ALTER TABLE domain.reading_waits DROP CONSTRAINT IF EXISTS reading_waits_status_check;
+ALTER TABLE domain.reading_waits ADD CONSTRAINT reading_waits_status_check
+    CHECK (status IN ('waiting', 'read', 'refused', 'skipped'));
+
+-- WP-43: what an operator chose when every model tier was spent (00_LAW §8 A6); insert-only.
+CREATE TABLE IF NOT EXISTS domain.reading_choices (
+    seq        bigserial PRIMARY KEY,
+    choice_id  text NOT NULL UNIQUE,
+    day        text NOT NULL,                -- the Pacific date it holds for
+    body       jsonb NOT NULL
+);
+CREATE INDEX IF NOT EXISTS reading_choices_day ON domain.reading_choices (day, seq);

@@ -35,7 +35,7 @@ The domain store (Postgres, A1) may hold an expected set and witness snapshots. 
 4. Graph edges read only stored fields or Jev answers already on state. No LLM on an edge.
 5. Models act only inside nodes, by **role**, and every role is pinned to one exact model in
    `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (no alias, no auto-router, no fallback model
-   but the model tiers of Google AI Studio document reading, §8 A3–A5;
+   but the model tiers of Google AI Studio document reading, §8 A3–A6;
    an unset model means the role refuses and a person is asked). **System One = Jev**: routes and
    classifies JSON / normalized data. **System Two = DeepSeek or GLM**: explains and drafts for a
    person; never posts, never decides a gate. **Document reading = Gemini**: only where there is no
@@ -193,6 +193,17 @@ Decided by the owner on 2026-10-02, after the free tier's limits were read in fu
 2. **Waiting is not refusing.** When no model in the order can read a statement now (every one at its limit, or busy), the statement is parked with its PDF (`domain.reading_waits`) and read again from the time the first model may read; it has no Job until a read confirms. A read that does not confirm is still refused (A4 §2). The same PDF uploaded while it waits is the same parked statement.
 3. **Read again** by a background round every `READING_RETRY_SECONDS` (default 60) and by `POST /reading/{cui}/retry`.
 4. **Budget.** `GET /reading/{cui}/budget` shows each model's reads left today (as counted by this process; Google's daily 429 also marks a model spent), what waits, and — with `documents=N` — a warning before a batch the day's budget does not cover.
-5. **Not changed:** the synthetic-only guard, the key and the client-data rules; no model is chosen at run time outside the catalog. A choice an operator makes when every tier is spent (reserve models) is a later amendment.
+5. **Not changed:** the synthetic-only guard, the key and the client-data rules; no model is chosen at run time outside the catalog. A choice an operator makes when every tier is spent is A6.
+
+Not an amendment of: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` is unchanged.
+
+### A6 · 2026-10-02 — the operator's choice when every tier is spent
+
+Decided by the owner on 2026-10-02, so that reading never stalls until a procedure is written.
+
+1. **Reserve models.** A Google AI Studio document-reading role may list `tiers.reserve`: exact `gemini-…` ids, each with its rate limits, which are never read with unless an operator chooses so. They are added to the end of the order (and to a second run's order).
+2. **The question.** When a statement is parked (A5) and the reserve is not open, the upload's answer and `GET /reading/{cui}/budget` carry the question and its closed options: `wait` (read after Pacific midnight), `reserve` (read with the reserve models until Pacific midnight; offered only when the catalog lists them), or setting one statement aside (`skip`) to send its tables instead.
+3. **The answer.** `POST /reading/{cui}/choice {choice: wait | reserve}` is recorded (`domain.reading_choices`, insert-only: who, when, which tenant's statements were waiting, until when, how many it released). `reserve` holds until the next Pacific midnight and sends the waiting statements to be read at once. `POST /reading/{cui}/waiting/{wait_id}/skip {reason}` sets one aside, recorded with who did it; it is never read by a model afterwards.
+4. **Bounds.** No model outside the catalog is chosen at run time; no paid key; every reserve read is checked like any other (holder CUI, IBAN, tie-out) and a wrong read is refused. Synthetic tenants only; client-data rules untouched.
 
 Not an amendment of: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` is unchanged.

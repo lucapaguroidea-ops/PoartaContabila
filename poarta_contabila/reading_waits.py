@@ -16,7 +16,8 @@ from typing import Any, Literal
 
 from poarta_contabila.types.base import Closed
 
-Status = Literal["waiting", "read", "refused"]
+Status = Literal["waiting", "read", "refused", "skipped"]
+Choice = Literal["wait", "reserve"]
 
 
 class ReadingWait(Closed):
@@ -31,6 +32,66 @@ class ReadingWait(Closed):
     attempts: int = 0
     created_at: str
     result: dict[str, Any] | None = None  # once read: the ingest result
+    skipped_by: str | None = None  # WP-43: who set it aside, and why (in reason)
+
+
+class ReadingChoice(Closed):
+    """00_LAW §8 A6: what an operator chose when every tier was spent, for one Pacific day."""
+
+    choice_id: str  # {pacific date}:{seq}
+    day: str  # the Pacific date it holds for
+    choice: Choice
+    tenant_cui: str  # the tenant whose statements were waiting when it was chosen
+    operator: str | None
+    at: str  # UTC ISO
+    until: str  # UTC ISO: the next Pacific midnight
+    released: int = 0  # parked statements it sent to be read again
+
+
+@dataclass
+class InMemoryReadingChoiceStore:
+    rows: list[ReadingChoice] = field(default_factory=list)
+
+    def add(self, choice: ReadingChoice) -> None:
+        self.rows.append(choice)
+
+    def latest(self, day: str) -> ReadingChoice | None:
+        rows = [c for c in self.rows if c.day == day]
+        return rows[-1] if rows else None
+
+    def recent(self, limit: int = 50) -> list[ReadingChoice]:
+        return list(reversed(self.rows))[:limit]
+
+
+class PostgresReadingChoiceStore:
+    """``domain.reading_choices``: insert-only."""
+
+    def __init__(self, dsn: str) -> None:
+        import psycopg
+
+        self._dsn, self._psycopg = dsn, psycopg
+
+    def add(self, choice: ReadingChoice) -> None:
+        with self._psycopg.connect(self._dsn, autocommit=True) as conn:
+            conn.execute(
+                "INSERT INTO domain.reading_choices (choice_id, day, body) VALUES (%s, %s, %s)",
+                (choice.choice_id, choice.day, choice.model_dump_json()),
+            )
+
+    def latest(self, day: str) -> ReadingChoice | None:
+        with self._psycopg.connect(self._dsn) as conn:
+            row = conn.execute(
+                "SELECT body FROM domain.reading_choices WHERE day = %s ORDER BY seq DESC LIMIT 1",
+                (day,),
+            ).fetchone()
+        return ReadingChoice.model_validate(row[0], strict=False) if row else None
+
+    def recent(self, limit: int = 50) -> list[ReadingChoice]:
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT body FROM domain.reading_choices ORDER BY seq DESC LIMIT %s", (limit,)
+            ).fetchall()
+        return [ReadingChoice.model_validate(r[0], strict=False) for r in rows]
 
 
 @dataclass

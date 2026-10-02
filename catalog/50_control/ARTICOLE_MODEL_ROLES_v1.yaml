@@ -147,11 +147,17 @@ roles:
     tiers:
       everyday: [gemini-3.5-flash-lite, gemini-3.1-flash-lite]
       strong: [gemini-3.8-flash, gemini-3.7-flash]
+      # 00_LAW §8 A6: only on a day an operator chose `reserve`. Evaluated 2026-10-02: every
+      # statement they answered was read right (3.6: 30/30 lines, 3.5: 9/9) but Google was
+      # busy (503) for 5 of 6 each, so 6/6 is [de confirmat]; a wrong read is refused anyway.
+      reserve: [gemini-3.6-flash, gemini-3.5-flash]
     rate_limits:   # AI Studio free tier, per project (owner's AI Studio page, 2026-10-02)
       gemini-3.5-flash-lite: {rpm: 15, tpm: 250000, rpd: 500}
       gemini-3.1-flash-lite: {rpm: 15, tpm: 250000, rpd: 500}
       gemini-3.8-flash: {rpm: 5, tpm: 250000, rpd: 20}
       gemini-3.7-flash: {rpm: 5, tpm: 250000, rpd: 20}
+      gemini-3.6-flash: {rpm: 5, tpm: 250000, rpd: 20}
+      gemini-3.5-flash: {rpm: 5, tpm: 250000, rpd: 20}
     card:
       task: >-
         This file is an expense report (decont de cheltuieli) with its receipts and invoices.
@@ -172,11 +178,17 @@ roles:
     tiers:
       everyday: [gemini-3.5-flash-lite, gemini-3.1-flash-lite]
       strong: [gemini-3.8-flash, gemini-3.7-flash]
+      # 00_LAW §8 A6: only on a day an operator chose `reserve`. Evaluated 2026-10-02: every
+      # statement they answered was read right (3.6: 30/30 lines, 3.5: 9/9) but Google was
+      # busy (503) for 5 of 6 each, so 6/6 is [de confirmat]; a wrong read is refused anyway.
+      reserve: [gemini-3.6-flash, gemini-3.5-flash]
     rate_limits:   # AI Studio free tier, per project (owner's AI Studio page, 2026-10-02)
       gemini-3.5-flash-lite: {rpm: 15, tpm: 250000, rpd: 500}
       gemini-3.1-flash-lite: {rpm: 15, tpm: 250000, rpd: 500}
       gemini-3.8-flash: {rpm: 5, tpm: 250000, rpd: 20}
       gemini-3.7-flash: {rpm: 5, tpm: 250000, rpd: 20}
+      gemini-3.6-flash: {rpm: 5, tpm: 250000, rpd: 20}
+      gemini-3.5-flash: {rpm: 5, tpm: 250000, rpd: 20}
     note: >-
       WP-36: reads a synthetic tenant's statement PDF when MODEL_CALLS=live and the key is set
       (extract/gemini.py); Document AI (WP-21) reads otherwise. Never a client tenant's.
