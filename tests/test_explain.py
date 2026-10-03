@@ -174,6 +174,37 @@ def test_a_bad_answer_is_failed_and_the_question_is_shown_without_one(cat, monke
     assert call["status"] == "failed" and "not JSON" in call["reason"]
 
 
+def test_an_answer_off_the_card_is_asked_once_more_with_the_reason(cat, monkeypatch):
+    answers = [json.dumps({**GOOD, "explanation": ""}), json.dumps(GOOD)]
+    api = OpenRouter(content=lambda request: answers.pop(0))
+    o = _ops(cat, api, monkeypatch)
+    out = o.ingest(NEW_INVOICE).json()
+    assert out["explanation"]["explanation"] == GOOD["explanation"]
+    first, second = api.chat()
+    retry = json.loads(second.content)["messages"]
+    assert len(retry) == len(json.loads(first.content)["messages"]) + 2
+    assert retry[-1]["role"] == "user" and "explanation is empty" in retry[-1]["content"]
+    (call,) = _calls(o, "sys2_explain_approve")
+    assert call["status"] == "sent" and call["output"]["answers"] == 2
+    assert call["output"]["usage"]["cost"] == 0.0002  # both answers are paid for
+
+
+def test_a_second_bad_answer_is_failed(cat, monkeypatch):
+    api = OpenRouter(content="Aprobați factura.")
+    o = _ops(cat, api, monkeypatch)
+    assert o.ingest(NEW_INVOICE).json()["explanation"] is None
+    assert len(api.chat()) == 2
+    (call,) = _calls(o, "sys2_explain_approve")
+    assert call["status"] == "failed" and call["reason"].endswith("(after 2 answers)")
+
+
+def test_the_brief_forbids_empty_facts_and_an_empty_explanation(cat):
+    from poarta_contabila.model_roles import brief
+
+    text = brief(cat.model_roles["sys2_explain_close"])
+    assert "never empty" in text and "an empty field is not a fact" in text
+
+
 def test_openrouter_refusing_is_failed_and_nothing_waits(cat, monkeypatch):
     api = OpenRouter(status=402)
     o = _ops(cat, api, monkeypatch)

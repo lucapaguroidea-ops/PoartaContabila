@@ -69,6 +69,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-55 | done | WP-49 | Jev back on its own key: `OPENROUTER_SYS1_API_KEY` (System Two keeps `OPENROUTER_SYS2_API_KEY`) |
 | WP-56 | done | WP-55 | `GET /model-keys`: each OpenRouter key's spend and what is left, read from OpenRouter; the account's with a management key |
 | WP-57 | done | WP-54 | Free-tier token cap: diagnosed `is_free_tier` per-request budget; resolved by adding credits (`is_free_tier` → `false`); `max_tokens` stays 6000 |
+| WP-58 | done | WP-57 | System Two brief: never an empty explanation, never an empty field cited; an answer off the card is asked once more with its reason |
 
 ## WP details
 
@@ -921,6 +922,16 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   The key's own limit ($1.00) is irrelevant under the free-tier constraint.
 - Resolution: owner added credits → `is_free_tier` flipped to `false` on both keys, removing
   the per-request cap. `MAX_TOKENS` stays at 6000 (needed for close questions with reasoning).
+
+### WP-58 System Two answers on the card
+- Smoke of 2026-10-03 after WP-57: GLM answered, but `explanation is empty` (twice) and
+  `fact 'question.blockers' = [] is not in the question`.
+- The card's `output_rule` now says the explanation is never empty and written in the answer
+  (not only in the reasoning), and that only single values are cited: an empty field is not a fact.
+- `explain.send`: an answer that fails `check_explanation` is asked once more (`RETRIES = 1`),
+  with the model's answer and the refusal reason added to the conversation. A second bad answer
+  is `failed` with `(after 2 answers)`. The call's output records `answers` and the summed usage.
+- Next, owner 2026-10-03: try the approved alternate `moonshotai/kimi-k2.6` if GLM still misses.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

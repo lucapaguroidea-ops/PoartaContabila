@@ -21,6 +21,11 @@ TIMEOUT_S = 30.0
 MAX_TOKENS = 6000  # reasoning counts against it (WP-54)
 EXCERPT = 160  # of an answer that is not JSON, kept in the call's reason (synthetic only)
 MAX_SENTENCES = 5
+RETRIES = 1  # an answer off the card is asked once more, with the reason (WP-58)
+RETRY_ASK = (
+    "Your answer was refused: {reason}. Answer again with the JSON object only, following "
+    "the Output rule: a non-empty explanation, and only single values from the input as facts."
+)
 FIELDS = ("explanation", "facts_cited", "missing")
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$")
@@ -117,6 +122,36 @@ def request_body(role: Any, payload: dict[str, Any], provider: Any = None) -> di
     }
 
 
+def _sum(rows: list[dict[str, Any]], name: str) -> Any:
+    values = [r.get(name) for r in rows if r.get(name) is not None]
+    return sum(values) if values else None
+
+
+def _post(client: Any, body: dict[str, Any], secret: str) -> tuple[dict[str, Any], Any]:
+    """(the response JSON, the message content) or :class:`ExplainError`."""
+    import httpx
+
+    try:
+        resp = client.post(CHAT_URL, json=body, headers={"Authorization": f"Bearer {secret}"})
+    except httpx.HTTPError as exc:
+        raise ExplainError(f"OpenRouter unreachable: {type(exc).__name__}") from None
+    if resp.status_code != 200:
+        try:
+            err = resp.json().get("error") or {}
+        except ValueError:
+            err = {}
+        msg = str(err.get("message", ""))[:200]
+        reason = f"OpenRouter answered HTTP {resp.status_code} {err.get('code', '')}: {msg}"
+        if resp.status_code == 404 and "data policy" in msg.lower():
+            raise PolicyRefused(reason.replace("  ", " "))
+        raise ExplainError(reason.replace("  ", " "))
+    try:
+        data = resp.json()
+        return data, data["choices"][0]["message"]["content"]
+    except (ValueError, KeyError, IndexError, TypeError):
+        raise ExplainError("OpenRouter answered without a message") from None
+
+
 def send(
     role: Any, payload: dict[str, Any], secret: str, http: Any = None, provider: Any = None
 ) -> dict[str, Any]:
@@ -127,41 +162,37 @@ def send(
     import httpx
 
     client = http if http is not None else httpx.Client(timeout=TIMEOUT_S)
+    body = request_body(role, payload, provider)
+    spent: list[dict[str, Any]] = []
     try:
-        try:
-            resp = client.post(
-                CHAT_URL,
-                json=request_body(role, payload, provider),
-                headers={"Authorization": f"Bearer {secret}"},
-            )
-        except httpx.HTTPError as exc:
-            raise ExplainError(f"OpenRouter unreachable: {type(exc).__name__}") from None
-        if resp.status_code != 200:
+        for attempt in range(1 + RETRIES):
+            data, content = _post(client, body, secret)
+            spent.append(data.get("usage") or {})
             try:
-                err = resp.json().get("error") or {}
-            except ValueError:
-                err = {}
-            msg = str(err.get("message", ""))[:200]
-            reason = f"OpenRouter answered HTTP {resp.status_code} {err.get('code', '')}: {msg}"
-            if resp.status_code == 404 and "data policy" in msg.lower():
-                raise PolicyRefused(reason.replace("  ", " "))
-            raise ExplainError(reason.replace("  ", " "))
-        try:
-            data = resp.json()
-            content = data["choices"][0]["message"]["content"]
-        except (ValueError, KeyError, IndexError, TypeError):
-            raise ExplainError("OpenRouter answered without a message") from None
-        out = check_explanation(payload, content)
-        usage = data.get("usage") or {}
-        return {
-            **out,
-            "served_by": f"{data.get('model', role.model)} via {data.get('provider', '?')}",
-            "usage": {
-                "input_tokens": usage.get("prompt_tokens"),
-                "output_tokens": usage.get("completion_tokens"),
-                "cost": usage.get("cost"),
-            },
-        }
+                out = check_explanation(payload, content)
+            except ExplainError as exc:
+                if attempt == RETRIES:
+                    raise ExplainError(f"{exc} (after {attempt + 1} answers)") from None
+                body = {
+                    **body,
+                    "messages": [
+                        *body["messages"],
+                        {"role": "assistant", "content": content or ""},
+                        {"role": "user", "content": RETRY_ASK.format(reason=exc)},
+                    ],
+                }
+                continue
+            return {
+                **out,
+                "served_by": f"{data.get('model', role.model)} via {data.get('provider', '?')}",
+                "answers": attempt + 1,
+                "usage": {
+                    "input_tokens": _sum(spent, "prompt_tokens"),
+                    "output_tokens": _sum(spent, "completion_tokens"),
+                    "cost": _sum(spent, "cost"),
+                },
+            }
+        raise AssertionError("unreachable")
     finally:
         if http is None:
             client.close()

@@ -76,8 +76,11 @@ systems:
         - "SPV / e-Factura, CUI (without RO), TVA la încasare"
       output_fields: [explanation, facts_cited, missing]
       output_rule: >-
-        JSON only: `explanation` (at most 5 short sentences), `facts_cited` (list of
+        JSON only: `explanation` (at most 5 short sentences, never empty), `facts_cited` (list of
         {field, value} copied from the input), `missing` (list of strings). No other keys.
+        Write the explanation in the answer itself, not only in your reasoning. Cite only a
+        single value (text, number, true/false) exactly as the input holds it; never cite an
+        empty list, an empty object or a whole list: an empty field is not a fact.
 
   document_reading:
     family: gemini
