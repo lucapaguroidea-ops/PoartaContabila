@@ -256,7 +256,13 @@ def witnesses_provider(registry, blobs: BlobStore):
                 if bal
                 else None
             )
-            eye = ReportPackEye(documents=docs, cui=cui, periods=covered, balance=balance)
+            journal = None
+            if rj is not None and rj.product == "saga":  # bank documents live there (G8)
+                lines = _with_file(blobs.get(rj.bucket_key), rj.bucket_key, read_saga_rj)
+                journal = ExportEye(product="saga", lines=lines, cui=cui, periods=rj.periods)
+            eye = ReportPackEye(
+                documents=docs, cui=cui, periods=covered, balance=balance, journal=journal
+            )
         elif rj is None:
             eye = FakeSagaEye()
         else:

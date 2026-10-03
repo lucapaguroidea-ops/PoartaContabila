@@ -537,10 +537,10 @@ class ExportEye:
                     analytic=analytic,
                 )
             )
-        docs.extend(self._bank_documents(period))
+        docs.extend(self.bank_documents(period))
         return sorted(docs, key=lambda d: (d.date, d.saga_key))
 
-    def _bank_documents(self, period: str) -> list[SinkDoc]:
+    def bank_documents(self, period: str) -> list[SinkDoc]:
         """Bank-journal entries as documents: 5121 debit → încasare, 5121 credit → plată."""
         groups: dict[tuple[str, str, str, str], list[SinkLine]] = {}
         for ln in self.lines:

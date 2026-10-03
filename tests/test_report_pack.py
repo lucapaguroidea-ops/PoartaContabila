@@ -168,3 +168,30 @@ def test_runtime_prefers_uploaded_journals(cat):
     assert nextup.status_code == 422
     out = o.ingest(NEW_INVOICE).json()  # AB 0099 is not in the journals: covered, absent
     assert out["question"]["kind"] == "v3_approve"
+
+
+def test_the_report_pack_eye_reads_bank_documents_from_the_journal():
+    """WP-73 G8: the journals hold invoices only; a statement line SAGA holds is in Banca."""
+    from poarta_contabila.sinks.exports import ExportEye, SinkLine
+    from poarta_contabila.sinks.saga_eye import ReportPackEye
+
+    fee = SinkLine(
+        product="saga",
+        row=9,
+        seq="1",
+        date="2026-05-28",
+        journal="Banca",
+        doc_number="COM2605",
+        explanation="Comision",
+        debit="627",
+        credit="5121.01",
+        amount="12.50",
+    )
+    journal = ExportEye(product="saga", lines=[fee], cui="1001012", periods=["2026-05"])
+    eye = ReportPackEye(documents=[], cui="1001012", periods=["2026-05"], journal=journal)
+    docs = eye.documents("1001012", "2026-05")
+    assert [(d.doc_class, d.number, d.gross) for d in docs] == [("plata", "COM2605", "12.50")]
+    assert eye.journal_lines("1001012", "2026-05") == [fee]
+    assert eye.turnover("1001012", "2026-05")["5121"] == {"debit": "0.00", "credit": "12.50"}
+    alone = ReportPackEye(documents=[], cui="1001012", periods=["2026-05"])
+    assert alone.documents("1001012", "2026-05") == []  # without the journal: none, as before

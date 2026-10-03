@@ -157,7 +157,11 @@ def read_saga_tva_journal(path: str | Path, side: Literal["cumparari", "vanzari"
 
 
 class ReportPackEye:
-    """SagaEye over the report pack's purchase/sales journals (+ balance when given)."""
+    """SagaEye over the report pack's purchase/sales journals (+ balance when given).
+
+    The journals hold invoices only. With *journal* (the registru jurnal of the same firm),
+    its bank documents, journal lines and turnover are read from it for the months it covers
+    (WP-73 G8): otherwise a statement line SAGA already holds would look absent."""
 
     def __init__(
         self,
@@ -166,25 +170,35 @@ class ReportPackEye:
         cui: str | None,
         periods: Iterable[str],
         balance: list[BalanceRow] | None = None,
+        journal: ExportEye | None = None,
     ) -> None:
         self.docs = documents
         self.cui = cui
         self.periods = frozenset(periods)
         self._balance = ExportEye(product="saga", lines=[], balance=balance or [], cui=cui)
+        self._journal = journal
+
+    def _rj(self, cui: str, period: str) -> ExportEye | None:
+        j = self._journal
+        return j if j is not None and j.covers(cui, period) else None
 
     def covers(self, cui: str, period: str) -> bool:
         return self.cui is not None and self.cui == cui and period in self.periods
 
     def documents(self, cui: str, period: str) -> list[SinkDoc]:
-        return sorted(
-            (d for d in self.docs if d.date.startswith(period)), key=lambda d: (d.date, d.saga_key)
-        )
+        docs = [d for d in self.docs if d.date.startswith(period)]
+        rj = self._rj(cui, period)
+        if rj is not None:
+            docs += rj.bank_documents(period)
+        return sorted(docs, key=lambda d: (d.date, d.saga_key))
 
     def turnover(self, cui: str, period: str) -> dict[str, dict[str, str]]:
-        return self._balance.turnover(cui, period)
+        rj = self._rj(cui, period)
+        return rj.turnover(cui, period) if rj is not None else self._balance.turnover(cui, period)
 
     def journal_lines(self, cui: str, period: str) -> list[SinkLine]:
-        return []
+        rj = self._rj(cui, period)
+        return rj.journal_lines(cui, period) if rj is not None else []
 
     def solduri(self, cui: str, period: str) -> dict[str, dict]:
         return self._balance.solduri(cui, period)
