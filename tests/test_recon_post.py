@@ -188,3 +188,50 @@ def test_accounts_the_profile_does_not_list_are_not_compared(cat):
     split = [*POSTED[:1], _ln(3, "6022", "401.00001", "0.00"), POSTED[1]]
     res = _check(cat, _eye(split), expect_accounts=["401", "6"])
     assert res.verdict == "how_ok" and [a.account for a in res.amounts] == ["401"]
+
+
+def test_a_bank_lines_posting_is_found_in_the_bank_journal_under_its_reference():
+    """WP-71: SAGA holds an imported bank line under the bank's reference, in ``Banca``."""
+    from poarta_contabila.recon.post import posting_lines
+    from poarta_contabila.sinks.exports import SinkLine
+    from poarta_contabila.types import (
+        CanonicalDocument,
+        Line,
+        PartnerRef,
+        SourceRef,
+        TenantRef,
+        Totals,
+    )
+
+    doc = CanonicalDocument(
+        job_id="j",
+        tenant=TenantRef(cui="1001012", saga_firm_folder="0001"),
+        period="2026-05",
+        doc_class="plata",
+        number="EXT-abcdef12-1",
+        date="2026-05-20",
+        partner=PartnerRef(cui="20010114", name="FURNIZOR ALFA SRL", role="supplier"),
+        totals=Totals(net="121.00", vat="0.00", gross="121.00"),
+        lines=[Line(desc="Plata", net="121.00", vat_rate="0", vat="0.00", gross="121.00")],
+        source=SourceRef(
+            kind="pdf", bucket_key="k", content_type="application/pdf", source_hash="0" * 64
+        ),
+        maps={"iban": "RO00AAAA", "referinta": "OP260504"},
+    )
+
+    def line(journal, number):
+        return SinkLine(
+            product="saga",
+            row=1,
+            seq="1",
+            date="2026-05-20",
+            journal=journal,
+            doc_number=number,
+            explanation="Achit.",
+            debit="401.00001",
+            credit="5121.01",
+            amount="121.00",
+        )
+
+    rows = [line("Banca", "OP260504"), line("Intrari", "OP260504"), line("Banca", "OP260505")]
+    assert posting_lines(rows, "saga", doc, ("exact", "alnum")) == [rows[0]]

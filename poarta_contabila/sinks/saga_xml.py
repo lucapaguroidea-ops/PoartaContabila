@@ -132,6 +132,14 @@ def is_bank_mouth(module_id: str) -> bool:
     return module_id in _BANK_MOUTHS
 
 
+def packaged_number(doc: CanonicalDocument) -> str:
+    """The number SAGA is given for *doc*: a bank line goes in under the bank's reference
+    when the statement names it once (``render_bank_line``'s ``Numar``), else its number."""
+    if doc.doc_class in ("incasare", "plata"):
+        return doc.maps.get("referinta") or doc.number
+    return doc.number
+
+
 def export_key(module_id: str, job_id: str, schema_version: str) -> str:
     """Write-once key for a package (IDEMPOTENCY.md)."""
     return f"{module_id}:{job_id}:{schema_version}"
@@ -290,7 +298,7 @@ def render_bank_line(
 
     values = {
         "Data": _ro_date(doc.date),
-        "Numar": maps.get("referinta") or doc.number,
+        "Numar": packaged_number(doc),
         "Suma": str(gross.quantize(_CENT)),
         "Cont": cont,
         "Explicatie": doc.lines[0].desc if doc.lines else doc.number,

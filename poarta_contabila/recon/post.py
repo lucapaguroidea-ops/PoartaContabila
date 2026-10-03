@@ -35,7 +35,13 @@ from typing import Any, Literal
 from pydantic import Field
 
 from poarta_contabila.recon.numbers import NumberLevel, match_level
-from poarta_contabila.sinks.exports import _INVOICE_JOURNALS, SinkLine, synthetic
+from poarta_contabila.sinks.exports import (
+    _BANK_JOURNALS,
+    _INVOICE_JOURNALS,
+    SinkLine,
+    synthetic,
+)
+from poarta_contabila.sinks.saga_xml import packaged_number
 from poarta_contabila.types import CanonicalDocument, Closed, Money, Slug
 
 PostVerdict = Literal["how_ok", "how_mismatch", "need_rj_export"]
@@ -67,13 +73,17 @@ class PostResult(Closed):
 def posting_lines(
     lines: list[SinkLine], product: str, doc: CanonicalDocument, levels: tuple[NumberLevel, ...]
 ) -> list[SinkLine]:
-    """The invoice-journal lines of *doc*'s posting: same date, number at an accepted level."""
-    journals = _INVOICE_JOURNALS[product]
+    """The journal lines of *doc*'s posting: same date, number at an accepted level. An
+    invoice is looked for in the invoice journals; a bank line in the bank journal, under the
+    number SAGA was given (``packaged_number``)."""
+    bank = doc.doc_class in ("incasare", "plata")
+    journals = _BANK_JOURNALS[product] if bank else _INVOICE_JOURNALS[product]
+    number = packaged_number(doc)
     out = []
     for ln in lines:
         if ln.journal not in journals or ln.date != doc.date:
             continue
-        level = match_level(doc.number, ln.doc_number, levels)
+        level = match_level(number, ln.doc_number, levels)
         if level is not None and level != "digits_core":  # digits alone name no posting
             out.append(ln)
     return out

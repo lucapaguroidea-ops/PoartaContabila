@@ -34,6 +34,7 @@ from pydantic import Field
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.recon.numbers import normalize
+from poarta_contabila.sinks.saga_xml import packaged_number
 from poarta_contabila.types import (
     CanonicalDocument,
     Closed,
@@ -221,7 +222,7 @@ _SIDE = {
 def _matches(doc: CanonicalDocument, sd: SnapshotDoc) -> bool:
     return (
         _SIDE.get(doc.doc_class, doc.doc_class) == _SIDE.get(sd.doc_class, sd.doc_class)
-        and normalize(doc.number, "alnum") == normalize(sd.number, "alnum")
+        and normalize(packaged_number(doc), "alnum") == normalize(sd.number, "alnum")
         and doc.date == sd.date
         and Decimal(doc.totals.gross) == Decimal(sd.gross)
     )

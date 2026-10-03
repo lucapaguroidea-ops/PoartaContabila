@@ -355,3 +355,38 @@ def test_postgres_agent_store(cat):
     store.add_snapshot("a", old)
     assert store.latest_snapshot(CUI).closed_periods == ["2026-08"]
     assert store.latest_snapshot("20000005") is None
+
+
+def test_a_bank_line_matches_saga_under_the_reference_it_was_imported_with():
+    """WP-71 found it: a bank line goes into SAGA numbered with the bank's reference
+    (render_bank_line's Numar), so the snapshot shows that number, not EXT-…."""
+    from poarta_contabila.agent import SnapshotDoc, _matches
+    from poarta_contabila.types import Line, PartnerRef, SourceRef, TenantRef, Totals
+
+    line = CanonicalDocument(
+        job_id="j",
+        tenant=TenantRef(cui="1001012", saga_firm_folder="0001"),
+        period="2026-05",
+        doc_class="plata",
+        number="EXT-abcdef12-1",
+        date="2026-05-20",
+        partner=PartnerRef(cui="20010114", name="FURNIZOR ALFA SRL", role="supplier"),
+        totals=Totals(net="121.00", vat="0.00", gross="121.00"),
+        lines=[Line(desc="Plata", net="121.00", vat_rate="0", vat="0.00", gross="121.00")],
+        source=SourceRef(
+            kind="pdf", bucket_key="k", content_type="application/pdf", source_hash="0" * 64
+        ),
+        maps={"iban": "RO00AAAA", "referinta": "OP260504"},
+    )
+    shown = SnapshotDoc(
+        saga_doc_key="saga:Banca:OP260504:2026-05-20:plata",
+        doc_class="plata",
+        number="OP260504",
+        date="2026-05-20",
+        gross="121.00",
+        validated=True,
+    )
+    assert _matches(line, shown)
+    assert not _matches(line, shown.model_copy(update={"number": "OP260505"}))
+    no_ref = line.model_copy(update={"maps": {"iban": "RO00AAAA"}})
+    assert _matches(no_ref, shown.model_copy(update={"number": "EXT-abcdef12-1"}))
