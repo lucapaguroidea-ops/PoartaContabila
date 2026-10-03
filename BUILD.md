@@ -63,6 +63,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-49 | done | WP-20 | One OpenRouter key for Jev and System Two: `OPENROUTER_SYS2_API_KEY` |
 | WP-50 | done | WP-32, WP-49 | System Two sender: a person's question comes with a checked explanation (DeepSeek through OpenRouter) |
 | WP-51 | done | WP-50 | The explain roles move to GLM (`z-ai/glm-5.3`): DeepSeek's provider trains on prompts |
+| WP-52 | done | WP-51 | GLM answers: reasoning off, a larger budget, JSON read from inside prose, a bad answer quoted |
 
 ## WP details
 
@@ -856,6 +857,13 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Owner, 2026-10-03: take GLM if Z.AI is not flagged. `sys2_explain_approve`,
   `sys2_explain_recon` and `sys2_explain_close` are `z-ai/glm-5.3`, provider `{only: [z-ai]}`;
   data collection stays denied for every role. No role uses DeepSeek now.
+
+### WP-52 GLM answers
+- Smoke run of 2026-10-03 after WP-51: every `sys2_explain_close` call reached GLM and failed
+  "the answer is not JSON" (about 10 s each: GLM reasons first).
+- The request turns reasoning off (`reasoning: {enabled: false}`) and allows 2000 tokens; the
+  JSON object is read from between the first `{` and the last `}`; an empty answer says so; a
+  bad one is quoted (160 characters, synthetic questions only) in the call's reason.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

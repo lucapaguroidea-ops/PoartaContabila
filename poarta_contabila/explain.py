@@ -18,7 +18,8 @@ from typing import Any
 
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 TIMEOUT_S = 30.0
-MAX_TOKENS = 800
+MAX_TOKENS = 2000
+EXCERPT = 160  # of an answer that is not JSON, kept in the call's reason (synthetic only)
 MAX_SENTENCES = 5
 FIELDS = ("explanation", "facts_cited", "missing")
 
@@ -58,10 +59,15 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
     A cited fact must come from the question: the last part of its ``field`` is a key there
     and its ``value`` is one of the question's values (a fact the model made up is refused).
     """
+    if not isinstance(content, str) or not content.strip():
+        raise ExplainError("the answer is empty")
+    text = _FENCE.sub("", content.strip())
+    start, end = text.find("{"), text.rfind("}")
     try:
-        out = json.loads(_FENCE.sub("", content.strip()))
-    except (json.JSONDecodeError, AttributeError):
-        raise ExplainError("the answer is not JSON") from None
+        out = json.loads(text[start : end + 1] if 0 <= start < end else text)
+    except json.JSONDecodeError:
+        excerpt = " ".join(content.split())[:EXCERPT]
+        raise ExplainError(f"the answer is not JSON: {excerpt!r}") from None
     if not isinstance(out, dict) or set(out) != set(FIELDS):
         got = sorted(out) if isinstance(out, dict) else type(out).__name__
         raise ExplainError(f"the answer must have exactly {list(FIELDS)}, not {got}")
@@ -102,6 +108,7 @@ def request_body(role: Any, payload: dict[str, Any]) -> dict[str, Any]:
         "response_format": {"type": "json_object"},
         "temperature": 0,
         "max_tokens": MAX_TOKENS,
+        "reasoning": {"enabled": False},  # WP-52: GLM spent the budget thinking, no answer
     }
 
 
