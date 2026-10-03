@@ -139,6 +139,34 @@ _COUNTERPART = {"customer": "4111", "supplier": "401"}  # incasare_xml / plata_x
 _POSTED_COUNTERPART = {"incasare": "4111", "plata": "401"}
 
 
+def _paid_shares(
+    bank: list[ExpectedJob], invoices: list[ExpectedJob]
+) -> list[tuple[CanonicalDocument, CanonicalDocument, Decimal]]:
+    """(bank line, the invoice it settles, its VAT share): every bound line of *bank* whose
+    invoice is among *invoices* (same partner CUI, number); share = amount × VAT / gross, half
+    up."""
+    by_key = {
+        (e.doc.partner.cui, normalize(e.doc.number, "alnum")): e.doc
+        for e in invoices
+        if e.doc.doc_class in ("intrare", "iesire") and e.doc.partner.cui
+    }
+    out = []
+    for e in bank:
+        d = e.doc
+        if d.doc_class not in _BANK or not d.partner.cui or not d.maps.get("factura_numar"):
+            continue
+        inv = by_key.get((d.partner.cui, normalize(d.maps["factura_numar"], "alnum")))
+        if inv is None or Decimal(inv.totals.gross) == 0:
+            continue
+        share = Decimal(d.totals.gross) * Decimal(inv.totals.vat) / Decimal(inv.totals.gross)
+        out.append((d, inv, share.quantize(_CENT, rounding=ROUND_HALF_UP)))
+    return out
+
+
+def _la_incasare(axes: dict[str, str]) -> bool:
+    return axes.get("exig") == "tva_la_incasare" and axes.get("tva") not in _NON_PAYER
+
+
 def vat_exigible(
     exp: list[ExpectedJob], prior: list[ExpectedJob], axes: dict[str, str]
 ) -> list[tuple[str, str, Decimal]]:
@@ -146,28 +174,32 @@ def vat_exigible(
     a payment 4426 Dr / 4428 Cr, a receipt 4428 Dr / 4427 Cr; the share is the line's amount
     × the invoice's VAT / gross, half up. The invoice is looked for among this month's and
     *prior* months' expected documents (same partner CUI, number)."""
-    if axes.get("exig") != "tva_la_incasare" or axes.get("tva") in _NON_PAYER:
+    if not _la_incasare(axes):
         return []
-    invoices = {
-        (e.doc.partner.cui, normalize(e.doc.number, "alnum")): e.doc
-        for e in [*prior, *exp]
-        if e.doc.doc_class in ("intrare", "iesire") and e.doc.partner.cui
-    }
     out = []
-    for e in exp:
-        d = e.doc
-        if d.doc_class not in _BANK or not d.partner.cui or not d.maps.get("factura_numar"):
-            continue
-        inv = invoices.get((d.partner.cui, normalize(d.maps["factura_numar"], "alnum")))
-        if inv is None or Decimal(inv.totals.gross) == 0:
-            continue
-        share = Decimal(d.totals.gross) * Decimal(inv.totals.vat) / Decimal(inv.totals.gross)
-        share = share.quantize(_CENT, rounding=ROUND_HALF_UP)
+    for d, _, share in _paid_shares(exp, [*prior, *exp]):
         if d.doc_class == "plata":
             out += [("4426", "debit", share), ("4428", "credit", share)]
         else:
             out += [("4428", "debit", share), ("4427", "credit", share)]
     return out
+
+
+def open_4428(exp: list[ExpectedJob], prior: list[ExpectedJob]) -> Decimal:
+    """M1_8 (WP-75): the VAT still not exigible at the month's end, as a 4428 balance (debit
+    positive) — purchases' VAT less the share paid, minus sales' VAT less the share collected,
+    over this month's and *prior* months' documents and bank lines. Older documents are not
+    seen (the window is SETTLE_MONTHS): their open VAT shows as a difference."""
+    jobs = [e for e in [*prior, *exp] if e.job.status not in _NOT_EXPECTED]
+    net = Decimal(0)
+    for e in jobs:
+        if e.doc.doc_class in _IN:
+            net += Decimal(e.doc.totals.vat)
+        elif e.doc.doc_class in _OUT:
+            net -= Decimal(e.doc.totals.vat)
+    for d, _, share in _paid_shares(jobs, jobs):
+        net += -share if d.doc_class == "plata" else share
+    return net
 
 
 def standard_rate(cat: Catalog, period: str) -> str | None:
@@ -371,6 +403,7 @@ def build_period_diff(
         synthetic=synthetic,
         epsilon=epsilon,
         turnover=turnover,
+        open_4428=open_4428(exp, prior or []) if _la_incasare(axes) else None,
     )
     runs: list[ControlRun] = []
     blockers: list[str] = []
@@ -454,6 +487,7 @@ class _Ctx:
     synthetic: dict[str, AccountDelta]
     epsilon: Decimal
     turnover: dict[str, dict[str, str]]
+    open_4428: Decimal | None = None
 
 
 def _balance(row: dict[str, Any] | None) -> Decimal:
@@ -527,6 +561,21 @@ def _evaluate(cid: str, row: dict[str, Any], ctx: _Ctx, analytic: dict[str, Acco
         )
     if cid in ("M1_1_payables_tie", "M1_2_receivables_tie", "M1_1_trade_ext", "M1_2_trade_ext"):
         return _tie(ctx, list(row.get("watched") or []), analytic)
+    if cid == "M1_8_4428_open":
+        solduri = ctx.eye.solduri(ctx.cui, ctx.period)
+        if not solduri:
+            return "FAIL", "needs the balanță (4428's balance at the month's end)", None
+        if ctx.open_4428 is None:
+            return "INFO", "does not apply to this tenant's axes", None
+        books = _balance(solduri.get("4428"))
+        want = ctx.open_4428
+        if abs(books - want) >= ctx.epsilon:
+            return (
+                "FAIL",
+                f"4428 open on la-încasare documents {_m(want)}, balanță {_m(books)}",
+                (_m(want), _m(books), _m(books - want)),
+            )
+        return "PASS", "", None
     if cid == "T_regime_4428":
         tva = ctx.axes.get("tva")
         if tva is None:

@@ -2,7 +2,7 @@
 
 Status: **decided by the owner, 2026-10-03.** G1, G2, G3, G4 and G6 accepted: in the catalog as
 `status: draft`, with the code that makes each true (WP-73). G8 fixed (`700c9c2`). Everything
-that needs the owner is on `docs/OWNER_CHECKLIST.md`; M1_8 (G7) is WP-75.
+that needs the owner is on `docs/OWNER_CHECKLIST.md`; M1_8 (G7) is computed (WP-75).
 
 | Gap | Decision | Where |
 |---|---|---|
@@ -12,7 +12,7 @@ that needs the owner is on `docs/OWNER_CHECKLIST.md`; M1_8 (G7) is WP-75.
 | G4 PRE for a credit note | accepted | `recon_pre_storno` on `reconcile_sink` |
 | G6 C0 by TVA regime | accepted | C0's note; `period_diff.expected_turnover` / `vat_exigible` (accounts `[de confirmat]`) |
 | G5 storno mouths | owner | copy firm (checklist) |
-| G7 M1_8 not computed | code | WP-75 |
+| G7 M1_8 not computed | code | computed (WP-75) |
 | G8 report pack hides bank documents | fixed | `ReportPackEye` reads them from the registru jurnal |
 | G9 NextUp job settlement | owner | checklist |
 

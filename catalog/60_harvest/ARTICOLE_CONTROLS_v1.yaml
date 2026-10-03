@@ -111,6 +111,7 @@ controls:
     on_fail: [no_file]
     require:
       exig: [tva_la_incasare]
+    note: "WP-75: open = the VAT of the period's and the two months before's documents, less the share each bound bank line paid (amount × VAT / gross, half up); bal(4428) from the balanță (none uploaded: FAIL). Older documents' open VAT shows as a difference."
 
   - control_id: M1_9_4424_watched
     schema_version: "1"

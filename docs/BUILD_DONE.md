@@ -1107,3 +1107,17 @@ The status table in `BUILD.md` stays the index of every WP. Text kept as written
   (a sale in RON with reverse charge). M1_8 (G7) is WP-75.
 - Tests: `tests/test_controls.py` (G6, G2b), `tests/test_recon_pre.py` (G4),
   `tests/test_scenarios.py` (G1; no finding left), `tests/test_decont.py` (G2).
+
+### WP-75 M1_8 computed (G7)
+- Owner, 2026-10-03: WP-75 before WP-74.
+- `M1_8_4428_open` is computed (it failed closed as "not computed in v1", so every TVA la
+  încasare month was material): `period_diff.open_4428` = the VAT of la-încasare purchases less
+  the share bound payments made exigible, minus that of sales less the share collected, over
+  the period and the two months before (`Runtime.prior`); compared with the balanță's 4428
+  closing balance within the control's epsilon. No balanță: FAIL. Older documents' open VAT is
+  not seen and shows as a difference (noted on the row).
+- `vat_exigible` and `open_4428` share one share computation (`_paid_shares`).
+- Scenarios: `incasare_clean` now closes clean (M1_8 PASS), `incasare_partial_payment` (half a
+  sale's VAT stays open on 4428: PASS), `incasare_vat_differs` (4428 booked 1.00 higher: FAIL).
+  `coverage.OUT_OF_REACH` no longer lists M1_8 PASS.
+- Tests: `tests/test_controls.py::test_m1_8_compares_the_vat_still_open_with_4428`.

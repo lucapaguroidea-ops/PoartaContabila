@@ -190,9 +190,6 @@ OUT_OF_REACH: dict[tuple[Table, str], Reach] = {
         "no_code_path", None, "the answer's checker exists (WP-09); no node asks it"
     ),
     # ----- controls -----
-    ("control", control_key("M1_8_4428_open", "PASS")): Reach(
-        "not_computed", None, "not computed in v1: fails closed whenever it applies"
-    ),
     ("control", control_key("M1_9_4424_watched", "PASS")): Reach(
         "not_computed", None, "advisory, not computed in v1: INFO only"
     ),

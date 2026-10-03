@@ -446,3 +446,36 @@ def test_a_job_minted_without_a_thread_is_an_outbound_hole(cat):
     )
     assert diff.outbound_holes == ["job-x"]
     assert {r.control_id: r.status for r in runs}["C1_outbound_complete"] == "FAIL"
+
+
+def test_m1_8_compares_the_vat_still_open_with_4428(cat):
+    """WP-75: open VAT on la-încasare documents (less the share paid) == the balanță's 4428."""
+    from poarta_contabila.period_diff import open_4428
+    from poarta_contabila.types import PartnerRef
+
+    supplier = PartnerRef(cui="20000005", name="FURNIZOR", role="supplier")
+    inv = _exp("A1", "2026-09-03", "121.00", "21.00")
+    inv = ExpectedJob(job=inv.job, doc=inv.doc.model_copy(update={"partner": supplier}))
+    pay = _exp("EXT-1", "2026-09-10", "60.50", "0.00", doc_class="plata", n=2)
+    pay = ExpectedJob(
+        job=pay.job,
+        doc=pay.doc.model_copy(
+            update={
+                "partner": supplier,
+                "maps": {"factura_numar": "A1"},
+                "totals": pay.doc.totals.model_copy(update={"net": "60.50"}),
+            }
+        ),
+    )
+    assert open_4428([inv], []) == Decimal("21.00")
+    assert open_4428([pay], [inv]) == Decimal("10.50")  # half paid, half still open
+    axes = {"tva": "tva_platitor", "exig": "tva_la_incasare"}
+
+    def status(debit):
+        eye = CleanEye([], solduri={"4428": {"debit": debit, "credit": "0"}})
+        _, runs = build_period_diff(cat, CUI, PERIOD, [pay], eye, axes=axes, prior=[inv])
+        return {r.control_id: r.status for r in runs}["M1_8_4428_open"]
+
+    assert status("10.50") == "PASS" and status("11.50") == "FAIL"
+    _, runs = build_period_diff(cat, CUI, PERIOD, [inv], CleanEye([]), axes=axes)
+    assert {r.control_id: r.status for r in runs}["M1_8_4428_open"] == "FAIL"  # no balanță

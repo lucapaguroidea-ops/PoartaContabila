@@ -1,10 +1,10 @@
-name: incasare_clean
-note: 'TVA la încasare: close_tva_incasare, POST with post_how_4428; C0 implies 4428 at the invoice and
-  its share moved as it is paid (WP-73 G6); M1_8 finds the VAT still open on the month''s documents equal
-  to the balanță''s 4428 (WP-75). Nothing material.'
+name: incasare_vat_differs
+note: 'TVA la încasare, a purchase''s VAT booked 1.00 higher on 4428: M1_8 sees 4428 off the VAT still
+  open on the documents (WP-75); C0 and the snapshot see it too.'
 firm: incasare
 period: 2026-05
 seed: 1
+defect: vat_differs
 expect:
   documents:
     p1:
@@ -26,11 +26,9 @@ expect:
       asks:
       - v3_approve
       - wait_validare
-      status: acked
+      status: wait_validare
       module: intrare_factura_xml
       pre: pre_doc_nr_date
-      post: post_how_4428
-      post_verdict: how_ok
     p3:
       source_doc: ro_efactura_ubl
       job_kind: job_ro_efactura
@@ -101,15 +99,19 @@ expect:
   months:
     2026-05:
       close: close_tva_incasare
-      material: false
-      blockers: []
+      material: true
+      blockers:
+      - C0_synthetic_parity
+      - C1_outbound_complete
+      - C2_unexplained_empty
+      - M1_8_4428_open
       controls:
-        C0_synthetic_parity: PASS
-        C1_outbound_complete: PASS
-        C2_unexplained_empty: PASS
+        C0_synthetic_parity: FAIL
+        C1_outbound_complete: FAIL
+        C2_unexplained_empty: FAIL
         M1_1_payables_tie: PASS
         M1_2_receivables_tie: PASS
-        M1_8_4428_open: PASS
+        M1_8_4428_open: FAIL
         T_regime_4428: PASS
         T_regime_442x: PASS
       filings:
