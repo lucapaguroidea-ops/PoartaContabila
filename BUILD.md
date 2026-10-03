@@ -76,6 +76,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-62 | done | WP-61 | An answer wrapped once around the card's fields is unwrapped; a cited fact with an empty value is dropped, not refused |
 | WP-63 | done | WP-62 | System Two answers in English, Romanian domain words kept; each question carries `as_of`; the model's own memory of Romanian rules never wins over the input |
 | WP-64 | done | WP-63 | Smoke leaves a September invoice (`AB 0102`) at `v3_approve` and reports its System Two explanation |
+| WP-65 | done | WP-64 | A close or reconcile run stopped between nodes (process died) continues when started again |
 
 ## WP details
 
@@ -994,6 +995,13 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - It is dated September because the journal covers August and September only (an October
   invoice stops at `need_rj_export`). September is already held as material; this adds one
   expected job and 807.81 to C0's expected 401 credit there.
+
+### WP-65 A run stopped between nodes goes on
+- Smoke of 2026-10-03: September's close returned 502 while the server restarted for a deploy;
+  its run stayed `v2_ready` with `layer2` next and no question. `start_close` read any pending
+  task as "waiting on a person", so every later start showed nothing.
+- `Runtime._start` (close and reconcile_sink): a run with a question waits; a run with a next
+  node and no question continues from its checkpoint (`invoke(None)`); otherwise it starts.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

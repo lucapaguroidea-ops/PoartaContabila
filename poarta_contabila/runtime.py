@@ -471,6 +471,16 @@ class Runtime:
     # -- the answer log (WP-33) --
 
     @staticmethod
+    def _start(graph: Any, cfg: dict, inputs: dict[str, Any]) -> None:
+        """Start a run, or go on with one already there: a run waiting on a person is left
+        as it is; a run stopped between nodes (the process died mid-run, WP-65) continues
+        from its last checkpoint instead of looking like a question that never comes."""
+        state = graph.get_state(cfg)
+        if any(t.interrupts for t in state.tasks):
+            return
+        graph.invoke(None if state.next else inputs, cfg)
+
+    @staticmethod
     def _waiting(graph: Any, cfg: dict) -> dict[str, Any] | None:
         tasks = graph.get_state(cfg).tasks
         return next((i.value for t in tasks for i in t.interrupts), None)
@@ -632,9 +642,7 @@ class Runtime:
         if self.registry.tenant(cui) is None:
             raise IngestRefused(f"tenant {cui} is not registered")
         cfg = self._recon_cfg(cui, period)
-        if self.reconcile.get_state(cfg).tasks:
-            return self.recon_view(cui, period)
-        self.reconcile.invoke({"cui": cui, "period": period, "settled": []}, cfg)
+        self._start(self.reconcile, cfg, {"cui": cui, "period": period, "settled": []})
         return self.recon_view(cui, period)
 
     def resume_recon(
@@ -1161,9 +1169,7 @@ class Runtime:
 
     def start_close(self, cui: str, period: str, axes: dict[str, str]) -> dict[str, Any]:
         cfg = self._close_cfg(cui, period)
-        if self.close.get_state(cfg).tasks:
-            return self.close_view(cui, period)  # already waiting on a person
-        self.close.invoke({"cui": cui, "period": period, "axes": axes}, cfg)
+        self._start(self.close, cfg, {"cui": cui, "period": period, "axes": axes})
         return self.close_view(cui, period)
 
     def resume_close(

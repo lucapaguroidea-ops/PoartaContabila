@@ -329,3 +329,20 @@ def test_v4_seed_carries_a_micro_firm_and_its_default_exig_follows_tva(cat):
         }
     )
     assert "exig" not in codits2.get(CUI, "2026-10").derive()  # the default followed tva
+
+
+def test_a_close_stopped_between_nodes_goes_on_when_started_again(cat):
+    """WP-65: the process died after period_diff; the saved run has a next node and no
+    question. Starting the close again continues it instead of showing nothing forever."""
+    from tests.test_runtime import Ops, _runtime
+
+    o = Ops(_runtime(cat))
+    o.tenant()
+    o.upload_rj()
+    cfg = o.rt._close_cfg(CUI, PERIOD)
+    inputs = {"cui": CUI, "period": PERIOD, "axes": {"tva": "tva_platitor"}}
+    o.rt.close.invoke(inputs, cfg, interrupt_before=["layer2"])  # stands in for the crash
+    stuck = o.http.get(f"/close/{CUI}/{PERIOD}", headers=o.op).json()
+    assert stuck["run"]["status"] == "v2_ready" and stuck["question"] is None
+    out = o.http.post(f"/close/{CUI}/{PERIOD}", headers=o.op).json()
+    assert out["question"]["kind"] == "v2_close"
