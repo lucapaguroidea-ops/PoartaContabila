@@ -85,6 +85,11 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
         raise ExplainError(f"the answer is not JSON: {excerpt!r}") from None
     if isinstance(out, dict) and len(out) == 1:  # {"answer": {...the card's fields...}} (WP-62)
         (inner,) = out.values()
+        if isinstance(inner, str):  # Z.AI also sends the object as a JSON string
+            try:
+                inner = json.loads(_FENCE.sub("", inner.strip()))
+            except json.JSONDecodeError:
+                pass
         if isinstance(inner, dict) and set(inner) == set(FIELDS):
             out = inner
     if not isinstance(out, dict) or set(out) != set(FIELDS):

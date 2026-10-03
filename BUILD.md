@@ -966,7 +966,8 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Comparison of 2026-10-03 after WP-61 (6 first answers each): GLM on Z.AI 1/6, Together 3/6,
   Kimi 1/6 (reasoning only, ~139 s, ~$0.02 a pass). GLM's misses: `{"answer": {...}}` (3) and
   `blockers = []` cited as a fact (2).
-- `check_explanation` unwraps one outer key when its value has exactly the card's fields.
+- `check_explanation` unwraps one outer key when its value has exactly the card's fields, as an
+  object or as a JSON string (Z.AI sends `{"answer": "{\"explanation\": …}"}`).
 - A cited fact whose value is empty (`[]`, `{}`, `""`, null) claims nothing: it is dropped. Its
   field must still be in the question; any other value must still be found there.
 - Kimi stays an approved alternate but is not used by choice until its call is reworked.

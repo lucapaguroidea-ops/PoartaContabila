@@ -342,6 +342,9 @@ def test_one_candidate_on_one_question_at_a_time(cat, monkeypatch):
 
 def test_one_wrapper_around_the_card_fields_is_unwrapped():
     assert check_explanation(QUESTION, json.dumps({"answer": GOOD})) == GOOD
+    assert check_explanation(QUESTION, json.dumps({"answer": json.dumps(GOOD)})) == GOOD
+    with pytest.raises(ExplainError, match="exactly"):
+        check_explanation(QUESTION, json.dumps({"answer": "Aprobați factura."}))
     with pytest.raises(ExplainError, match="exactly"):
         check_explanation(QUESTION, json.dumps({"answer": {**GOOD, "decision": "x"}}))
 
