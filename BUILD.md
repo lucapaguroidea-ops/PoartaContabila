@@ -70,6 +70,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-56 | done | WP-55 | `GET /model-keys`: each OpenRouter key's spend and what is left, read from OpenRouter; the account's with a management key |
 | WP-57 | done | WP-54 | Free-tier token cap: diagnosed `is_free_tier` per-request budget; resolved by adding credits (`is_free_tier` → `false`); `max_tokens` stays 6000 |
 | WP-58 | done | WP-57 | System Two brief: never an empty explanation, never an empty field cited; an answer off the card is asked once more with its reason |
+| WP-59 | done | WP-58 | `POST /model-roles/{role_id}/compare`: main pin vs each approved alternate on the latest synthetic questions, first answer only; nothing recorded |
 
 ## WP details
 
@@ -932,6 +933,15 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   with the model's answer and the refusal reason added to the conversation. A second bad answer
   is `failed` with `(after 2 answers)`. The call's output records `answers` and the summed usage.
 - Next, owner 2026-10-03: try the approved alternate `moonshotai/kimi-k2.6` if GLM still misses.
+
+### WP-59 Compare a role's approved alternates
+- Owner, 2026-10-03: compare `moonshotai/kimi-k2.6` (approved alternate, A7) with GLM before
+  any change of pin.
+- `POST /model-roles/{role_id}/compare?inputs=2&runs=3` (operator and build agent): a System Two
+  role's latest distinct questions of synthetic tenants, each sent `runs` times to the main pin
+  and to every approved alternate with its own provider pin (`data_collection: deny`), no retry.
+  Answers: per candidate, first-try passes of `check_explanation`, cost per pass, each result.
+- Returned, never recorded; it changes no pin. Choosing a new main pin stays a catalog change.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

@@ -153,7 +153,12 @@ def _post(client: Any, body: dict[str, Any], secret: str) -> tuple[dict[str, Any
 
 
 def send(
-    role: Any, payload: dict[str, Any], secret: str, http: Any = None, provider: Any = None
+    role: Any,
+    payload: dict[str, Any],
+    secret: str,
+    http: Any = None,
+    provider: Any = None,
+    retries: int = RETRIES,
 ) -> dict[str, Any]:
     """POST the question; the checked output plus who answered and the usage.
 
@@ -165,13 +170,13 @@ def send(
     body = request_body(role, payload, provider)
     spent: list[dict[str, Any]] = []
     try:
-        for attempt in range(1 + RETRIES):
+        for attempt in range(1 + retries):
             data, content = _post(client, body, secret)
             spent.append(data.get("usage") or {})
             try:
                 out = check_explanation(payload, content)
             except ExplainError as exc:
-                if attempt == RETRIES:
+                if attempt == retries:
                     raise ExplainError(f"{exc} (after {attempt + 1} answers)") from None
                 body = {
                     **body,

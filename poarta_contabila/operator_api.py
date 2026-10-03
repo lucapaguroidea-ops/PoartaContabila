@@ -412,6 +412,20 @@ def operator_router(
         except IngestRefused as exc:
             raise HTTPException(422, str(exc)) from exc
 
+    @router.post("/model-roles/{role_id}/compare")
+    def model_role_compare(
+        role_id: str,
+        inputs: int = Query(default=2, ge=1, le=5),
+        runs: int = Query(default=3, ge=1, le=5),
+        rt: Runtime = Depends(operator),
+    ) -> dict[str, Any]:
+        """WP-59: the main pin against each approved alternate on the role's latest synthetic
+        questions, first answer only. Nothing is recorded or changed."""
+        try:
+            return rt.model_compare(role_id, inputs, runs)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
     @router.get("/model-calls")
     def model_calls(
         request: Request,

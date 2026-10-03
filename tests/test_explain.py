@@ -258,3 +258,33 @@ def test_the_close_question_is_explained_and_still_asked(cat, monkeypatch):
     # the rule drafter stays shadow: recorded, never sent
     drafts = _calls(o, "sys2_draft_rule")
     assert all(c["status"] == "recorded" for c in drafts)
+
+
+def test_the_alternates_are_compared_first_answer_only_and_nothing_is_recorded(cat, monkeypatch):
+    def by_model(request):
+        model = json.loads(request.content)["model"]
+        return json.dumps(GOOD) if model.startswith("moonshotai/") else "Aprobați."
+
+    api = OpenRouter(content=by_model)
+    o = _ops(cat, api, monkeypatch)
+    o.ingest(NEW_INVOICE)
+    before = len(_calls(o, "sys2_explain_approve"))
+    sent = len(api.chat())
+    resp = o.http.post(
+        "/model-roles/sys2_explain_approve/compare", params={"runs": 2}, headers=o.op
+    )
+    assert resp.status_code == 200
+    rows = {r["on"]: r for r in resp.json()["candidates"]}
+    assert set(rows) == {"main", "alternate 1", "alternate 2"}
+    assert rows["main"]["first_try_ok"] == 0 and rows["main"]["tries"] == 2
+    assert rows["alternate 2"]["model"] == "moonshotai/kimi-k2.6"
+    assert rows["alternate 2"]["first_try_ok"] == 2
+    assert len(api.chat()) - sent == 6  # 3 candidates x 1 question x 2 runs, no retries
+    assert len(_calls(o, "sys2_explain_approve")) == before
+    assert KEY not in resp.text
+
+
+def test_compare_needs_a_system_two_role(cat, monkeypatch):
+    o = _ops(cat, OpenRouter(), monkeypatch)
+    resp = o.http.post("/model-roles/jev_v3_judge/compare", headers=o.op)
+    assert resp.status_code == 422
