@@ -26,7 +26,7 @@ enums:
   system: [system_one, system_two, document_reading]
   status: [wired, shadow, not_wired]   # shadow: observed in the flow, decides nothing
   route: [openrouter, google_ai_studio]   # google_ai_studio: document reading, synthetic only (WP-36)
-  key_env: [OPENROUTER_SYS2_API_KEY, GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC]
+  key_env: [OPENROUTER_SYS1_API_KEY, OPENROUTER_SYS2_API_KEY, GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC]
   question_type: [noul, choice, score]
 
 defaults:
@@ -44,7 +44,7 @@ defaults:
 systems:
   system_one:
     family: jev
-    key_env: OPENROUTER_SYS2_API_KEY   # owner, 2026-10-03: one OpenRouter key for both systems (WP-49)
+    key_env: OPENROUTER_SYS1_API_KEY   # owner, 2026-10-03: Jev's own key and credit limit (WP-55)
     does: "classify and route JSON / normalized data into closed answers"
     cannot: [explain_to_person, write_saga, set_codit_axes, choose_mouth, open_gate_alone]
     card:
