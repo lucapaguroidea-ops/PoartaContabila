@@ -5,15 +5,16 @@ the answer and the session records it.
 
 ## Models and OpenRouter (00_LAW §3.5, `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml`)
 
-- [ ] **Exact OpenRouter model ids**, one per family: DeepSeek, GLM, Gemini, and Jev if listed.
-      No alias (`…latest`), no `openrouter/auto`, no `:free` variant. They go into each role's
-      `model:`; until then every role refuses and a person is asked.
-- [ ] **Is Jev (TypeSafe AI) listed on OpenRouter?** If yes: its model id, and one example
-      response (key removed) showing whether the `noul` probability / `choice` confidence come
-      through. If no: Jev's roles take the direct route of `RESEARCH_LOG.md` R2
-      (`JEV_BASE_URL`, `JEV_API_KEY`).
-- [ ] **Provider pins**: for each role, the provider(s) OpenRouter may use (`provider.only`);
-      fallbacks stay off and data collection denied.
+- [x] **Exact OpenRouter model ids** (2026-10-03): Jev `typesafe/jev-1.13` (all System One
+      roles), DeepSeek `deepseek/deepseek-v4.1-flash`, GLM `z-ai/glm-5.3`.
+- [x] **Is Jev (TypeSafe AI) listed on OpenRouter?** Yes (2026-10-03): `typesafe/jev-1.13`
+      through the Decisions endpoint; a `noul` comes back as a probability, a `choice` with
+      its confidence and per-option probabilities (RESEARCH_LOG R2). Where TypeSafe processes
+      data is not documented: synthetic tenants only.
+- [x] **Provider pins** (2026-10-03): each model's own provider only — `typesafe`,
+      `deepseek`, `z-ai`; fallbacks off, data collection denied.
+- [x] **OpenRouter keys** on Railway (2026-10-03): `OPENROUTER_JEV_API_KEY`,
+      `OPENROUTER_SYS2_API_KEY`.
 - [x] **Gemini direct for synthetic data** (decided 2026-10-02, WP-36): the AI Studio key is
       on Railway as `GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC`. It replaces the OpenRouter BYOK route
       for document reading, so the BYOK key in OpenRouter can be removed.

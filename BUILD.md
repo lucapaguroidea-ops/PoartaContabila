@@ -31,7 +31,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-18 | parked | — | Take-on / year-end / D406 producer / FX engine |
 | WP-D3 | decision | WP-11 | Non-payer RC books: 4423 vs 446x on copy-firm note |
 | WP-19 | done | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (R1) |
-| WP-20 | in-progress | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; R2 read, live sender not built |
+| WP-20 | done | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; live through OpenRouter's Decisions endpoint (synthetic only) |
 | WP-21 | done | WP-13 | Statement PDFs read by Google Document AI into the extract contract |
 | WP-22 | done | WP-19 | Bank line → the invoice it settles: a proposal on `v3_approve`, a person decides |
 | WP-23 | done | WP-05 | `reconcile_sink` graph, PRE stage: `need_rj_export`, `recon_ambiguous`, review contest |
@@ -291,6 +291,28 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   person is asked. The owner chose to build it outside that session. `JEV_*` are not set on
   Railway (the owner adds them). Layer 2 sees the period's due filings (`filings_due`: id +
   books_gate, from the CO.DiT axes) since 2026-10-02.
+- Built 2026-10-03 (owner: models confirmed, keys set, "go for it"), through OpenRouter, not
+  the direct TypeSafe route:
+  - Catalog: every System One role `typesafe/jev-1.13`, provider `{only: [typesafe]}`; the
+    DeepSeek roles `deepseek/deepseek-v4.1-flash` `{only: [deepseek]}`; `sys2_draft_rule`
+    `z-ai/glm-5.3` `{only: [z-ai]}`; fallbacks off, data collection denied (RESEARCH_LOG R2).
+  - `jev.role_transport`, `MODEL_CALLS=live`, a wired pack (`v3_judge`, `recon_review`,
+    `v2_declaration_gate`), a synthetic tenant (`route_check`; a client tenant needs the EU
+    route, which no role has) and `OPENROUTER_JEV_API_KEY` set: `POST
+    https://openrouter.ai/api/alpha/decisions` with `{model, state: the pack input,
+    questions: the role card's questions, provider: the pin}`. Without the key it records as
+    in `dry`.
+  - The answers are mapped by the card's thresholds: a `noul` is yes from 0.90
+    (`needs_human` from 0.10); a `choice` stands from confidence 0.80, else its cautious value
+    (`risk: high` + `needs_human`; `gap_materiality: material`; `action: hold`;
+    `verdict: abstain`). An answer off the card, a non-200 or an unreachable endpoint is
+    recorded `failed` and fails closed (a person is asked; Layer 2 gives no suggestion).
+  - Every call is recorded (`sent` with the answers, the mapped fields and the usage; never
+    the key). Answers are cached in `domain.jev_answers` (keyed with the role's model and
+    card hash), so a question is paid for once.
+  - System Two roles stay `shadow`: pinned, recorded, not sent (no sender is built for them).
+- Open: the Decisions endpoint is `alpha`; where TypeSafe processes data is not documented,
+  so Jev stays synthetic-only until the owner decides an EU route for it.
 
 ### WP-21 Statement PDF reading backend
 - Decided by the owner on 2026-10-01: Google Document AI. Write the extract contract

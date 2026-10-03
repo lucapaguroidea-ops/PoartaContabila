@@ -31,8 +31,9 @@ from poarta_contabila.types import Closed, Slug
 System = Literal["system_one", "system_two", "document_reading"]
 CallMode = Literal["off", "dry", "live"]
 """``off``: nothing. ``dry``: every role records what it would be sent, nothing is sent.
-``live``: a role with a built sender sends (today only document reading, synthetic tenants
-only, WP-36); every other role records as in ``dry``."""
+``live``: a role with a built sender sends, synthetic tenants only: document reading
+(Google AI Studio, WP-36) and the wired Jev packs (OpenRouter Decisions, WP-20); every other
+role records as in ``dry``."""
 CALL_MODES = ("off", "dry", "live")
 Route = Literal["openrouter", "google_ai_studio"]
 KEY_ENV = {

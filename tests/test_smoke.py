@@ -33,11 +33,12 @@ def test_the_smoke_run_goes_through_every_graph():
         "ingest_source_doc.v3_classify",
         "monthly_close.layer2",
     } <= set(report.calls)
-    # only document reading has a model: it records what it would be sent; the rest refuse
+    # every role has its model (owner, 2026-10-03): in dry mode each records what it would be
+    # sent, and nothing is sent
     calls = [c for cs in report.calls.values() for c in cs]
-    assert {c["status"] for c in calls if not c["role_id"].startswith("ocr_")} == {"refused"}
-    assert {c["status"] for c in calls if c["role_id"].startswith("ocr_")} == {"recorded"}
-    assert "no model chosen" in render(report)
+    assert {c["status"] for c in calls} == {"recorded"}
+    assert {c["model"] for c in calls if c["role_id"].startswith("jev_")} == {"typesafe/jev-1.13"}
+    assert "dry run: recorded, not sent" in render(report)
 
     again = run(client)  # a second run answers nothing new
     steps = _steps(again)
