@@ -1437,8 +1437,11 @@ class Runtime:
             draft_job = JobRecord(
                 job_id="pending", tenant=tenant.ref(), period="2000-01", status="ingested"
             )
+            # WP-73 G1: a counterparty without a RO CUI, from abroad, is an invoice from abroad
+            other = invoice.customer if invoice.supplier.cui == cui else invoice.supplier
+            abroad = other.cui is None and (other.country or "RO").upper() != "RO"
             source = SourceRef(
-                kind="ubl_spv",
+                kind="xml" if abroad else "ubl_spv",  # not from SPV: what the readers are told
                 bucket_key=f"tenants/{cui}/{tenant.punct}/{invoice.issue_date[:7]}/source/"
                 f"{source_hash}/{filename}",
                 content_type="application/zip" if xml is not data else "application/xml",
@@ -1447,15 +1450,7 @@ class Runtime:
             doc = to_canonical(invoice, job=draft_job, source=source)
         except UblError as exc:
             raise IngestRefused(str(exc)) from exc
-        # WP-73 G1: a counterparty without a RO CUI, from abroad, is an invoice from abroad
-        other = (
-            invoice.customer if doc.doc_class in ("iesire", "storn_iesire") else invoice.supplier
-        )
-        source_doc_id = (
-            "foreign_invoice_xml"
-            if other.cui is None and (other.country or "RO").upper() != "RO"
-            else "ro_efactura_ubl"
-        )
+        source_doc_id = "foreign_invoice_xml" if abroad else "ro_efactura_ubl"
         self.gateway.observe(  # shadow: what Jev would be asked at triage
             "jev_source_doc",
             {

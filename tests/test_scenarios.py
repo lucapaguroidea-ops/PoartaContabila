@@ -127,3 +127,36 @@ def test_the_cli_runs_named_scenarios(capsys):
     assert main(["platitor_clean"]) == 0
     out = capsys.readouterr().out
     assert "[pass] platitor_clean" in out and AGENT_LABEL in out
+
+
+def test_an_invoice_from_abroad_is_not_labelled_as_from_spv():
+    """WP-74 (live): System Two read "received via SPV" off an XML from abroad; the stored
+    source kind said ``ubl_spv``. It is ``xml``; an SPV zip stays ``ubl_spv``."""
+    from langgraph.checkpoint.memory import MemorySaver
+
+    from poarta_contabila.agent import InMemoryAgentStore
+    from poarta_contabila.jobs import InMemoryJobStore
+    from poarta_contabila.packages import InMemoryBlobStore, InMemoryPackageStore
+    from poarta_contabila.recon.pre import InMemoryReconStore
+    from poarta_contabila.registry import InMemoryRegistry, Tenant
+    from poarta_contabila.runtime import build_runtime
+    from poarta_contabila.synthetic import FIRMS
+    from poarta_contabila.synthetic.docs import Gen
+
+    f = FIRMS["abroad"]
+    rt = build_runtime(
+        catalog=load_catalog(),
+        jobs=InMemoryJobStore(),
+        packages=InMemoryPackageStore(),
+        blobs=InMemoryBlobStore(),
+        registry=InMemoryRegistry(),
+        recon=InMemoryReconStore(),
+        agent_store=InMemoryAgentStore(),
+        checkpointer=MemorySaver(),
+    )
+    rt.registry.put_tenant(Tenant.model_validate(f.tenant()))
+    g = Gen(f, "2026-05", 3)
+    x = rt.ingest_upload(f.cui, g.foreign_purchase("x", partner="x1").xml(f), "x.xml")
+    p = rt.ingest_upload(f.cui, g.purchase("p").spv_zip(f), "p.zip")
+    assert rt.canonical(x["job"]["job_id"]).source.kind == "xml"
+    assert rt.canonical(p["job"]["job_id"]).source.kind == "ubl_spv"
