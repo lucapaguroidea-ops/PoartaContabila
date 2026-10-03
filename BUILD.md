@@ -166,6 +166,52 @@ sovereign AI guide (`openrouter.ai/docs/guides/features/sovereign-ai`) and its m
 DPA (`docs.typesafe.ai/legal`, `typesafe.ai/legal/data-processing`); Gemini EU listings
 (`opper.ai/models/eu/gemini`) and Google's data residency page (not readable from the session).
 
+**Pricing, read 2026-10-03** (per million tokens, before tax; EUR → USD at the ECB rate of
+2026-10-02, 1 EUR = 1.1225 USD):
+
+| Role / model | OpenRouter (the pinned provider) | Scaleway serverless, Paris |
+|---|---|---|
+| System Two `z-ai/glm-5.3` on Z.AI (alternate: same on Together) | $1.40 in / $4.40 out | not served |
+| nearest on Scaleway: `glm-5.2` | Z.AI $1.40 / $4.40 | €1.80 / €5.50 (≈ $2.02 / $6.17); batch €0.90 / €2.75 (≈ $1.01 / $3.09) |
+| System Two alternate `moonshotai/kimi-k2.6` on Moonshot | $0.95 / $4.00 | not served |
+| System One `typesafe/jev-1.13` on TypeSafe | $0.042 / $0 | not served |
+| Document reading (Gemini, direct on Google AI Studio) | — | not served |
+| `deepseek-v4-flash` (dropped: its OpenRouter provider trained on prompts) | $0.09 / $0.18 (DeepInfra) to $0.44 / $1.32 (Cloudflare) | €0.40 / €0.80, cached €0.08 |
+
+- Per System Two explanation (≈ 1,550 input / 610 output tokens, the WP-74 live sample):
+  OpenRouter ≈ $0.0049 at list price (≈ $0.0042 as billed for those 5 calls); Scaleway live
+  ≈ $0.0069 (about 1.4×); Scaleway batch ≈ $0.0035 (about 30 % below OpenRouter).
+- OpenRouter: "no markup on inference pricing (however we do charge a fee when purchasing
+  credits)" — the percentage was not on the FAQ page. Its EU in-region route
+  (`eu.openrouter.ai`) needs a Business or Enterprise plan, priced on request.
+- Scaleway: "You benefit from a free tier on the first 1,000,000 tokens" (reads as once per
+  account); "All requests performed using Batches API are priced with a -50% discount".
+- Scaleway Batches API (how-to validated 2026-02-17; FAQ): a JSONL file in an Object Storage
+  bucket of the same project, one model per file ("The `method`, `url`, and `model` fields must
+  remain consistent across all requests"); "We aim to process any batch within 24 hours.
+  After this delay, batch processing will be stopped, and any remaining unprocessed queries
+  will not be billed"; no rate limit. No model is excluded from batching in the docs, but none
+  names `glm-5.2` either: **[de confirmat]** with one small test batch (no Scaleway key in the
+  build sessions).
+- Owner, 2026-10-03: with several clients, System Two's explanations could be batched on
+  Scaleway (EU, Paris), bringing its cost below OpenRouter's. What that implies:
+  - only System Two moves: Jev and Gemini are not on Scaleway, and Jev's `v3_judge` sits on the
+    path to every approval, so a 24-hour wait there would stall the flow;
+  - an explanation arrives up to 24 hours after its question (e.g. a nightly batch for the
+    questions still waiting); until then the question shows without one, as today when none
+    comes back;
+  - requests a batch drops after 24 hours are sent again or left unexplained;
+  - input and output pass through our own Scaleway bucket: deleting them after each batch is
+    ours; Scaleway may keep a full request up to 2 weeks after a server error (above);
+  - `glm-5.2` reasons at `max` by default: each line sets low effort, as the current sender
+    does; and it is one version behind the GLM 5.3 pin, so it is compared with it on the
+    synthetic questions first (`POST /model-roles/{role_id}/compare`).
+
+Sources (2026-10-03): `openrouter.ai/api/v1/models/{model}/endpoints`, `openrouter.ai/docs/faq`;
+`scaleway.com/en/pricing/model-as-a-service/`; `github.com/scaleway/docs-content`
+`pages/generative-apis/` (`faq.mdx`, `concepts.mdx`, `how-to/use-batch-processing.mdx`);
+`ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml`.
+
 ## Definition of done for v1
 
 WP-00–WP-12 green. WP-13 optional. Parked WPs untouched. No `Journal.post` in the tree. No SYSDBA in env samples. Catalogs that shipped without fixtures remain `draft`.
