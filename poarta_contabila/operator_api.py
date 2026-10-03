@@ -107,6 +107,8 @@ def _synthetic_only(rt: Runtime, request: Request) -> None:
             raise HTTPException(404, f"unknown batch {params['batch_id']}")
     elif request.url.path in _TENANTLESS:
         return
+    elif request.url.path.startswith("/model-roles/") and request.url.path.endswith("/compare"):
+        return  # WP-59: synthetic tenants' questions only
     else:
         raise HTTPException(403, "the build agent's token does not open this route")
     if not rt._synthetic(cui):

@@ -282,6 +282,15 @@ def test_the_alternates_are_compared_first_answer_only_and_nothing_is_recorded(c
     assert len(api.chat()) - sent == 6  # 3 candidates x 1 question x 2 runs, no retries
     assert len(_calls(o, "sys2_explain_approve")) == before
     assert KEY not in resp.text
+    # the build agent opens it too: only synthetic tenants' questions are compared
+    from fastapi.testclient import TestClient
+
+    from poarta_contabila.app import create_app
+
+    sb = "s" * 40
+    app = create_app(None, runtime=o.rt, operator_token="o" * 40, sysbuilder_token=sb)
+    builder = TestClient(app, headers={"Authorization": f"Bearer {sb}"})
+    assert builder.post("/model-roles/sys2_explain_approve/compare").status_code == 200
 
 
 def test_compare_needs_a_system_two_role(cat, monkeypatch):

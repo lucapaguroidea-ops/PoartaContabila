@@ -937,7 +937,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 ### WP-59 Compare a role's approved alternates
 - Owner, 2026-10-03: compare `moonshotai/kimi-k2.6` (approved alternate, A7) with GLM before
   any change of pin.
-- `POST /model-roles/{role_id}/compare?inputs=2&runs=3` (operator and build agent): a System Two
+- `POST /model-roles/{role_id}/compare?inputs=2&runs=3` (operator and build agent: synthetic questions only): a System Two
   role's latest distinct questions of synthetic tenants, each sent `runs` times to the main pin
   and to every approved alternate with its own provider pin (`data_collection: deny`), no retry.
   Answers: per candidate, first-try passes of `check_explanation`, cost per pass, each result.
