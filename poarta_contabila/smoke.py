@@ -18,7 +18,9 @@ model role was given at its place in the flow (``GET /model-calls``, ``MODEL_CAL
    September stays material (its packages wait for an agent; its books hold invoices never
    uploaded here); August should show no blocker. On a lock mismatch (the month's jobs
    changed since it was locked) the run answers ``reopen`` first and closes again;
-10. ``GET /model-calls`` for this firm, grouped by graph and node.
+10. a September invoice (``AB 0102``) left at ``v3_approve``: its explanation (WP-64), before
+    the closes;
+11. ``GET /model-calls`` for this firm, grouped by graph and node.
 
 ``--ocr`` (WP-36) adds one step: a second statement, a real one-page PDF generated here
 (invented firm, invented movement), uploaded **without** its tables, so the server's reader
@@ -320,6 +322,27 @@ def _close(c: Client, report: Report, period: str) -> None:
     )
 
 
+def _approval_explanation(c: Client, report: Report) -> None:
+    """WP-64: a September invoice (``AB 0102``) is left at its ``v3_approve``, never answered,
+    so every run shows the approval question's System Two explanation (sent once, then found
+    again). September is already held as material; this adds one waiting job to it."""
+    invoice = spv_invoice("AB 0102", issued="2026-09-25", due="2026-10-25", spv_id="4100000003")
+    resp = _octet(c, "/ingest", invoice, {"cui": CUI, "filename": "spv-ab0102.zip"})
+    view = _json(resp)
+    if _kind(view) != "v3_approve":
+        outcome = f"no approval question: {_outcome(view)}"
+    elif view.get("explanation"):
+        e = view["explanation"]
+        outcome = f"{e.get('served_by')}: {e.get('explanation')}"
+    else:
+        job_calls = c.get("/model-calls", params={"role": "sys2_explain_approve", "limit": 1})
+        last = (_json(job_calls) or [{}])[0] if job_calls.status_code < 400 else {}
+        outcome = f"none: {last.get('status')} ({last.get('reason')})"
+    report.steps.append(
+        Step("approval explanation", resp.status_code, outcome[:400], resp.status_code < 400)
+    )
+
+
 def run(
     c: Client,
     *,
@@ -487,6 +510,7 @@ def run(
         )
     )
 
+    _approval_explanation(c, report)
     _close(c, report, PERIOD)
     _close(c, report, CLEAN)
 

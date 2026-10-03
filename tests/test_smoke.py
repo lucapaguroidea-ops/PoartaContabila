@@ -17,6 +17,8 @@ def test_the_smoke_run_goes_through_every_graph():
     assert report.ok and report.mode == "dry"
     steps = _steps(report)
     assert steps["invoice v3_approve"].outcome.startswith("job packaged")
+    # dry: the approval question waits; its explanation is recorded, not sent
+    assert steps["approval explanation"].outcome.startswith("none: recorded (dry run")
     assert steps["line 2 v3_approve"].outcome.startswith("job packaged")
     assert steps["decont_split"].outcome == "workings emit=False"
     assert steps["eu route"].outcome.startswith("set on 0 of ")
