@@ -374,3 +374,75 @@ def test_the_fixture_payment_with_its_statement_line_ties_401(cat):
     assert diff.synthetic_delta["401:debit"].delta == "0.00"
     assert diff.synthetic_delta["5121:credit"].delta == "0.00"
     assert _status(runs, "C0_synthetic_parity") == "PASS"
+
+
+# ----- WP-73 G6: C0's implied VAT follows the period's CO.DiT -----
+
+
+def _items(*specs):
+    return [_exp(*s, n=i, doc_class=dc).item() for i, (dc, *s) in enumerate(specs, start=1)]
+
+
+def test_implied_vat_follows_the_tva_regime():
+    items = _items(
+        ("intrare", "A1", "2026-09-03", "121.00", "21.00"),
+        ("iesire", "S1", "2026-09-04", "242.00", "42.00"),
+    )
+    payer = expected_turnover(items, {"tva": "tva_platitor", "exig": "tva_exig_livrare"})
+    assert payer["4426"]["debit"] == Decimal("21.00") and payer["4427"]["credit"] == Decimal(
+        "42.00"
+    )
+    incasare = expected_turnover(items, {"tva": "tva_platitor", "exig": "tva_la_incasare"})
+    assert "4426" not in incasare and "4427" not in incasare
+    assert incasare["4428"] == {"debit": Decimal("21.00"), "credit": Decimal("42.00")}
+    nonpayer = expected_turnover(items, {"tva": "tva_neplatitor"})
+    assert "4426" not in nonpayer and nonpayer["401"]["credit"] == Decimal("121.00")
+    unknown = expected_turnover(items, {})  # no CO.DiT: the payer's reading, as before
+    assert unknown == expected_turnover(items)
+    assert unknown["4426"]["debit"] == Decimal("21.00")
+
+
+def test_reverse_charge_for_a_payer_is_implied_on_its_invoice_from_abroad():
+    items = _items(("intrare", "DE-1", "2026-09-05", "100.00", "0.00"))
+    rc = expected_turnover(items, {"tva": "tva_platitor"}, "21", {"job-1"})
+    assert rc["4426"]["debit"] == Decimal("21.00") and rc["4427"]["credit"] == Decimal("21.00")
+    plain = expected_turnover(items, {"tva": "tva_platitor"}, "21")  # not bound abroad
+    assert plain["4426"]["debit"] == Decimal("0") and "4427" not in plain
+
+
+def test_tva_la_incasare_moves_the_paid_share(cat):
+    from poarta_contabila.period_diff import vat_exigible
+    from poarta_contabila.types import PartnerRef
+
+    inv = _exp("A1", "2026-08-20", "121.00", "21.00")
+    inv = ExpectedJob(
+        job=inv.job,
+        doc=inv.doc.model_copy(
+            update={"partner": PartnerRef(cui="20000005", name="FURNIZOR", role="supplier")}
+        ),
+    )
+    pay = _exp("EXT-1", "2026-09-10", "60.50", "0.00", doc_class="plata", n=2)
+    pay = ExpectedJob(
+        job=pay.job,
+        doc=pay.doc.model_copy(
+            update={
+                "partner": PartnerRef(cui="20000005", name="FURNIZOR", role="supplier"),
+                "maps": {"factura_numar": "A 1"},
+                "totals": pay.doc.totals.model_copy(update={"net": "60.50", "vat": "0.00"}),
+            }
+        ),
+    )
+    axes = {"tva": "tva_platitor", "exig": "tva_la_incasare"}
+    got = vat_exigible([pay], [inv], axes)  # the invoice is of the month before
+    assert got == [("4426", "debit", Decimal("10.50")), ("4428", "credit", Decimal("10.50"))]
+    assert vat_exigible([pay], [inv], {"tva": "tva_platitor"}) == []
+
+
+def test_a_job_minted_without_a_thread_is_an_outbound_hole(cat):
+    """WP-73 G2: the close counts every Job of the month, even one never started."""
+    exp = [_exp(*PURCHASE)]
+    diff, runs = build_period_diff(
+        cat, CUI, PERIOD, exp, CleanEye([_sd(*PURCHASE)]), axes=PAYER, stalled=["job-x"]
+    )
+    assert diff.outbound_holes == ["job-x"]
+    assert {r.control_id: r.status for r in runs}["C1_outbound_complete"] == "FAIL"

@@ -1,7 +1,8 @@
 name: neplatitor_month
-note: 'A neplătitor (micro) buying EU services: d301 and d390 fall due. Known gaps (WP-73): the XML invoice
-  from abroad is refused (no RO CUI for the identity gate), so it sits in the books unexplained (C2);
-  VAT carried in the cost is not the 4426 Layer 1 implies (C0).'
+note: 'A neplătitor (micro) buying EU services: d301 and d390 fall due; purchase VAT in the cost is what
+  C0 implies (G6). The XML invoice from abroad is a job (G1) on foreign_rc_neplatitor, which goes to a
+  person (WP-D3) and is not packaged (C1). Known gap: its EUR amounts against the books'' RON stay off
+  parity and unmatched (FX parked, WP-18).'
 firm: neplatitor
 period: 2026-05
 seed: 1
@@ -76,8 +77,13 @@ expect:
       post: post_doc_how
       post_verdict: how_ok
     x1:
-      source_doc: ro_efactura_ubl
-      refused: emit gates failed
+      source_doc: foreign_invoice_xml
+      job_kind: job_foreign_invoice
+      articol: foreign_rc_neplatitor
+      asks:
+      - v3_approve
+      status: needs_human
+      pre: pre_doc_nr_date
     pay:p1:
       source_doc: extras_statement_pdf
       job_kind: job_extras_line
@@ -115,10 +121,11 @@ expect:
       material: true
       blockers:
       - C0_synthetic_parity
+      - C1_outbound_complete
       - C2_unexplained_empty
       controls:
         C0_synthetic_parity: FAIL
-        C1_outbound_complete: PASS
+        C1_outbound_complete: FAIL
         C2_unexplained_empty: FAIL
         M1_1_payables_tie: PASS
         M1_2_receivables_tie: PASS

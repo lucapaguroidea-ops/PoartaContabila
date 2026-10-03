@@ -1,33 +1,157 @@
 name: bonuri_decont
-note: >-
-  An expense report split into its parts (two bonuri, one with our CUI; an SPV invoice whose
-  zip is uploaded after the split; a workings sheet). Known gaps, kept as they are for WP-73:
-  a bon part mints job_bon, whose thread never starts (it stays ingested and the close never
-  counts it); the books carry the deductible bon's VAT on 4426, which C0 cannot explain.
+note: 'An expense report split into its parts: two bonuri (one with our CUI) and a workings sheet are
+  evidence of the 542 settlement (WP-73 G2, no Job); an SPV invoice part is a Job once its zip is uploaded.
+  Known gap: the books carry the deductible bon''s VAT on 4426, which C0 does not imply (the 542 settlement
+  is not built in v1).'
 firm: bonuri
-period: "2026-05"
+period: 2026-05
 seed: 1
 expect:
   documents:
-    decont: {source_doc: decont_cheltuieli, asks: [decont_split]}
-    bon1: &bon {source_doc: bon_fiscal, job_kind: job_bon, asks: [], status: ingested}
-    bon2: *bon
+    p1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    p2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    p3:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    s1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: iesire_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    s2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: iesire_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    decont:
+      source_doc: decont_cheltuieli
+      asks:
+      - decont_split
+    bon1:
+      source_doc: decont_part_evidence
+      asks: []
+    bon2:
+      source_doc: decont_part_evidence
+      asks: []
     dec_inv:
       source_doc: ro_efactura_ubl
       job_kind: job_ro_efactura
       articol: ro_efactura_inbound
-      asks: [v3_approve, wait_validare]
+      asks:
+      - v3_approve
+      - wait_validare
       status: acked
       module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
       post_verdict: how_ok
-    calc: {source_doc: workings, asks: []}
-    p1: {articol: ro_efactura_inbound, status: acked}
-    s1: {articol: ro_efactura_outbound, status: acked}
+    calc:
+      source_doc: workings
+      asks: []
+    salary:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: []
+      status: already_in_sink
+      pre: pre_extras_date_gross
+    pay:p1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: plata_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    get:s1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: incasare_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    fee:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: []
+      status: already_in_sink
+      pre: pre_extras_date_gross
   months:
-    "2026-05":
+    2026-05:
       close: close_standard
       material: true
-      blockers: [C0_synthetic_parity]
-      controls: {C0_synthetic_parity: FAIL, C1_outbound_complete: PASS, C2_unexplained_empty: PASS}
-      filings: [d100_micro, d112_payroll, d300_platitor, d394_platitor, d406_saft]
+      blockers:
+      - C0_synthetic_parity
+      controls:
+        C0_synthetic_parity: FAIL
+        C1_outbound_complete: PASS
+        C2_unexplained_empty: PASS
+        M1_1_payables_tie: PASS
+        M1_2_receivables_tie: PASS
+        T_regime_4428: PASS
+        T_regime_442x: PASS
+      filings:
+      - d100_micro
+      - d112_payroll
+      - d300_platitor
+      - d394_platitor
+      - d406_saft
+      recon_asks: []
+      close_asks:
+      - v2_close
       v2: hold

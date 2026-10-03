@@ -68,6 +68,7 @@ class Firm:
     suppliers: tuple[Party, ...]
     customers: tuple[Party, ...]
     foreign: tuple[Party, ...] = ()
+    foreign_customers: tuple[Party, ...] = ()
     bank_account: str = "5121.01"
     cash_account: str = "5311"
     book_of_record: Literal["saga", "nextup"] = "saga"
@@ -92,7 +93,7 @@ class Firm:
         return f"{self.name}   c.f. {cf}   r.c. J00/{self.cui[-3:]}/2021"
 
     def party(self, key: str) -> Party:
-        for p in (*self.suppliers, *self.customers, *self.foreign):
+        for p in (*self.suppliers, *self.customers, *self.foreign, *self.foreign_customers):
             if p.key == key:
                 return p
         raise KeyError(f"{self.key} has no partner {key!r}")
@@ -149,6 +150,15 @@ CUSTOMERS = (
 FOREIGN = (
     _foreign(1, "EXEMPLU SOFTWARE GMBH", "DE", "DE000000001"),
     _foreign(2, "MODELO SERVICIOS SL", "ES", "ESX0000001X"),
+)
+FOREIGN_CUSTOMERS = (
+    Party(
+        key="y1",
+        name="EXEMPLU RETAIL BV",
+        analytic="4111.00091",
+        vat_id="NL000000001B01",
+        country="NL",
+    ),
 )
 _OPENING = {"5121.01": 2_500_000, "1012": -20_000, "117": -2_480_000}
 
@@ -222,6 +232,7 @@ FIRMS: dict[str, Firm] = {
                 "cross_border": "mixed",
             },
             foreign=FOREIGN,
+            foreign_customers=FOREIGN_CUSTOMERS,
         ),
         _firm(
             5,

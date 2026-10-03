@@ -34,7 +34,7 @@ controls:
     watched: ["401", "4111", "4426", "4427", "4428", "5121", "5311"]
     epsilon: "0.01"
     on_fail: [no_file]
-    note: "Never plug. Unexplained remainder is a bucket row, not an adjusting post. A statement line's counterpart (WP-46, owner 2026-10-02): bound to a customer → 4111, to a supplier → 401, opposite 5121; never bound → the books' own counterpart only when its bank document is one line, 401 Dr (payment) or 4111 Cr (receipt), of exactly the line's amount."
+    note: "Never plug. Unexplained remainder is a bucket row, not an adjusting post. A statement line's counterpart (WP-46, owner 2026-10-02): bound to a customer → 4111, to a supplier → 401, opposite 5121; never bound → the books' own counterpart only when its bank document is one line, 401 Dr (payment) or 4111 Cr (receipt), of exactly the line's amount. Implied VAT by CO.DiT (WP-73 G6, owner accepted 2026-10-03, draft, accounts [de confirmat]): tva_platitor + tva_exig_livrare → purchase 4426 Dr, sale 4427 Cr; tva_la_incasare → 4428 at the invoice, and on a bound bank line its VAT share 4428 → 4426 (payment) / 4428 → 4427 (receipt); tva_neplatitor / tva_scutire_mici → purchase VAT in the cost (nothing on 4426); reverse charge for a payer → 4426 Dr = 4427 Cr on the base at the standard rate; for a neplătitor → WP-D3."
 
   - control_id: C1_outbound_complete
     schema_version: "1"
@@ -144,6 +144,17 @@ controls:
     epsilon: "0.01"
     on_fail: [hitl]
     note: "4423/4424 are not on the v1 watched list. Blocking requires amendment. Articol foreign_rc_neplatitor + decision WP-D3 on 4423 vs 446x."
+
+  - control_id: C2_waiting_for_xml   # WP-73 G3, owner accepted 2026-10-03
+    schema_version: "1"
+    status: draft
+    layer: v2
+    severity: advisory
+    check: "an unexplained sink document whose supplier CUI, number and date match a part waiting in _incomplete_spv is named as waiting for its SPV XML"
+    watched: []
+    epsilon: "0.00"
+    on_fail: [hitl]
+    note: "Does not clear C2. The SPV zip of the part settles it (A2 §5). Not computed yet: a decont_split part carries no number or date (owner checklist)."
 
   - control_id: P_prefile_duplicate
     schema_version: "1"

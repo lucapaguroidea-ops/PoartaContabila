@@ -296,12 +296,13 @@ def test_two_hits_are_ambiguous(cat):
     assert out.verdict == "ambiguous" and len(out.hits) == 2
 
 
-def test_storno_has_no_pre_profile_and_asks(cat, saga_lines):
+def test_storno_is_checked_on_its_own_pre_articol(cat, saga_lines):
+    """WP-73 G4 (owner, 2026-10-03): recon_pre_storno; before it a storno always asked."""
     doc = _doc("FX-120", "2026-09-20", "-121.00", doc_class="storn_iesire", storno=True)
     store = InMemoryReconStore()
     out = _check(cat, _eye(saga_lines), store=store, doc=doc)
-    assert out.verdict == "ambiguous" and out.profile_id is None
-    assert store.rows == {}  # no books were read: nothing to keep
+    assert out.profile_id == "pre_doc_nr_date" and out.verdict == "absent"
+    assert len(store.rows) == 1
 
 
 def test_verdict_is_stored_once_per_sink_snapshot(cat, saga_lines):
@@ -383,3 +384,21 @@ def test_postgres_recon_store_keeps_the_first_verdict(cat):
     second = first.model_copy(update={"verdict": "ambiguous", "reason": "b"})
     assert store.put_once(job.job_id, "pre", first) == first
     assert store.put_once(job.job_id, "pre", second) == first
+
+
+def test_a_credit_note_has_its_own_pre_articol():
+    """WP-73 G4: recon_pre_storno takes a storno on the number / date profile."""
+    from poarta_contabila.catalog import load_catalog
+    from poarta_contabila.flux import MatchContext, match_articole
+
+    cat = load_catalog()
+    for storno, want in ((True, ["recon_pre_storno"]), (False, ["recon_pre_standard"])):
+        ctx = MatchContext(
+            graph_id="reconcile_sink",
+            fiscal_class="ro_efactura",
+            our_role="outbound",
+            is_storno=storno,
+            stage="pre",
+        )
+        assert match_articole(cat, ctx) == want
+    assert cat.articole["recon_pre_storno"]["profile_id"] == "pre_doc_nr_date"

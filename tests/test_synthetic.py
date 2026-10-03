@@ -154,7 +154,7 @@ def test_an_expense_report_splits_into_the_catalogs_children(cat):
     )
     assert check_split(cat, container, answer) is None
     ids = [p.source_doc_id for p in answer.parts]
-    assert ids == ["bon_fiscal", "bon_fiscal", "ro_efactura_ubl", "workings"]
+    assert ids == ["decont_part_evidence", "decont_part_evidence", "ro_efactura_ubl", "workings"]
     assert [p.bon_our_cui_on_doc for p in answer.parts[:2]] == [True, False]
     # the invoice part is named by the hash of the SPV zip a person would upload later
     assert (
@@ -309,7 +309,7 @@ def test_the_account_level_defects(tmp_path):
     assert any(e.debit == "4423" for e in n.book.entries if e.ref == "p1")
     a = month(FIRMS["abroad"], PERIOD, seed=1)
     ids = [p["source_doc_id"] for p in a.docs["decont_abroad"].split_answer(a.firm)["parts"]]
-    assert ids == ["foreign_invoice", "ro_efactura_pdf", "workings"]
+    assert ids == ["decont_part_evidence", "ro_efactura_pdf", "workings"]
 
 
 def test_realistic_months_are_drawn_sized_and_repeatable():

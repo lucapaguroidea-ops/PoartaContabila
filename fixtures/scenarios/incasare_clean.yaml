@@ -1,7 +1,7 @@
 name: incasare_clean
-note: 'TVA la încasare: close_tva_incasare, POST with post_how_4428. Known gaps (WP-73): M1_8_4428_open
-  is not computed in v1, so it fails closed; Layer 1 implies 4426 / 4427 while SAGA posts 4428, so C0
-  fails.'
+note: 'TVA la încasare: close_tva_incasare, POST with post_how_4428; C0 implies 4428 at the invoice and
+  its share moved as it is paid (WP-73 G6), so parity holds. Known gap: M1_8_4428_open is not computed
+  in v1, so it fails closed (owner checklist).'
 firm: incasare
 period: 2026-05
 seed: 1
@@ -103,10 +103,9 @@ expect:
       close: close_tva_incasare
       material: true
       blockers:
-      - C0_synthetic_parity
       - M1_8_4428_open
       controls:
-        C0_synthetic_parity: FAIL
+        C0_synthetic_parity: PASS
         C1_outbound_complete: PASS
         C2_unexplained_empty: PASS
         M1_1_payables_tie: PASS

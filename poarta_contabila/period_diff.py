@@ -33,7 +33,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from poarta_contabila.catalog import Catalog
@@ -87,20 +87,47 @@ class ExpectedJob:
         )
 
 
-def expected_turnover(items: list[ExpectedItem]) -> dict[str, dict[str, Decimal]]:
-    """The turnover the expected documents imply on the watched accounts."""
+_NON_PAYER = {"tva_neplatitor", "tva_scutire_mici"}
+
+
+def expected_turnover(
+    items: list[ExpectedItem],
+    axes: dict[str, str] | None = None,
+    standard_rate: str | None = None,
+    reverse_charged: set[str] | frozenset[str] = frozenset(),
+) -> dict[str, dict[str, Decimal]]:
+    """The turnover the expected documents imply on the watched accounts.
+
+    VAT by the period's CO.DiT (WP-73 G6, C0's note; accounts [de confirmat]): a payer with
+    exigibility at delivery → 4426 / 4427; TVA la încasare → 4428 at the invoice; a
+    neplătitor carries purchase VAT in the cost (nothing on 4426). A payer's invoice from
+    abroad (*reverse_charged*: jobs on ``foreign_invoice_inbound`` with no VAT) is reverse
+    charged: 4426 Dr = 4427 Cr on the net at the year's standard rate. Unknown ``tva`` keeps
+    the payer's reading (fail closed: a difference)."""
+    axes = axes or {}
+    tva = axes.get("tva")
+    incasare = axes.get("exig") == "tva_la_incasare"
+    payer = tva not in _NON_PAYER
     t: dict[str, dict[str, Decimal]] = {}
 
-    def add(account: str, side: str, amount: str) -> None:
+    def add(account: str, side: str, amount: str | Decimal) -> None:
         t.setdefault(account, {"debit": Decimal(0), "credit": Decimal(0)})[side] += Decimal(amount)
 
     for it in items:
         if it.doc_class in _IN:
             add("401", "credit", it.gross)
-            add("4426", "debit", it.vat)
+            if not payer:
+                continue
+            add("4428" if incasare else "4426", "debit", it.vat)
+            if it.job_id in reverse_charged and Decimal(it.vat) == 0 and standard_rate:
+                rc = (Decimal(it.net) * Decimal(standard_rate) / 100).quantize(
+                    _CENT, rounding=ROUND_HALF_UP
+                )
+                add("4426", "debit", rc)
+                add("4427", "credit", rc)
         elif it.doc_class in _OUT:
             add("4111", "debit", it.gross)
-            add("4427", "credit", it.vat)
+            add("4428" if incasare else "4427", "credit", it.vat)
         elif it.doc_class == "incasare":  # a statement line (WP-13): the bank side only
             add("5121", "debit", it.gross)
         elif it.doc_class == "plata":
@@ -110,6 +137,45 @@ def expected_turnover(items: list[ExpectedItem]) -> dict[str, dict[str, Decimal]
 
 _COUNTERPART = {"customer": "4111", "supplier": "401"}  # incasare_xml / plata_xml (WP-46)
 _POSTED_COUNTERPART = {"incasare": "4111", "plata": "401"}
+
+
+def vat_exigible(
+    exp: list[ExpectedJob], prior: list[ExpectedJob], axes: dict[str, str]
+) -> list[tuple[str, str, Decimal]]:
+    """TVA la încasare (WP-73 G6): a bound bank line makes its invoice's VAT share exigible —
+    a payment 4426 Dr / 4428 Cr, a receipt 4428 Dr / 4427 Cr; the share is the line's amount
+    × the invoice's VAT / gross, half up. The invoice is looked for among this month's and
+    *prior* months' expected documents (same partner CUI, number)."""
+    if axes.get("exig") != "tva_la_incasare" or axes.get("tva") in _NON_PAYER:
+        return []
+    invoices = {
+        (e.doc.partner.cui, normalize(e.doc.number, "alnum")): e.doc
+        for e in [*prior, *exp]
+        if e.doc.doc_class in ("intrare", "iesire") and e.doc.partner.cui
+    }
+    out = []
+    for e in exp:
+        d = e.doc
+        if d.doc_class not in _BANK or not d.partner.cui or not d.maps.get("factura_numar"):
+            continue
+        inv = invoices.get((d.partner.cui, normalize(d.maps["factura_numar"], "alnum")))
+        if inv is None or Decimal(inv.totals.gross) == 0:
+            continue
+        share = Decimal(d.totals.gross) * Decimal(inv.totals.vat) / Decimal(inv.totals.gross)
+        share = share.quantize(_CENT, rounding=ROUND_HALF_UP)
+        if d.doc_class == "plata":
+            out += [("4426", "debit", share), ("4428", "credit", share)]
+        else:
+            out += [("4428", "debit", share), ("4427", "credit", share)]
+    return out
+
+
+def standard_rate(cat: Catalog, period: str) -> str | None:
+    """The year's standard VAT rate from ArticolePins, or None."""
+    for row in (cat.docs.get("ArticolePins") or {}).get("pins") or []:
+        if int(row.get("year", 0)) == int(period[:4]):
+            return str((row.get("tva") or {}).get("standard_pct") or "") or None
+    return None
 
 
 def bank_counterparts(
@@ -186,8 +252,11 @@ def build_period_diff(
     *,
     axes: dict[str, str] | None = None,
     rules: list[ExplainedRule] | None = None,
+    stalled: list[str] | None = None,
+    prior: list[ExpectedJob] | None = None,
 ) -> tuple[PeriodDiff, list[ControlRun]]:
-    """PeriodDiff + one ControlRun per v2/both control row."""
+    """PeriodDiff + one ControlRun per v2/both control row. *stalled*: the month's jobs with no
+    document on their thread (minted, never started); each is an outbound hole (WP-73 G2)."""
     axes = axes or {}
     rules = [r for r in rules or [] if r.cui == cui and r.applies_to(period)]
     exp = [e for e in expected if e.job.status not in _NOT_EXPECTED]
@@ -240,12 +309,19 @@ def build_period_diff(
                     delta_gross=_m(Decimal(sd.gross) - Decimal(e.doc.totals.gross)),
                 )
             )
-    holes = sorted(e.job.job_id for e in exp if e.job.status not in _DONE)
+    holes = sorted({e.job.job_id for e in exp if e.job.status not in _DONE} | set(stalled or []))
 
     control = cat.controls.get("C0_synthetic_parity") or {}
     watched = list(control.get("watched") or [])
     epsilon = Decimal(str(control.get("epsilon", "0.01")))
-    implied = expected_turnover(items)
+    rc = {
+        e.job.job_id
+        for e in exp
+        if e.job.articol_id == "foreign_invoice_inbound" and Decimal(e.doc.totals.vat) == 0
+    }
+    implied = expected_turnover(items, axes, standard_rate(cat, period), rc)
+    for account, side, amount in vat_exigible(exp, prior or [], axes):
+        implied.setdefault(account, {"debit": Decimal(0), "credit": Decimal(0)})[side] += amount
     for account, side, amount in bank_counterparts(exp, matched, month_lines):
         implied.setdefault(account, {"debit": Decimal(0), "credit": Decimal(0)})[side] += amount
     explained_lines = []

@@ -48,7 +48,7 @@ def test_an_out_of_reach_row_says_why(cat):
     cmap = build_map(cat)
     rows = {(r.table, r.key): r for r in cmap.rows}
     assert rows[("articol", "bon_cu_cui")].reach.ref == "WP-14"
-    assert rows[("articol", "foreign_rc_neplatitor")].reach.kind == "decision"
+    assert rows[("write_module", "nota_nc_dbf")].reach.kind == "decision"
     assert rows[("hitl", "recon_review_contest")].reach.kind == "live_only"
     assert rows[("articol", "ro_efactura_inbound")].reach is None
     for (table, key), reach in OUT_OF_REACH.items():
@@ -126,7 +126,7 @@ def test_data_to_catalog_findings(cat):
 
 def test_the_cli_prints_text_and_json(capsys):
     assert main(["--no-run"]) == 0
-    assert "articole de cale: 22 rows" in capsys.readouterr().out
+    assert "articole de cale: 23 rows" in capsys.readouterr().out
     assert main(["--json", "--no-run"]) == 0
     data = json.loads(capsys.readouterr().out)
-    assert data["summary"]["articol"]["rows"] == 22 and data["problems"] == []
+    assert data["summary"]["articol"]["rows"] == 23 and data["problems"] == []

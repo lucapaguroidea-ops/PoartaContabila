@@ -96,11 +96,11 @@ def control_key(control_id: str, outcome: str) -> str:
 
 
 _BON = Reach("parked", "WP-14", "bonuri walk through ArticolBon / bon_via_nota, parked in v1")
-_FOREIGN = Reach(
+_FOREIGN_SCAN = Reach(
     "no_code_path",
     None,
-    "no foreign-invoice extract or upload route: a decont part mints job_foreign_invoice, "
-    "whose thread never starts; an XML from abroad is read as RO e-Factura",
+    "an invoice from abroad is read only as XML (foreign_invoice_xml, WP-73 G1); a scan or "
+    "PDF has no extract, and in an expense report it is evidence (G2)",
 )
 _TRIAGE = Reach(
     "no_code_path",
@@ -125,16 +125,15 @@ OUT_OF_REACH: dict[tuple[Table, str], Reach] = {
     ("articol", "triage_pair_efactura"): _TRIAGE,
     ("articol", "triage_bon_fork"): _TRIAGE,
     ("articol", "triage_extras"): _TRIAGE,
-    ("articol", "foreign_invoice_inbound"): _FOREIGN,
-    ("articol", "foreign_invoice_outbound"): _FOREIGN,
-    ("articol", "foreign_rc_neplatitor"): Reach(
-        "decision", "WP-D3", "4423 vs 446x open; always-HITL, and no foreign-invoice path"
-    ),
     ("articol", "bon_cu_cui"): _BON,
     ("articol", "bon_fara_cui"): _BON,
     ("articol", "recon_pre_bon"): _BON,
     ("articol", "recon_post_bon"): _BON,
     # ----- source documents -----
+    ("source_doc", "foreign_invoice"): _FOREIGN_SCAN,
+    ("source_doc", "bon_fiscal"): Reach(
+        "parked", "WP-14", "no route mints a bon since an expense report's receipts are evidence"
+    ),
     ("source_doc", "extras"): Reach(
         "no_code_path", None, "statements arrive as PDF only (extras_statement_pdf, WP-13)"
     ),
@@ -150,6 +149,7 @@ OUT_OF_REACH: dict[tuple[Table, str], Reach] = {
         "no_code_path", None, "every route names its source doc; none mints 'unknown'"
     ),
     # ----- job kinds -----
+    ("job_kind", "job_bon"): Reach("parked", "WP-14", "no route mints a bon (WP-73 G2)"),
     ("job_kind", "job_extras"): Reach(
         "no_code_path", None, "statement packs are line jobs (job_extras_line, WP-13)"
     ),
@@ -171,7 +171,7 @@ OUT_OF_REACH: dict[tuple[Table, str], Reach] = {
     ),
     ("hitl", "define_module"): Reach("no_code_path", None, _NOT_ASKED),
     ("hitl", "articol_bon"): _BON,
-    ("hitl", "no_counterparty"): _FOREIGN,
+    ("hitl", "no_counterparty"): Reach("no_code_path", None, _NOT_ASKED),
     ("hitl", "request_devalidare"): Reach("no_code_path", None, _NOT_ASKED),
     ("hitl", "recon_review_contest"): Reach(
         "live_only", "WP-74", "MODEL_CALLS=dry: llm_review abstains, so nothing is contested"
@@ -198,6 +198,12 @@ OUT_OF_REACH: dict[tuple[Table, str], Reach] = {
     ),
     ("control", control_key("M1_9_4424_watched", "FAIL")): Reach(
         "not_computed", None, "advisory, not computed in v1: INFO only"
+    ),
+    ("control", control_key("C2_waiting_for_xml", "PASS")): Reach(
+        "not_computed", None, "a decont_split part carries no number or date to match (owner)"
+    ),
+    ("control", control_key("C2_waiting_for_xml", "FAIL")): Reach(
+        "not_computed", None, "a decont_split part carries no number or date to match (owner)"
     ),
     ("control", control_key("P_prefile_duplicate", "FAIL")): _PREFILE_FAIL,
     ("control", control_key("P_prefile_hard_failures", "FAIL")): _PREFILE_FAIL,

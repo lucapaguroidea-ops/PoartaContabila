@@ -261,6 +261,8 @@ class Runtime:
                     [w.job.job_id for w in self.recon_waiting(cui, period)]
                     + self.post_open(cui, period)
                 ),
+                stalled=lambda cui, period: self.stalled(cui, period),
+                prior=lambda cui, period: self.prior(cui, period),
             ),
             checkpointer=self.checkpointer,
         )
@@ -746,6 +748,20 @@ class Runtime:
                 doc = CanonicalDocument.model_validate(values["canonical"])
                 out.append(ExpectedJob(job=job, doc=doc))
         return out
+
+    def prior(self, cui: str, period: str) -> list[ExpectedJob]:
+        """The two months before *period*: invoices a bank line of this month may settle."""
+        return [ej for p in _months_back(period, SETTLE_MONTHS)[1:] for ej in self.expected(cui, p)]
+
+    def stalled(self, cui: str, period: str) -> list[str]:
+        """The month's jobs minted with no document on their thread (never started): the
+        close counts them as outbound holes (WP-73 G2)."""
+        return [
+            job.job_id
+            for job in self.jobs.for_period(cui, period)
+            if job.status != "rejected"
+            and "canonical" not in self.ingest.get_state(self._cfg(job.job_id)).values
+        ]
 
     def settlement(self, line: CanonicalDocument) -> SettlementProposal:
         """The invoices an unbound bank line could settle (WP-22, WP-30), from this tenant's
@@ -1271,7 +1287,15 @@ class Runtime:
         axes = self.axes(cui, period, axes)
         rules = self.rules.active(cui) if self.rules is not None else []
         diff, runs = build_period_diff(
-            self.catalog, cui, period, expected, eye, axes=axes, rules=rules
+            self.catalog,
+            cui,
+            period,
+            expected,
+            eye,
+            axes=axes,
+            rules=rules,
+            stalled=self.stalled(cui, period),
+            prior=self.prior(cui, period),
         )
         if self.periods is not None:
             self.periods.save(diff, runs)
@@ -1423,6 +1447,15 @@ class Runtime:
             doc = to_canonical(invoice, job=draft_job, source=source)
         except UblError as exc:
             raise IngestRefused(str(exc)) from exc
+        # WP-73 G1: a counterparty without a RO CUI, from abroad, is an invoice from abroad
+        other = (
+            invoice.customer if doc.doc_class in ("iesire", "storn_iesire") else invoice.supplier
+        )
+        source_doc_id = (
+            "foreign_invoice_xml"
+            if other.cui is None and (other.country or "RO").upper() != "RO"
+            else "ro_efactura_ubl"
+        )
         self.gateway.observe(  # shadow: what Jev would be asked at triage
             "jev_source_doc",
             {
@@ -1450,8 +1483,8 @@ class Runtime:
             punct=tenant.punct,
             period=doc.period,
             source_hash=source_hash,
-            source_doc_id="ro_efactura_ubl",
-            kinds=["ubl_spv"],
+            source_doc_id=source_doc_id,
+            kinds=["ubl_spv"] if source_doc_id == "ro_efactura_ubl" else ["xml"],
             our_role="outbound" if doc.doc_class in ("iesire", "storn_iesire") else "inbound",
             counterparty_cui=doc.partner.cui,
             identity_ok=True,
@@ -1471,7 +1504,7 @@ class Runtime:
             start_payload(
                 result.job,
                 doc,
-                source_doc_id="ro_efactura_ubl",
+                source_doc_id=source_doc_id,
                 axes=self.axes(cui, doc.period),
             ),
             self._cfg(result.job.job_id),

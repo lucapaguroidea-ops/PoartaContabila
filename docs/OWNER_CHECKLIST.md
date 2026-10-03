@@ -35,6 +35,34 @@ Each item says where the answer goes. Send the answer and a session records it. 
 
 ## Decisions still open
 
+From the synthetic-data program (WP-69 – WP-74; `docs/CATALOG_GAPS.md`), 2026-10-03:
+
+- [ ] **Storno SAGA mouths (G5).** An approved credit note stops at `needs_human`: no
+      `storno_intrare_xml` / `storno_iesire_xml` is rendered, because no tag is invented
+      (AGENTS). Send SAGA's own storno sample (`docs/COPY_FIRM_TEST.md` §3, `FMT-1s`) and say how
+      SAGA imports a storno (negative amounts on the same mouth, or another file).
+- [ ] **A foreign partner on the invoice mouths (G1).** A sale to an EU business (or a purchase
+      from abroad, once FX exists) needs `ClientCIF` / `FurnizorCIF`: does SAGA's import take a
+      foreign VAT id (`NL…`) there? One copy-firm import of such an invoice answers it.
+- [ ] **NextUp job settlement (G9).** A NextUp firm's document uploaded before it is posted in
+      NextUp stops at `needs_human` (no PreFile, A2 §3) and nothing settles it, so the month
+      stays material. Proposal: it waits until NextUp's journal shows it, then
+      `already_in_sink`. Yes / no / other.
+- [ ] **A report part waiting for its XML (G3).** `C2_waiting_for_xml` cannot be computed: a
+      `decont_split` part carries only its hash. Should the answer also carry the part's number
+      and date? That changes an existing HITL kind's answer shape: say whether it needs a dated
+      00_LAW amendment (§7) or may enter as draft.
+- [ ] **C0's implied VAT accounts (G6), for an accountant.** Entered as `[de confirmat]`:
+      TVA la încasare 4428 at the invoice, moved 4428 → 4426 / 4427 by the paid share (half up);
+      neplătitor VAT in the cost; reverse charge for a payer 4426 = 4427 at the standard rate.
+      Confirm or correct each.
+- [ ] **Journal types in the synthetic books.** The generator writes `Diverse` (notes), `Casa`
+      (cash) and `Salarii` (payroll) as SAGA's journal types; only `Intrari`, `Iesiri`, `Banca`
+      are read as documents. Confirm SAGA's names on the copy firm.
+- [ ] **WP-74 go-ahead**: ≤ 10 documents, one approval, one close of the new synthetic firms on
+      production with `MODEL_CALLS=live`, stopping when a key has less than $0.50 left (see the
+      first item above for the System Two key's balance).
+
 - [ ] **WP-D3**: non-payer reverse charge books, 4423 vs 446x. Until then
       `foreign_rc_neplatitor` always goes to a person.
 - [ ] **WP-D4**: the EU route per model family (Gemini on Vertex AI `eu`; GLM on Scaleway or

@@ -57,7 +57,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS_DIR = ROOT / "fixtures" / "scenarios"
 AGENT_LABEL = "simulated SAGA agent (not a copy-firm import)"
 TAKEN_AT = "2026-10-01T00:00:00Z"
-_PROFILE_ARTICOL: dict[str, str] = {}  # recon profile → its reconcile_sink articol (lazy)
+_PROFILE_ARTICOL: dict[tuple[str, bool], str] = {}  # (profile, is_storno) → recon articol
 
 # ----- the scenario file -----
 
@@ -261,7 +261,9 @@ def names(sc: Scenario) -> set[tuple[Table, str]]:
 
         for aid, row in load_catalog().articole.items():
             if "profile_id" in row:
-                _PROFILE_ARTICOL[row["profile_id"]] = aid
+                storno = (row.get("extra_filters") or {}).get("is_storno")
+                for flag in (True, False) if storno is None else (storno,):
+                    _PROFILE_ARTICOL.setdefault((row["profile_id"], flag), aid)
     for d in sc.expect.documents.values():
         if d.refused:
             continue
@@ -277,11 +279,12 @@ def names(sc: Scenario) -> set[tuple[Table, str]]:
             out.add(("write_module", d.module))
             out.add(("control", control_key("P_prefile_duplicate", "PASS")))
             out.add(("control", control_key("P_prefile_hard_failures", "PASS")))
+        storno = (d.articol or "").startswith("storno_")
         for profile in (d.pre, d.post):
             if profile:
                 out.add(("recon_profile", profile))
-                if profile in _PROFILE_ARTICOL:
-                    out.add(("articol", _PROFILE_ARTICOL[profile]))
+                if (profile, storno) in _PROFILE_ARTICOL:
+                    out.add(("articol", _PROFILE_ARTICOL[(profile, storno)]))
     for m in sc.expect.months.values():
         if m.close:
             out.add(("close_kind", m.close))
@@ -422,7 +425,8 @@ class Runner:
                 f"{ref}.zip",
             )
         )
-        d = self.r.docs.setdefault(ref, DocState(ref, "ro_efactura_ubl"))
+        source = "foreign_invoice_xml" if inv.foreign else "ro_efactura_ubl"
+        d = self.r.docs.setdefault(ref, DocState(ref, source))
         resp = self.c.post(
             "/ingest",
             params={"cui": self.f.cui, "filename": name},

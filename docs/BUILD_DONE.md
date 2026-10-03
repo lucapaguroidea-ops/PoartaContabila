@@ -1079,3 +1079,31 @@ The status table in `BUILD.md` stays the index of every WP. Text kept as written
   4427); M1_8 is not computed; XML invoices from abroad are refused at the identity gate;
   foreign and bon parts of an expense report mint jobs that never start; autolichidare
   4426 = 4427 is not implied.
+
+### WP-73 Data → catalog
+- `synthetic.months.realistic(firm, periods, seed)`: consecutive months drawn without choosing
+  any document's path (30–60 documents a month; noisy books). Three firms × two months run
+  blind (`fixtures/scenarios/realistic_*`, seed 73), with `platitor_report_pack`.
+- The gap list `docs/CATALOG_GAPS.md` (G1–G9). Owner, 2026-10-03: accept G1–G4 and G6, fix
+  G8 now, everything else that needs a decision to the owner's checklist.
+- Entered as `draft` with the code that makes each true:
+  - G1 `foreign_invoice_xml` (+ `job_foreign_invoice.source_doc_ids`): the upload sends a UBL
+    whose counterparty has no RO CUI there; it binds `foreign_invoice_inbound` /
+    `_outbound` / `foreign_rc_neplatitor` (EUR stops at the package, FX parked; a foreign
+    partner's CIF on the SAGA mouth is for the copy firm).
+  - G2 `decont_part_evidence` as the report's receipt / foreign-invoice child (no Job); C1
+    counts a Job of the month with no document on its thread (`Runtime.stalled`).
+  - G3 `C2_waiting_for_xml` (advisory; not computed until a split part carries its number and
+    date — owner).
+  - G4 `recon_pre_storno` (+ `reconcile_sink.allowed_flux`).
+  - G6 C0 implies VAT by CO.DiT: 4426 / 4427; 4428 la încasare with the paid share moved by
+    bound bank lines (`vat_exigible`, also from the two months before); nothing on 4426 for a
+    neplătitor; reverse charge 4426 = 4427 at the year's standard rate for a payer's invoice on
+    `foreign_invoice_inbound`. Accounts `[de confirmat]`.
+- G8 fixed in its own commit (`700c9c2`): the report-pack eye reads bank documents, journal
+  lines and turnover from the registru jurnal.
+- After: every reachable row still has a passing scenario (15 of 23 articole now), and the
+  realistic months land on nothing the catalog does not foresee. `abroad` gains an EU customer
+  (a sale in RON with reverse charge). M1_8 (G7) is WP-75.
+- Tests: `tests/test_controls.py` (G6, G2b), `tests/test_recon_pre.py` (G4),
+  `tests/test_scenarios.py` (G1; no finding left), `tests/test_decont.py` (G2).

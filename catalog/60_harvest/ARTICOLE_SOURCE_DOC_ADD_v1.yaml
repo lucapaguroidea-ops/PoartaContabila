@@ -159,7 +159,7 @@ rows:
       needs_counterparty_cui: false
       bon_cui_fork: false
     split:
-      children: [bon_fiscal, foreign_invoice, ro_efactura_ubl, ro_efactura_pdf, workings]
+      children: [decont_part_evidence, ro_efactura_ubl, ro_efactura_pdf, workings]  # WP-73 G2
       hitl: decont_split
     flux_candidates: []
     note: "Container (A2): split into child packs before emit; the report itself is evidence. Implied SPV invoices come from their .xml; a PDF-only child waits in _incomplete_spv. 542 settlement not built in v1 [de confirmat]."
@@ -188,3 +188,54 @@ rows:
       bon_cui_fork: false
     flux_candidates: []
     note: "Evidence only (A2): payroll is explained_sink_only in the book; supports the payroll rule and d112_payroll."
+
+  # ----- WP-73 · owner accepted 2026-10-03 (docs/CATALOG_GAPS.md) -----
+  - source_doc_id: foreign_invoice_xml   # G1
+    schema_version: "1"
+    status: draft
+    fiscal_class: foreign_invoice
+    aisle: "20_foreign_invoice/{inbound|outbound}/{id}/"
+    our_role_default: either
+    posting_eligible: true
+    emit_on_incomplete: false
+    primary:
+      required_kinds: [xml]
+      companions_are: additional
+      missing_aisle: null
+    pairing:
+      with: [foreign_invoice]
+      key: [number, date]
+    extract:
+      backend: ubl
+      skip_if: []
+    identity:
+      needs_tenant_on_doc: false
+      needs_counterparty_cui: false
+      bon_cui_fork: false
+    flux_candidates: [foreign_invoice_inbound, foreign_invoice_outbound, foreign_rc_neplatitor]
+    note: "A2 §1: an e-invoice from abroad as UBL XML (counterparty without a RO CUI) is the primary; its PDF is a companion. A payer's EUR invoice still stops at the package (FX parked, WP-18)."
+
+  - source_doc_id: decont_part_evidence   # G2
+    schema_version: "1"
+    status: draft
+    fiscal_class: decont
+    aisle: "50_decont/{period}/parts/"
+    our_role_default: inbound
+    posting_eligible: false
+    emit_on_incomplete: false
+    primary:
+      required_kinds: [pdf, jpeg, png]
+      companions_are: additional
+      missing_aisle: null
+    pairing:
+      with: [decont_cheltuieli]
+      key: []
+    extract:
+      backend: none
+      skip_if: []
+    identity:
+      needs_tenant_on_doc: false
+      needs_counterparty_cui: false
+      bon_cui_fork: false
+    flux_candidates: []
+    note: "A receipt or a foreign invoice inside an expense report: evidence of its 542 settlement, posted in SAGA with the report (A2 §5, [de confirmat]). Until WP-14. Whether our CUI is on a receipt may still be given (bon_our_cui_on_doc)."

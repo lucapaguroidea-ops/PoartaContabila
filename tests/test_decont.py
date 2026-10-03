@@ -45,11 +45,11 @@ def _part(n: int, source_doc_id: str, kinds: list[str], **over) -> dict:
 
 
 PARTS = [
-    _part(1, "bon_fiscal", ["jpeg"], bon=True),
-    _part(2, "bon_fiscal", ["pdf"], bon=False),
+    _part(1, "decont_part_evidence", ["jpeg"], bon=True),  # receipts: evidence (WP-73 G2)
+    _part(2, "decont_part_evidence", ["pdf"], bon=False),
     _part(3, "ro_efactura_ubl", ["ubl_spv", "pdf"], cui=PARTNER),
     _part(4, "ro_efactura_pdf", ["pdf"]),
-    _part(5, "foreign_invoice", ["pdf"]),
+    _part(5, "decont_part_evidence", ["pdf"]),  # an invoice from abroad: evidence too
     _part(6, "workings", ["xlsx"]),
 ]
 
@@ -80,7 +80,8 @@ def test_graph_asks_for_the_parts_before_anything_is_emitted(cat):
     run = Run(cat)
     q = run.question()
     assert q["kind"] == "decont_split"
-    assert "bon_fiscal" in q["children"] and "ro_efactura_ubl" in q["children"]
+    assert "decont_part_evidence" in q["children"] and "ro_efactura_ubl" in q["children"]
+    assert "bon_fiscal" not in q["children"]  # WP-73 G2: no bon Job from an expense report
     assert run.store.jobs == {}
 
 
@@ -90,18 +91,13 @@ def test_parts_become_child_jobs_through_their_own_gates(cat):
     children = out["children"]
     by_doc = [(c["pack"]["source_doc_id"], c["decision"]["emit"], c["job_id"]) for c in children]
     emitted = [c for c in children if c["job_id"]]
-    assert [c["decision"]["job_kind"] for c in emitted] == [
-        "job_bon",
-        "job_bon",
-        "job_ro_efactura",
-        "job_foreign_invoice",
-    ]
+    assert [c["decision"]["job_kind"] for c in emitted] == ["job_ro_efactura"]
+    assert [d[1] for d in by_doc] == [False, False, True, False, False, False]
     assert by_doc[3][:2] == ("ro_efactura_pdf", False)  # PDF only: waits for the XML
     assert children[3]["decision"]["aisle"] == "10_ro_efactura/_incomplete_spv/"
     assert by_doc[5][:2] == ("workings", False)  # evidence
-    assert children[0]["decision"]["aisle"] == "30_bon/cu_cui/"
-    assert children[1]["decision"]["aisle"] == "30_bon/fara_cui/"
-    assert len(run.store.jobs) == 4
+    assert children[0]["pack"]["bon_our_cui_on_doc"] is True  # kept for the 542 settlement
+    assert len(run.store.jobs) == 1
     for c in emitted:  # children keep the container's tenant, folder and period
         assert c["pack"]["tenant_cui"] == CUI and c["pack"]["period"] == "2026-09"
     assert children[2]["pack"]["our_role"] == "inbound"  # "either" in an expense report
@@ -109,12 +105,12 @@ def test_parts_become_child_jobs_through_their_own_gates(cat):
 
 def test_a_part_seen_again_is_not_a_second_job(cat):
     first = Run(cat)
-    first.answer(PARTS[:1])
+    first.answer(PARTS[2:3])
     again = Run(cat)
     again.store = first.store
     again.graph = build_triage_graph(cat, first.store, checkpointer=MemorySaver())
     again.out = again.graph.invoke({"pack": _container().model_dump()}, again.cfg)
-    out = again.answer(PARTS[:1])
+    out = again.answer(PARTS[2:3])
     assert out["children"][0]["created"] is False and len(first.store.jobs) == 1
 
 
@@ -123,9 +119,12 @@ def test_a_part_seen_again_is_not_a_second_job(cat):
     [
         ([_part(1, "extras", ["pdf"])], "not one of"),
         ([_part(1, "ro_efactura_pdf", ["pdf", "ubl_spv"])], "XML exists"),
-        ([_part(1, "bon_fiscal", ["jpeg"])], "bon_our_cui_on_doc"),
-        ([_part(1, "bon_fiscal", ["jpeg"], bon=True)] * 2, "own hash"),
-        ([{**_part(1, "bon_fiscal", ["jpeg"], bon=True), "part_hash": "d" * 64}], "own hash"),
+        ([_part(1, "bon_fiscal", ["jpeg"], bon=True)], "not one of"),  # WP-73 G2
+        ([_part(1, "decont_part_evidence", ["jpeg"], bon=True)] * 2, "own hash"),
+        (
+            [{**_part(1, "decont_part_evidence", ["jpeg"], bon=True), "part_hash": "d" * 64}],
+            "own hash",
+        ),
         ([_part(1, "ro_efactura_ubl", ["ubl_spv"], cui="20000006")], "CUI"),
         ([], "at least 1"),
     ],

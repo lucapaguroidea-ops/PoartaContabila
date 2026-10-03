@@ -138,6 +138,10 @@ class CloseDeps:
     )
     """(HITL kind, question, tenant cui): the System Two roles that would explain it."""
     recon_open: Callable[[str, str], list[str]] = lambda cui, period: []
+    stalled: Callable[[str, str], list[str]] = lambda cui, period: []
+    prior: Callable[[str, str], list[ExpectedJob]] = lambda cui, period: []
+    """(cui, period) → the expected jobs of the months before (TVA la încasare, WP-73 G6)."""
+    """(cui, period) → jobs minted with no document on their thread (WP-73 G2)."""
     """(cui, period) → jobs still waiting on a reconcile_sink PRE answer (WP-23)."""
 
 
@@ -228,6 +232,8 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
             deps.eye(cui, period),
             axes=state.get("axes") or {},
             rules=rules,
+            stalled=deps.stalled(cui, period),
+            prior=deps.prior(cui, period),
         )
         if deps.period_store is not None:
             deps.period_store.save(diff, runs)

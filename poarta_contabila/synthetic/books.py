@@ -33,7 +33,7 @@ import zipfile
 from collections import defaultdict
 from dataclasses import dataclass, replace
 from datetime import date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
 from poarta_contabila.synthetic.docs import (
@@ -263,7 +263,9 @@ class Book:
                     )
                 )
             if f.la_incasare and inv is not None and inv.vat:
-                share = int((Decimal(amount) * inv.vat / inv.gross).quantize(Decimal(1)))
+                share = int(
+                    (Decimal(amount) * inv.vat / inv.gross).quantize(Decimal(1), ROUND_HALF_UP)
+                )
                 debit, credit = ("4426", "4428") if ln.side == "debit" else ("4428", "4427")
                 out.append(
                     Entry(

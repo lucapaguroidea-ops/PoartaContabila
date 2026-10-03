@@ -1,8 +1,10 @@
 name: abroad_month
-note: 'A payer trading abroad: d390 falls due. Known gaps (WP-73): both XML invoices from abroad are refused;
-  the expense report''s foreign part mints job_foreign_invoice, which never starts; the RO part with no
-  XML waits in _incomplete_spv (no Job); autolichidare 4426 = 4427 is not implied (C0) and the refused
-  invoices stay unexplained (C2).'
+note: 'A payer trading abroad: d390 falls due. The XML invoices from abroad are jobs (G1) on foreign_invoice_inbound,
+  approved, then refused at the package: EUR (FX parked, WP-18), so C1 fails and their RON booking stays
+  unexplained (C2, C0). The expense report''s foreign part is evidence (G2); its RO part with no XML waits
+  in _incomplete_spv (G3: unexplained meanwhile). A service sold to an EU business, invoiced in RON with
+  reverse charge, binds foreign_invoice_outbound and stops at the package: the SAGA mouth needs a partner
+  CIF, and whether SAGA''s import takes a foreign VAT id is for the copy firm (owner checklist).'
 firm: abroad
 period: 2026-05
 seed: 1
@@ -14,6 +16,7 @@ upload:
 - s2
 - x1
 - x2
+- xs_y1
 - decont_abroad
 - extras
 expect:
@@ -79,20 +82,36 @@ expect:
       post: post_doc_how
       post_verdict: how_ok
     x1:
-      source_doc: ro_efactura_ubl
-      refused: emit gates failed
+      source_doc: foreign_invoice_xml
+      job_kind: job_foreign_invoice
+      articol: foreign_invoice_inbound
+      asks:
+      - v3_approve
+      status: needs_human
+      pre: pre_doc_nr_date
     x2:
-      source_doc: ro_efactura_ubl
-      refused: emit gates failed
+      source_doc: foreign_invoice_xml
+      job_kind: job_foreign_invoice
+      articol: foreign_invoice_inbound
+      asks:
+      - v3_approve
+      status: needs_human
+      pre: pre_doc_nr_date
+    xs_y1:
+      source_doc: foreign_invoice_xml
+      job_kind: job_foreign_invoice
+      articol: foreign_invoice_outbound
+      asks:
+      - v3_approve
+      status: needs_human
+      pre: pre_doc_nr_date
     decont_abroad:
       source_doc: decont_cheltuieli
       asks:
       - decont_split
     dec_abroad:
-      source_doc: foreign_invoice
-      job_kind: job_foreign_invoice
+      source_doc: decont_part_evidence
       asks: []
-      status: ingested
     dec_pdf:
       source_doc: ro_efactura_pdf
       asks: []
@@ -143,10 +162,11 @@ expect:
       material: true
       blockers:
       - C0_synthetic_parity
+      - C1_outbound_complete
       - C2_unexplained_empty
       controls:
         C0_synthetic_parity: FAIL
-        C1_outbound_complete: PASS
+        C1_outbound_complete: FAIL
         C2_unexplained_empty: FAIL
         M1_1_payables_tie: PASS
         M1_2_receivables_tie: PASS

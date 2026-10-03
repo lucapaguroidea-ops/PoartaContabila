@@ -96,7 +96,7 @@ jobs:
     status: draft
     graph_id: ingest_source_doc
     thread_prefix: job
-    source_doc_ids: [foreign_invoice]
+    source_doc_ids: [foreign_invoice, foreign_invoice_xml]  # WP-73 G1
     allowed_flux:
       - foreign_invoice_inbound
       - foreign_invoice_outbound

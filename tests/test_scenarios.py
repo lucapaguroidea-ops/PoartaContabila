@@ -86,11 +86,35 @@ def test_a_passing_run_feeds_the_coverage_map():
     assert cmap.problems == []
 
 
-def test_a_run_reports_what_the_catalog_does_not_foresee():
-    outcome = run_one(load(SCENARIOS_DIR / "bonuri_decont.yaml")).outcome()
-    cmap = build_map(load_catalog(), [outcome])
-    stalled = {(f.kind, f.subject) for f in cmap.findings}
-    assert ("no_articol", "bon1") in stalled and ("no_articol", "bon2") in stalled
+def test_nothing_unforeseen_once_the_accepted_rows_are_in(results):
+    """WP-73: after G1–G4 and G6 entered, the realistic months land on nothing the catalog
+    does not foresee (no refused upload, no unbound Job, no blocker outside a control)."""
+    cmap = build_map(load_catalog(), [r.outcome() for r in results.values()])
+    assert [(f.kind, f.scenario, f.subject) for f in cmap.findings] == []
+
+
+def test_an_invoice_from_abroad_as_xml_is_a_foreign_invoice_job():
+    """WP-73 G1: a UBL whose counterparty has no RO CUI is foreign_invoice_xml."""
+    from poarta_contabila.scenarios import local_clients
+    from poarta_contabila.synthetic import FIRMS
+    from poarta_contabila.synthetic.docs import Gen
+
+    f = FIRMS["abroad"]
+    client, _ = local_clients()
+    assert client.put(f"/tenants/{f.cui}", json=f.tenant()).status_code == 200
+    g = Gen(f, "2026-05", 2)
+    xml = g.foreign_purchase("x", partner="x1", currency="RON").xml(f)
+    body = client.post(
+        "/ingest",
+        params={"cui": f.cui, "filename": "x.xml"},
+        content=xml,
+        headers={"Content-Type": "application/octet-stream"},
+    ).json()
+    job = body["job"]
+    assert (
+        job["job_kind"] == "job_foreign_invoice" and job["articol_id"] == "foreign_invoice_inbound"
+    )
+    assert body["pre"]["profile_id"] == "pre_doc_nr_date"  # PRE waits on the books here
 
 
 def test_blocker_heads():

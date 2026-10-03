@@ -85,8 +85,9 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-70 | done | WP-69 | Synthetic firms and books: seeded documents per source doc, and SAGA exports that agree (clean and with named defects) |
 | WP-71 | done | WP-70 | Scenario runner: YAML scenarios with expected paths, run over HTTP with a simulated SAGA agent |
 | WP-72 | done | WP-71 | Catalog → data: a scenario for every reachable articol de cale, HITL kind, control, recon profile and filing |
-| WP-73 | in-progress | WP-71 | Data → catalog: realistic months run blind; every gap becomes a proposed draft row in `docs/CATALOG_GAPS.md` |
+| WP-73 | done | WP-71 | Data → catalog: realistic months run blind; every gap becomes a proposed draft row in `docs/CATALOG_GAPS.md` |
 | WP-74 | todo | WP-72, WP-73 | A small live sample of the new paths on production's synthetic firms, within a spend limit |
+| WP-75 | todo | WP-73 | `M1_8_4428_open` computed: 4428 still open on unpaid la-încasare documents vs bal(4428) (G7) |
 
 ## WP details
 
@@ -124,21 +125,17 @@ tag or export shape beyond what `fixtures/` already holds (AGENTS hard ban); Wri
 after the owner accepts it, and graph topology, interrupt kinds or watched accounts need a
 00_LAW amendment (§7): list those, do not make them.
 
-### WP-73 Data → catalog
-- **Waiting on the owner** (2026-10-03): the gap list is `docs/CATALOG_GAPS.md` (G1–G9). Each
-  proposed row is accepted or refused there; accepted rows enter as `draft`, then WP-73 is done.
-- Realistic months (three firms × two months, 30–60 documents each), generated without choosing
-  each document's articol, run end to end.
-- Every document that ends without an articol, every question no articol foresees, every close
-  blocker no control explains becomes a row in `docs/CATALOG_GAPS.md`: what happened, the
-  scenario that shows it, and the proposed change as draft YAML (new articol de cale, source
-  doc, control or HITL kind). The owner accepts or refuses each; accepted rows enter as `draft`.
-
 ### WP-74 Live sample
 - After WP-72 and WP-73 pass dry: at most 10 documents, one approval and one close of the new
   firms on production (`--base-url`, the build agent's token: synthetic only) with
   `MODEL_CALLS=live`, to see Jev and System Two on the new paths. Report each key's spend before
   and after (`GET /model-keys`); stop when a key has less than $0.50 left.
+
+### WP-75 M1_8 computed (G7)
+- `M1_8_4428_open` fails closed today ("not computed in v1"), so every TVA la încasare month is
+  material (`incasare_clean`). Compute it: Σ VAT still open on la-încasare documents (gross
+  less what bound bank lines paid, by `vat_exigible`'s share) == the balanță's 4428. Then
+  `incasare_clean` expects it PASS and a scenario with an unpaid share on 4428 expects FAIL.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

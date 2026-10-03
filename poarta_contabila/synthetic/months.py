@@ -144,6 +144,8 @@ def month(firm: Firm, period: str, *, seed: int = 0, defect: str | None = None) 
             m.add(g.foreign_purchase(f"x{i}", partner=x.key, day=14 + i), upload=False)
             # the XML arrives by e-mail, not SPV: uploaded only by a scenario that asks
     if firm.key == "abroad":
+        for y in firm.foreign_customers:
+            m.add(g.export_sale(f"xs_{y.key}", partner=y.key, day=16))
         _abroad_report(m)
     if firm.key == "bonuri":
         _expense_report(m)

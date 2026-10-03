@@ -541,14 +541,14 @@ class ExpenseReport:
                 "bon_our_cui_on_doc": None,
                 "counterparty_cui": None,
             }
-            if isinstance(doc, Bon):
+            if isinstance(doc, Bon):  # evidence of the 542 settlement (WP-73 G2)
                 part.update(
-                    source_doc_id="bon_fiscal",
+                    source_doc_id="decont_part_evidence",
                     kinds=["pdf"],
                     bon_our_cui_on_doc=doc.our_cui is not None,
                 )
             elif isinstance(doc, Invoice) and doc.foreign:
-                part.update(source_doc_id="foreign_invoice", kinds=[fmt])
+                part.update(source_doc_id="decont_part_evidence", kinds=[fmt])
             elif isinstance(doc, Invoice):
                 part.update(
                     source_doc_id="ro_efactura_ubl" if fmt == "xml" else "ro_efactura_pdf",
@@ -687,6 +687,23 @@ class Gen:
             due=_plus_days(issued, 15),
             partner=p,
             items=self._items(SALES, items, rates, self.firm.vat_payer),
+            spv_id=f"6{self.firm.folder}{self.yymm}{n:03d}",
+        )
+
+    def export_sale(self, ref: str, *, partner: str = "y1", day: int | None = None) -> Invoice:
+        """A service to an EU business customer, invoiced in RON: reverse charge (AE, 0 %)."""
+        p = self.firm.party(partner)
+        issued = self.day(day)
+        n = self._n()
+        desc, account, _ = self.rng.choice(SALES)
+        return Invoice(
+            ref=ref,
+            side="out",
+            number=f"SN{self.firm.folder[-1]} {self.yymm}{n:03d}",
+            issued=issued,
+            due=_plus_days(issued, 30),
+            partner=p,
+            items=(Item(desc, self._amount(), 0, account, "AE"),),
             spv_id=f"6{self.firm.folder}{self.yymm}{n:03d}",
         )
 

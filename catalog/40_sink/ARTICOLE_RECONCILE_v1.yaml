@@ -57,6 +57,19 @@ flux:
     hitl: on_contest_or_ambiguous
     write_modules: []
 
+  - articol_id: recon_pre_storno   # WP-73 G4, owner accepted 2026-10-03
+    graph_id: reconcile_sink
+    schema_version: "1"
+    status: draft
+    stage: pre
+    filters: {}
+    extra_filters: {is_storno: true}
+    require: {}
+    forbid: {}
+    profile_id: pre_doc_nr_date
+    hitl: on_contest_or_ambiguous
+    write_modules: []
+
   - articol_id: recon_post_standard
     graph_id: reconcile_sink
     schema_version: "1"

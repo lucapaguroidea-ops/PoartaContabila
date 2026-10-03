@@ -1,7 +1,7 @@
 name: platitor_storno
-note: 'Credit notes on both sides bind storno_iesire / storno_intrare (job_storno). Known gaps (WP-73):
-  no reconcile_sink PRE row takes a storno (every one is is_storno: false), so each waits on recon_ambiguous;
-  answered override_absent, v3_approve, then no rendered storno mouth (needs_human).'
+note: 'Credit notes on both sides bind storno_iesire / storno_intrare (job_storno); PRE checks them on
+  recon_pre_storno (WP-73 G4). Approved, they stop at the package: no rendered storno mouth yet (G5, owner
+  checklist), so C1 fails.'
 firm: platitor
 period: 2026-05
 seed: 1
@@ -77,6 +77,7 @@ expect:
       asks:
       - v3_approve
       status: needs_human
+      pre: pre_doc_nr_date
     p1_storno:
       source_doc: ro_efactura_ubl
       job_kind: job_storno
@@ -84,6 +85,7 @@ expect:
       asks:
       - v3_approve
       status: needs_human
+      pre: pre_doc_nr_date
     salary:
       source_doc: extras_statement_pdf
       job_kind: job_extras_line
@@ -142,9 +144,7 @@ expect:
       - d300_platitor
       - d394_platitor
       - d406_saft
-      recon_asks:
-      - recon_ambiguous
-      - recon_ambiguous
+      recon_asks: []
       close_asks:
       - v2_close
       v2: hold

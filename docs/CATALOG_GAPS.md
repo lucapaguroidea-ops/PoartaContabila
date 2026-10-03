@@ -1,7 +1,26 @@
 # Catalog gaps — data → catalog (WP-73)
 
-Status: **proposed, waiting on the owner.** Nothing below is in the catalog. Each row the owner
-accepts enters as `status: draft` (00_LAW §7); a refused row is struck here with the reason.
+Status: **decided by the owner, 2026-10-03.** G1, G2, G3, G4 and G6 accepted: in the catalog as
+`status: draft`, with the code that makes each true (WP-73). G8 fixed (`700c9c2`). Everything
+that needs the owner is on `docs/OWNER_CHECKLIST.md`; M1_8 (G7) is WP-75.
+
+| Gap | Decision | Where |
+|---|---|---|
+| G1 XML invoices from abroad | accepted | `foreign_invoice_xml`; `job_foreign_invoice`; the upload routes a counterparty with no RO CUI there |
+| G2 bon / foreign parts of a report | accepted | `decont_part_evidence`; `decont_cheltuieli.split.children`; C1 counts a Job with no thread |
+| G3 a part waiting for its XML | accepted (row only) | `C2_waiting_for_xml`, not computed: a split part has no number or date (owner checklist) |
+| G4 PRE for a credit note | accepted | `recon_pre_storno` on `reconcile_sink` |
+| G6 C0 by TVA regime | accepted | C0's note; `period_diff.expected_turnover` / `vat_exigible` (accounts `[de confirmat]`) |
+| G5 storno mouths | owner | copy firm (checklist) |
+| G7 M1_8 not computed | code | WP-75 |
+| G8 report pack hides bank documents | fixed | `ReportPackEye` reads them from the registru jurnal |
+| G9 NextUp job settlement | owner | checklist |
+
+Found while making G1 true: a sale to an EU business binds `foreign_invoice_outbound` but the
+SAGA mouth needs a partner CIF; whether SAGA's import takes a foreign VAT id is for the copy
+firm (checklist). A payer's EUR invoice still stops at the package (FX parked, WP-18).
+
+The proposals as they were put to the owner follow, unchanged except where noted.
 
 ## How this list was made
 
@@ -112,7 +131,9 @@ fell outside a control.
     primary: {required_kinds: [pdf, jpeg, png], companions_are: additional, missing_aisle: null}
     pairing: {with: [decont_cheltuieli], key: []}
     extract: {backend: none, skip_if: []}
-    identity: {needs_tenant_on_doc: false, needs_counterparty_cui: false, bon_cui_fork: true}
+    identity: {needs_tenant_on_doc: false, needs_counterparty_cui: false, bon_cui_fork: false}
+    # entered with bon_cui_fork: false (a foreign part has no "our CUI" question);
+    # the answer may still say whether our CUI is on a receipt
     flux_candidates: []
     note: "A receipt or a foreign invoice inside an expense report: evidence of its 542
       settlement, posted in SAGA with the report (A2 §5, [de confirmat]). Until WP-14."
