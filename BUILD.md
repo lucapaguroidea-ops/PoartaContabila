@@ -65,6 +65,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-51 | done | WP-50 | The explain roles move to GLM (`z-ai/glm-5.3`): DeepSeek's provider trains on prompts |
 | WP-52 | done | WP-51 | GLM answers: reasoning off, a larger budget, JSON read from inside prose, a bad answer quoted |
 | WP-53 | done | WP-51 | Provider data policies read daily; approved alternates by themselves; the operator's choice when none passes (00_LAW §8 A7) |
+| WP-54 | done | WP-52 | GLM 5.3 needs reasoning: low effort, left out of the answer, 6000 tokens |
 
 ## WP details
 
@@ -884,6 +885,13 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   choice / none, the reason, when the policies were read, the operator's choice); the smoke
   run lists every role not on its main pin. `POST /model-roles/{role_id}/choice` (operators,
   not the build agent): `wait`, `pause` or `allow_synthetic` until a date.
+
+### WP-54 GLM 5.3 reasons
+- Smoke run of 2026-10-03 after WP-53: every explanation failed, OpenRouter HTTP 400 "Reasoning
+  is mandatory for this endpoint and cannot be disabled" (WP-52 had turned it off).
+- The request asks `reasoning: {effort: low, exclude: true}` (the answer carries no reasoning)
+  and allows 6000 tokens, reasoning included. Policies and pins were fine: every OpenRouter
+  role on its main pin, policies read at start.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

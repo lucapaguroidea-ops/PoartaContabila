@@ -18,7 +18,7 @@ from typing import Any
 
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 TIMEOUT_S = 30.0
-MAX_TOKENS = 2000
+MAX_TOKENS = 6000  # reasoning counts against it (WP-54)
 EXCERPT = 160  # of an answer that is not JSON, kept in the call's reason (synthetic only)
 MAX_SENTENCES = 5
 FIELDS = ("explanation", "facts_cited", "missing")
@@ -112,7 +112,8 @@ def request_body(role: Any, payload: dict[str, Any], provider: Any = None) -> di
         "response_format": {"type": "json_object"},
         "temperature": 0,
         "max_tokens": MAX_TOKENS,
-        "reasoning": {"enabled": False},  # WP-52: GLM spent the budget thinking, no answer
+        # WP-54: GLM 5.3 refuses reasoning off (HTTP 400); think little, keep it out of the answer
+        "reasoning": {"effort": "low", "exclude": True},
     }
 
 
