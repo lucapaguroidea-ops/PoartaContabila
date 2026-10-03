@@ -27,6 +27,7 @@ RETRY_ASK = (
     "the Output rule: a non-empty explanation, and only single values from the input as facts."
 )
 FIELDS = ("explanation", "facts_cited", "missing")
+EMPTY = ([], {}, "", None, "[]", "{}")
 MIN_WORDS = 4  # an explanation of fewer words ("...", "N/A") explains nothing (WP-60)
 # WP-54: GLM refuses reasoning off; think little and keep it out of the answer. Other families
 # get no reasoning field: Kimi answered empty with it (WP-60).
@@ -82,6 +83,10 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         excerpt = " ".join(content.split())[:EXCERPT]
         raise ExplainError(f"the answer is not JSON: {excerpt!r}") from None
+    if isinstance(out, dict) and len(out) == 1:  # {"answer": {...the card's fields...}} (WP-62)
+        (inner,) = out.values()
+        if isinstance(inner, dict) and set(inner) == set(FIELDS):
+            out = inner
     if not isinstance(out, dict) or set(out) != set(FIELDS):
         got = sorted(out) if isinstance(out, dict) else type(out).__name__
         raise ExplainError(f"the answer must have exactly {list(FIELDS)}, not {got}")
@@ -99,6 +104,7 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
     if not isinstance(facts, list):
         raise ExplainError("facts_cited must be a list")
     keys, values = _keys(question), _scalars(question)
+    kept = []
     for fact in facts:
         if not isinstance(fact, dict) or set(fact) != {"field", "value"}:
             raise ExplainError("each fact cited is {field, value}")
@@ -106,9 +112,12 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
         name = [p for p in name if p and not p.isdigit()]
         if not name or name[-1] not in keys:
             raise ExplainError(f"fact field {fact['field']!r} is not in the question")
+        if fact["value"] in EMPTY:  # an empty field claims nothing: dropped, not refused (WP-62)
+            continue
         if str(fact["value"]) not in values:
             raise ExplainError(f"fact {fact['field']!r} = {fact['value']!r} is not in the question")
-    return {"explanation": text.strip(), "facts_cited": facts, "missing": missing}
+        kept.append(fact)
+    return {"explanation": text.strip(), "facts_cited": kept, "missing": missing}
 
 
 def request_body(role: Any, payload: dict[str, Any], provider: Any = None) -> dict[str, Any]:

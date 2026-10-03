@@ -73,6 +73,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-59 | done | WP-58 | `POST /model-roles/{role_id}/compare`: main pin vs each approved alternate on the latest synthetic questions, first answer only; nothing recorded |
 | WP-60 | done | WP-59 | A placeholder explanation is refused; reasoning settings sent to GLM only; a reasoning-only answer is named; compare defaults to one run |
 | WP-61 | done | WP-60 | `compare` one candidate on one question per request (`candidate`, `skip`): the edge closes at 300 s |
+| WP-62 | done | WP-61 | An answer wrapped once around the card's fields is unwrapped; a cited fact with an empty value is dropped, not refused |
 
 ## WP details
 
@@ -960,6 +961,15 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   settings a call can take a minute or more.
 - `candidate` (0 = main pin, N = alternate N) and `skip` (start after that many of the latest
   questions) let a request send exactly one call (`inputs=1`).
+
+### WP-62 GLM's two habits
+- Comparison of 2026-10-03 after WP-61 (6 first answers each): GLM on Z.AI 1/6, Together 3/6,
+  Kimi 1/6 (reasoning only, ~139 s, ~$0.02 a pass). GLM's misses: `{"answer": {...}}` (3) and
+  `blockers = []` cited as a fact (2).
+- `check_explanation` unwraps one outer key when its value has exactly the card's fields.
+- A cited fact whose value is empty (`[]`, `{}`, `""`, null) claims nothing: it is dropped. Its
+  field must still be in the question; any other value must still be found there.
+- Kimi stays an approved alternate but is not used by choice until its call is reworked.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

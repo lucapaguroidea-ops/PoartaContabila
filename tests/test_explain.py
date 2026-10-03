@@ -338,3 +338,21 @@ def test_one_candidate_on_one_question_at_a_time(cat, monkeypatch):
     assert len(api.chat()) - sent == 1
     assert o.http.post(url, params={"candidate": 9}, headers=o.op).status_code == 422
     assert o.http.post(url, params={"skip": 5}, headers=o.op).status_code == 422
+
+
+def test_one_wrapper_around_the_card_fields_is_unwrapped():
+    assert check_explanation(QUESTION, json.dumps({"answer": GOOD})) == GOOD
+    with pytest.raises(ExplainError, match="exactly"):
+        check_explanation(QUESTION, json.dumps({"answer": {**GOOD, "decision": "x"}}))
+
+
+@pytest.mark.parametrize("empty", [[], {}, "", None, "[]"])
+def test_an_empty_fact_is_dropped_and_a_made_up_one_still_refused(empty):
+    question = {**QUESTION, "blockers": []}
+    cited = [*GOOD["facts_cited"], {"field": "question.blockers", "value": empty}]
+    out = check_explanation(question, json.dumps({**GOOD, "facts_cited": cited}))
+    assert out["facts_cited"] == GOOD["facts_cited"]
+    with pytest.raises(ExplainError, match="not in the question"):
+        check_explanation(
+            question, json.dumps({**GOOD, "facts_cited": [{"field": "nope", "value": []}]})
+        )
