@@ -96,7 +96,7 @@ def test_json_inside_prose_is_read_and_reasoning_is_off(cat):
     out = check_explanation(QUESTION, "Iată răspunsul:\n" + json.dumps(GOOD) + "\nGata.")
     assert out == GOOD
     body = request_body(cat.model_roles["sys2_explain_close"], {"kind": "v2_close"})
-    assert body["reasoning"] == {"effort": "low", "exclude": True} and body["max_tokens"] == 4000
+    assert body["reasoning"] == {"effort": "low", "exclude": True} and body["max_tokens"] == 6000
 
 
 def test_an_empty_answer_is_refused_and_a_bad_one_is_quoted():
