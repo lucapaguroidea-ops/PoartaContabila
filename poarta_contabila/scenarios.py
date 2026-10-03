@@ -50,7 +50,7 @@ from poarta_contabila.coverage import (
 )
 from poarta_contabila.synthetic.docs import BankLine, ExpenseReport, Invoice, Statement
 from poarta_contabila.synthetic.firms import firm as get_firm
-from poarta_contabila.synthetic.months import Month, month
+from poarta_contabila.synthetic.months import Month, month, realistic
 from poarta_contabila.types import Closed, Period
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -119,6 +119,8 @@ class Scenario(Closed):
     period: Period
     seed: int = 0
     defect: str | None = None
+    generator: Literal["standard", "realistic"] = "standard"
+    months: list[Period] | None = None  # realistic: consecutive months (default: period)
     books: Literal["agent", "late", "in_books", "none"] = "agent"
     report_pack: bool = False  # also upload SAGA's purchase / sales journals
     upload: list[str] | None = None  # refs to upload, in order (default: the month's)
@@ -319,7 +321,12 @@ class Runner:
     def __init__(self, client: Any, agent: Any | None, sc: Scenario) -> None:
         self.c, self.agent, self.sc = client, agent, sc
         f = get_firm(sc.firm, book_of_record=sc.book_of_record)
-        self.m: Month = month(f, sc.period, seed=sc.seed, defect=sc.defect)
+        if sc.generator == "realistic":
+            if sc.defect is not None:
+                raise ValueError(f"{sc.name}: a realistic month draws its own noise, no defect")
+            self.m: Month = realistic(f, sc.months or [sc.period], seed=sc.seed)
+        else:
+            self.m = month(f, sc.period, seed=sc.seed, defect=sc.defect)
         self.f = f
         self.r = Result(sc)
         self.rj_export: str | None = None
@@ -439,6 +446,8 @@ class Runner:
             return
         for job in body.get("jobs", []):
             ref = refs[job["seq"] - 1]
+            if ref in self.r.docs and self.r.docs[ref].job_id != job["job"]["job_id"]:
+                ref = f"{ref}@{st.day[:7]}"  # a fee or salary line of another month
             d = self.r.docs.setdefault(ref, DocState(ref, "extras_statement_pdf"))
             d.job_id = job["job"]["job_id"]
             d.see(job)
@@ -513,12 +522,35 @@ class Runner:
         if self.agent is None or not self.sc.agent or self.sc.books not in ("agent", "late"):
             self.step("agent: not run")
             return
-        pulled = self.agent.get("/agent/pull").json()
+        n = 0
+        for run in range(1, 21):  # one pull is one import folder; the agent pulls until none
+            pulled = self.agent.get("/agent/pull").json()
+            if not pulled.get("batches"):
+                break
+            n += self._import(pulled, run)
+        self.books(self.m.book, "after the import")
+        snap = {
+            "cui": self.f.cui,
+            "folder": self.f.folder,
+            "taken_at": TAKEN_AT,
+            "closed_periods": [],
+            "documents": self.snapshot_documents(),
+        }
+        result = self.agent.post("/agent/snapshot", json=snap).json()
+        self.step(
+            f"{AGENT_LABEL}: imported {n} in {run - 1} run(s); snapshot acked "
+            f"{len(result.get('acked', []))}, unmatched {len(result.get('unmatched', []))}, "
+            f"intent mismatch {len(result.get('intent_mismatch', []))}"
+        )
+        for d in self.r.docs.values():
+            self._view(d)
+
+    def _import(self, pulled: dict[str, Any], run: int) -> int:
         n = 0
         for batch in pulled.get("batches", []):
             label = None
             if batch["backup"] != "none":
-                label = f"{batch['cui']}:{batch['folder']}:20261001T000000Z"
+                label = f"{batch['cui']}:{batch['folder']}:20261001T{run:02d}0000Z"
                 self.agent.post(
                     "/agent/ack-backup",
                     json={"label": label, "cui": batch["cui"], "folder": batch["folder"]},
@@ -534,22 +566,7 @@ class Runner:
                 },
             )
             n += len(results)
-        self.books(self.m.book, "after the import")
-        snap = {
-            "cui": self.f.cui,
-            "folder": self.f.folder,
-            "taken_at": TAKEN_AT,
-            "closed_periods": [],
-            "documents": self.snapshot_documents(),
-        }
-        result = self.agent.post("/agent/snapshot", json=snap).json()
-        self.step(
-            f"{AGENT_LABEL}: imported {n}; snapshot acked {len(result.get('acked', []))}, "
-            f"unmatched {len(result.get('unmatched', []))}, "
-            f"intent mismatch {len(result.get('intent_mismatch', []))}"
-        )
-        for d in self.r.docs.values():
-            self._view(d)
+        return n
 
     def snapshot_documents(self) -> list[dict[str, Any]]:
         """What SAGA shows after the import: the books' documents, validated (a person's

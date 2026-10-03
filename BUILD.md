@@ -85,7 +85,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-70 | done | WP-69 | Synthetic firms and books: seeded documents per source doc, and SAGA exports that agree (clean and with named defects) |
 | WP-71 | done | WP-70 | Scenario runner: YAML scenarios with expected paths, run over HTTP with a simulated SAGA agent |
 | WP-72 | done | WP-71 | Catalog → data: a scenario for every reachable articol de cale, HITL kind, control, recon profile and filing |
-| WP-73 | todo | WP-71 | Data → catalog: realistic months run blind; every gap becomes a proposed draft row in `docs/CATALOG_GAPS.md` |
+| WP-73 | in-progress | WP-71 | Data → catalog: realistic months run blind; every gap becomes a proposed draft row in `docs/CATALOG_GAPS.md` |
 | WP-74 | todo | WP-72, WP-73 | A small live sample of the new paths on production's synthetic firms, within a spend limit |
 
 ## WP details
@@ -125,6 +125,8 @@ after the owner accepts it, and graph topology, interrupt kinds or watched accou
 00_LAW amendment (§7): list those, do not make them.
 
 ### WP-73 Data → catalog
+- **Waiting on the owner** (2026-10-03): the gap list is `docs/CATALOG_GAPS.md` (G1–G9). Each
+  proposed row is accepted or refused there; accepted rows enter as `draft`, then WP-73 is done.
 - Realistic months (three firms × two months, 30–60 documents each), generated without choosing
   each document's articol, run end to end.
 - Every document that ends without an articol, every question no articol foresees, every close

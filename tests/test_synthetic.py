@@ -310,3 +310,19 @@ def test_the_account_level_defects(tmp_path):
     a = month(FIRMS["abroad"], PERIOD, seed=1)
     ids = [p["source_doc_id"] for p in a.docs["decont_abroad"].split_answer(a.firm)["parts"]]
     assert ids == ["foreign_invoice", "ro_efactura_pdf", "workings"]
+
+
+def test_realistic_months_are_drawn_sized_and_repeatable():
+    """WP-73: two months of 30–60 documents each, the same bytes for the same seed."""
+    from poarta_contabila.synthetic.months import realistic
+
+    for key in ("abroad", "neplatitor", "bonuri"):
+        m = realistic(FIRMS[key], ["2026-06", "2026-07"], seed=73)
+        assert m.book.periods() == ["2026-06", "2026-07"]
+        for yy in ("2606", "2607"):
+            uploads = [u for u in m.uploads if u.ref.startswith(yy)]
+            lines = m.docs[f"{yy}-extras"].lines
+            assert 30 <= len(uploads) - 1 + len(lines) <= 60
+        again = realistic(FIRMS[key], ["2026-06", "2026-07"], seed=73)
+        assert [u.ref for u in again.uploads] == [u.ref for u in m.uploads]
+        assert again.book.saga_rj() == m.book.saga_rj()

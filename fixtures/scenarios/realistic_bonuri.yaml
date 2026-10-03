@@ -1,0 +1,13 @@
+name: realistic_bonuri
+note: >-
+  WP-73, data → catalog: two months of the bonuri firm drawn from the seed, without choosing any
+  document's path, run blind (no expectations). What it lands on that the catalog does not
+  foresee is listed in docs/CATALOG_GAPS.md.
+firm: bonuri
+period: "2026-07"
+months: ["2026-06", "2026-07"]
+seed: 73
+generator: realistic
+answers:
+  recon_ambiguous: override_absent
+  recon_how_mismatch: ack_mismatch

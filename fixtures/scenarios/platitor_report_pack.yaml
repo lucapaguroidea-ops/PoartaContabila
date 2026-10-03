@@ -1,0 +1,15 @@
+name: platitor_report_pack
+note: >-
+  The clean month with SAGA's report pack (purchase / sales journals) uploaded too. Known gap
+  (WP-73, G8): the eye then reads the report pack, which holds no bank documents, so the fee
+  and the salaries SAGA already holds are not found (PRE absent) and are asked to be approved
+  as new; an approved one would be packaged twice.
+firm: platitor
+period: "2026-05"
+seed: 1
+report_pack: true
+expect:
+  documents:
+    fee: &not_found {articol: extras_statement, asks: [v3_approve], status: reconcile_pre, pre: pre_extras_date_gross}
+    salary: *not_found
+    p1: {status: acked, post_verdict: how_ok}

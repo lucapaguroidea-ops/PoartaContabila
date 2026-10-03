@@ -41,8 +41,10 @@ from poarta_contabila.synthetic.docs import (
     ExpenseReport,
     Gen,
     Invoice,
+    PartFormat,
     Payroll,
     Statement,
+    Workings,
 )
 from poarta_contabila.synthetic.firms import Firm
 
@@ -291,3 +293,121 @@ DEFECTS: dict[str, Callable[[Month, dict[str, Invoice]], None]] = {
 def payroll_of(m: Month) -> Payroll | None:
     pay = m.docs.get("payroll")
     return pay if isinstance(pay, Payroll) else None
+
+
+# ----- realistic months (WP-73): drawn, not designed -----
+
+
+def realistic(firm: Firm, periods: list[str], *, seed: int = 0) -> Month:
+    """Consecutive months of a firm drawn from *seed*, without choosing any document's path:
+    a random mix of SPV purchases and sales, credit notes, invoices from abroad (XML, as the
+    supplier sends them), an expense report with random parts, payroll, and a statement per
+    month that pays and collects some invoices (in part, two at a time, or of the month
+    before); the books hold what SAGA would, with a little noise (a document missing, one with
+    no document here, one amount off). The uploads follow, month by month."""
+    book = Book(firm)
+    first = Gen(firm, periods[0], seed)
+    m = Month(firm, periods[-1], first, book)
+    unpaid: list[Invoice] = []
+    for period in periods:
+        g = Gen(firm, period, seed)
+        rng, yy = g.rng, g.yymm
+        lines: list[BankLine] = []
+        inv = m.add
+
+        suppliers = [p.key for p in firm.suppliers]
+        customers = [p.key for p in firm.customers]
+        buys = [
+            inv(g.purchase(f"{yy}-p{i}", partner=rng.choice(suppliers)))
+            for i in range(1, rng.randint(12, 18))
+        ]
+        sells = [
+            inv(g.sale(f"{yy}-s{i}", partner=rng.choice(customers)))
+            for i in range(1, rng.randint(8, 13))
+        ]
+        for i, of in enumerate(rng.sample(buys + sells, k=rng.randint(1, 2)), start=1):
+            inv(g.credit_note(f"{yy}-c{i}", of, share=rng.choice((50, 100))))
+        for i, x in enumerate(firm.foreign, start=1):
+            if rng.random() < 0.8:
+                inv(g.foreign_purchase(f"{yy}-x{i}", partner=x.key))
+        if firm.key in ("bonuri", "abroad") or rng.random() < 0.4:
+            parts: list[tuple[Any, PartFormat]] = []
+            for j in range(rng.randint(2, 5)):
+                kind = rng.choice(("bon", "bon", "ro_xml", "ro_pdf", "foreign", "workings"))
+                if kind == "bon":
+                    parts.append((g.bon(f"{yy}-b{j}", our_cui=rng.random() < 0.6), "pdf"))
+                elif kind in ("ro_xml", "ro_pdf"):
+                    parts.append(
+                        (
+                            g.purchase(f"{yy}-d{j}", partner=rng.choice(suppliers), items=1),
+                            "xml" if kind == "ro_xml" else "pdf",
+                        )
+                    )
+                elif kind == "foreign" and firm.foreign:
+                    parts.append(
+                        (
+                            g.foreign_purchase(f"{yy}-dx{j}", partner=firm.foreign[0].key, items=1),
+                            "pdf",
+                        )
+                    )
+                else:
+                    parts.append((g.workings(f"{yy}-w{j}"), "pdf"))
+            report = g.expense_report(f"{yy}-decont", parts)
+            for doc, _ in parts:
+                if not isinstance(doc, Workings):
+                    m.add(doc, upload=False, via="542")
+            m.docs[report.ref] = report
+            m.uploads.append(Upload(report.ref, "decont", report))
+        if firm.axes.get("employees") == "has":
+            pay = m.add(g.payroll(f"{yy}-payroll", employees=rng.randint(1, 4)), upload=False)
+            lines.append(g.salaries(pay))
+
+        # the statement: pays and collects some invoices of this month and the one before
+        open_buys = [d for d in unpaid if d.side == "in"] + [d for d in buys if not d.foreign]
+        open_sells = [d for d in unpaid if d.side == "out"] + sells
+        rng.shuffle(open_buys)
+        rng.shuffle(open_sells)
+        paid: set[str] = set()
+        for d in open_buys[: len(open_buys) * 2 // 3]:
+            if d.ref in paid:
+                continue
+            twin = next(
+                (
+                    o
+                    for o in open_buys
+                    if o.ref not in paid and o.ref != d.ref and o.partner == d.partner
+                ),
+                None,
+            )
+            if twin is not None and rng.random() < 0.2:
+                lines.append(g.payment(d, also=(twin,), day=rng.randint(10, 28)))
+                paid |= {d.ref, twin.ref}
+            elif rng.random() < 0.1:
+                lines.append(g.payment(d, amount=d.gross // 2, day=rng.randint(10, 28)))
+                paid.add(d.ref)
+            else:
+                lines.append(g.payment(d, day=rng.randint(10, 28)))
+                paid.add(d.ref)
+        for d in open_sells[: len(open_sells) // 2]:
+            lines.append(g.receipt(d, day=rng.randint(10, 28)))
+            paid.add(d.ref)
+        lines.append(g.fee(day=28))
+        unpaid = [d for d in [*buys, *sells] if d.ref not in paid]
+
+        # the books: what SAGA holds, a little noisy
+        if rng.random() < 0.7:
+            book.missing(rng.choice(buys).ref)
+        if rng.random() < 0.7:
+            m.add(g.purchase(f"{yy}-hidden", partner=rng.choice(suppliers)), upload=False)
+        if rng.random() < 0.5:
+            book.amount_differs(rng.choice(sells).ref, rng.choice((100, -250, 1_000)))
+        for ln in lines:
+            book.post(ln)
+        m.bank.extend(lines)
+        bal = book.balances(period).get(firm.bank_account, {})
+        opening = bal.get("open_d", 0) + bal.get("prev_d", 0)
+        opening -= bal.get("open_c", 0) + bal.get("prev_c", 0)
+        stmt = g.statement(f"{yy}-extras", lines, opening=opening)
+        m.docs[stmt.ref] = stmt
+        m.uploads.append(Upload(stmt.ref, "extras", stmt))
+    return m
