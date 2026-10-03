@@ -188,6 +188,8 @@ POST /decont/{cui}                  # an expense report → folder_triage (WP-28
 GET  /triage/{batch_id}             # …/resume answers decont_split
 GET  /answers                       # every submitted answer (WP-33); X-Operator-Name names its author
 POST /ocr-eval/{cui}                # the reading evaluation (WP-37): synthetic, live, scored
+GET  /inbox/{cui}/{period}           # what waits on an accountant (WP-66, 00_LAW §8 A8)
+GET  /review                        # the review page: a client of the resume routes (A8)
 GET  /jobs/{id}
 POST /jobs/{id}/resume
 POST /recon/{cui}/{period}          # one reconcile_sink pass (WP-23); GET shows; …/resume answers

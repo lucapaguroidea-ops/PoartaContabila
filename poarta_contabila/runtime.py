@@ -468,6 +468,70 @@ class Runtime:
         )
         return self.view(job_id)
 
+    # -- the review page's inbox (WP-66, 00_LAW §8 A8) --
+
+    # a job in any of these may wait on a person; acked, already_in_sink, rejected, failed never do
+    _OPEN_JOBS = (
+        "ingested",
+        "extracted",
+        "bound",
+        "reconcile_pre",
+        "approved",
+        "packaged",
+        "wait_validare",
+        "needs_human",
+        "reopened",
+    )
+
+    def inbox(self, cui: str, period: str) -> dict[str, Any]:
+        """Every question waiting on an accountant for *cui*: its open jobs (any month), and
+        the reconcile_sink and monthly_close runs of *period*. Each item names where its
+        answer goes and the answer's shape (ArticoleHITL); a question for the SAGA agent is
+        left out. A job that needs a person but asks nothing is listed with its error."""
+        if self.registry.tenant(cui) is None:
+            raise IngestRefused(f"tenant {cui} is not registered")
+        items = []
+        for status in self._OPEN_JOBS:
+            for job in self.jobs.by_status(status, cui):
+                question = self._waiting(self.ingest, self._cfg(job.job_id))
+                if question is None and status != "needs_human":
+                    continue
+                items.append(self._inbox_item(question, cui, f"/jobs/{job.job_id}/resume", job=job))
+        for graph, cfg, path in (
+            (self.reconcile, self._recon_cfg(cui, period), f"/recon/{cui}/{period}/resume"),
+            (self.close, self._close_cfg(cui, period), f"/close/{cui}/{period}/resume"),
+        ):
+            question = self._waiting(graph, cfg)
+            if question is not None:
+                items.append(self._inbox_item(question, cui, path))
+        items = [i for i in items if i["actor"] in ("accountant", None)]
+        return {"cui": cui, "period": period, "items": items}
+
+    def _inbox_item(
+        self, question: dict[str, Any] | None, cui: str, path: str, job: Any = None
+    ) -> dict[str, Any]:
+        kind = question.get("kind") if question else None
+        row = self.catalog.hitl.get(kind) if kind else None
+        return {
+            "kind": kind,
+            "actor": row.get("actor") if row else None,
+            "answer_schema": row.get("resume_schema") if row else None,
+            "answer_path": path if question else None,
+            "question": question,
+            "explanation": self.gateway.explanation(question, cui) if question else None,
+            "job": (
+                {
+                    "job_id": job.job_id,
+                    "status": job.status,
+                    "articol_id": job.articol_id,
+                    "period": job.period,
+                    "error": job.error,
+                }
+                if job is not None
+                else None
+            ),
+        }
+
     # -- the answer log (WP-33) --
 
     @staticmethod

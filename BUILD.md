@@ -27,7 +27,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-14 | parked | — | ArticolBon / `bon_via_nota` |
 | WP-15 | parked | — | FDB SQL SagaEye |
 | WP-16 | parked | — | Agent Validare |
-| WP-17 | parked | — | Engagement backlog / `chat:` face |
+| WP-17 | parked | — | Engagement backlog / `chat:` face (the review page is WP-66, not this face: A8 §6) |
 | WP-18 | parked | — | Take-on / year-end / D406 producer / FX engine |
 | WP-D3 | decision | WP-11 | Non-payer RC books: 4423 vs 446x on copy-firm note |
 | WP-19 | done | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (R1) |
@@ -77,6 +77,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-63 | done | WP-62 | System Two answers in English, Romanian domain words kept; each question carries `as_of`; the model's own memory of Romanian rules never wins over the input |
 | WP-64 | done | WP-63 | Smoke leaves a September invoice (`AB 0102`) at `v3_approve` and reports its System Two explanation |
 | WP-65 | done | WP-64 | A close or reconcile run stopped between nodes (process died) continues when started again |
+| WP-66 | done | WP-65 | Review page (00_LAW §8 A8): `GET /inbox/{cui}/{period}` and `/review`, a thin page that sends each answer unchanged to its resume route |
 
 ## WP details
 
@@ -1002,6 +1003,31 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   task as "waiting on a person", so every later start showed nothing.
 - `Runtime._start` (close and reconcile_sink): a run with a question waits; a run with a next
   node and no question continues from its checkpoint (`invoke(None)`); otherwise it starts.
+
+### WP-66 Review page (00_LAW §8 A8)
+- Owner, 2026-10-03: a thin page of our own instead of a hosted chat front end. A1 §4 put the
+  review page in v2; A8 brings it into v1. WP-17 (`chat:` face) stays parked.
+- `GET /inbox/{cui}/{period}` (`Runtime.inbox`): the firm's open jobs (any month; acked,
+  already_in_sink, rejected and failed are never open) with the question each waits on, plus
+  the month's reconcile_sink and monthly_close. Each item: `kind`, `actor`, `answer_schema`
+  (ArticoleHITL `resume_schema`), `answer_path`, `question`, `explanation`, `job`. Questions
+  whose actor is not `accountant` (`wait_validare`) are left out; a `needs_human` job with no
+  question is listed with its error and no answer. The path names the firm, so the build
+  agent's token is held to synthetic firms as everywhere else (WP-38).
+- `GET /review` (+ `review.js`, `review.css`, `icon.svg`, `poarta_contabila/ui/`): no token to
+  load (the files hold no data); CSP `default-src 'none'`, scripts and calls to this origin
+  only, no framing, no referrer, `no-store`.
+- The page: name + operator token (token in the tab's session storage only; ă, ș, ț are
+  written without marks because the name travels as an HTTP header). Per card: summary
+  (number, date, partner, gross, articol de cale), Jev's flags, lines, blockers, the System
+  Two explanation (labelled: it decides nothing), the whole question, and the answer. Choices
+  come from the catalog's enum fields; the answer starts empty, Send stays disabled until the
+  person chooses or writes, and the JSON that will be sent is shown first. A refused answer
+  shows the server's reason. Every value is written as text (`textContent`), never markup.
+- Checked in Chromium on a local in-memory server filled by the smoke run: wrong token → sign
+  in again; four cards; an invoice whose supplier name is an `<img onerror>` payload shows as
+  text and runs nothing; a bad answer is refused readably; approve and hold go through and the
+  cards leave; no horizontal scroll at 390 px; sign out forgets the token.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

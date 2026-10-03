@@ -218,3 +218,17 @@ Decided by the owner on 2026-10-03, so that a provider changing its data policy 
 4. **Bounds.** No model outside the catalog at run time; `deny` is never relaxed without that recorded, dated choice; client data never reaches an OpenRouter sender (synthetic only until the EU route). Jev has no alternate (only TypeSafe serves it). Document reading keeps its tiers (A4–A6).
 
 Not an amendment of: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` is unchanged.
+
+### A8 · 2026-10-03 — the review page in v1
+
+Decided by the owner on 2026-10-03 ("build the thin page"), after a hosted chat front end was found unfit for client work (it keeps chats, licenses their content, and puts its own model between the accountant and the answer).
+
+1. **A1 §4 changed.** The review page moves into v1. The HITL surface is still the HTTP resume routes (`ARCHITECTURE.md` §10): the page is a client of them, and every answer it sends goes unchanged to the question's own route (`POST /jobs/{id}/resume`, `/recon/{cui}/{period}/resume`, `/close/{cui}/{period}/resume`).
+2. **What it shows.** `GET /inbox/{cui}/{period}` lists every question waiting on an accountant (`actor: accountant` in ArticoleHITL) for one firm: its open jobs of any month, and the month's reconcile and close; each with its System Two explanation (if one was sent) and the answer's shape from ArticoleHITL. A question for the SAGA agent is not shown. A job that needs a person but asks nothing is shown with its error.
+3. **No model in the answer path.** The person chooses; the page only fills the catalog's answer shape. The explanation is shown as an explanation and decides nothing (§3.5 unchanged).
+4. **Who answered.** The page needs the person's name and sends it as `X-Operator-Name` with every answer (WP-33). Tokens are as before: the operator token (kept in the browser tab only), or the build agent's token for synthetic firms.
+5. **Nothing from outside.** The page is served by this app with a content security policy of this origin only; it loads no external script, font or service, and writes every value from a document as text, never as markup.
+6. **Not the `chat:` face.** §4's `chat:` face (WP-17) stays parked and still never resumes `job:`, `recon:` or `close:`.
+
+Not an amendment of: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` is unchanged.
+

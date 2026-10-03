@@ -18,6 +18,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hmac
+import re
 from collections.abc import Callable
 from typing import Any, Literal
 
@@ -60,6 +61,7 @@ class RuleRequest(RuleBody):
 
 
 SYSBUILDER = "claude-sysbuilder"
+_PERIOD = re.compile(r"\d{4}-(0[1-9]|1[0-2])")
 _TENANTLESS = {
     "/model-roles",
     "/model-calls",
@@ -510,6 +512,17 @@ def operator_router(
     @router.get("/rules/{cui}")
     def get_rules(cui: str, rt: Runtime = Depends(operator)) -> list[ExplainedRule]:
         return rt.rules.active(cui) if rt.rules is not None else []
+
+    @router.get("/inbox/{cui}/{period}")
+    def inbox(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
+        """WP-66 (00_LAW §8 A8): every question waiting on an accountant for this firm (its
+        open jobs, and the month's reconcile and close), with explanation and answer shape."""
+        if not _PERIOD.fullmatch(period):
+            raise HTTPException(422, "period is YYYY-MM")
+        try:
+            return rt.inbox(cui, period)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     @router.get("/jobs/{job_id}")
     def get_job(job_id: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
