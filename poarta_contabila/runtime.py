@@ -265,6 +265,9 @@ class Runtime:
             checkpointer=self.checkpointer,
         )
         self.deps.posted_doc = self.agent.posted_doc
+        self.deps.book_of_record = lambda cui: (
+            t.book_of_record if (t := self.registry.tenant(cui)) is not None else "saga"
+        )
         self.deps.treasury_account = self._treasury_account
         self.reconcile = build_reconcile_graph(
             ReconDeps(

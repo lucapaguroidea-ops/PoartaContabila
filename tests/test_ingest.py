@@ -256,3 +256,16 @@ def test_postgres_stores_package_once(cat):
     assert w.blobs.puts == 1
     assert w.jobs.get(job.job_id).status == "packaged"
     assert w.jobs.packaged_count(doc.tenant.cui, "ro_efactura_outbound") == 1
+
+
+def test_a_nextup_tenant_gets_no_prefile(cat):
+    """00_LAW §8 A2 §3: nothing is written to NextUp; the job stops before any package."""
+    w = World(cat)
+    w.deps.book_of_record = lambda cui: "nextup"
+    w.graph = build_ingest_graph(w.deps, checkpointer=MemorySaver())
+    job, doc = w.emit()
+    cfg, _ = w.run(job, doc)
+    out = w.graph.invoke(Command(resume={"decision": "approve", "edit": None}), cfg)
+    assert out["status"] == "needs_human"
+    assert w.blobs.puts == 0 and not w.packages.rows
+    assert "no PreFile" in w.jobs.get(job.job_id).error

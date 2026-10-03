@@ -98,6 +98,8 @@ class IngestDeps:
     treasury_account: Callable[[str, str], str | None] = lambda cui, iban: None
     """(tenant cui, IBAN) → the SAGA treasury account it maps to (``5121.01``), or None."""
     settlement: Callable[[CanonicalDocument], SettlementProposal | None] = lambda doc: None
+    book_of_record: Callable[[str], str] = lambda cui: "saga"
+    """(tenant cui) → its book of record; only ``saga`` has a mouth (00_LAW §8 A2 §3)."""
     observe: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: None
     """(role_id, input, tenant cui): a shadow model role at its place (records only)."""
     observe_question: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: (
@@ -351,6 +353,11 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
     def package(state: IngestState) -> IngestState:
         job = deps.jobs.get(state["job_id"])
         doc = CanonicalDocument.model_validate(state["canonical"])
+        book = deps.book_of_record(job.tenant.cui)
+        if book != "saga":  # A2 §3: nothing is written to NextUp; gating only, no PreFile
+            error = f"book of record is {book}: no PreFile (00_LAW §8 A2 §3); post it there"
+            deps.jobs.update(job.job_id, status="needs_human", error=error)
+            return {"status": "needs_human", "error": error}
         declared = cat.articol(state["articol_id"]).get("write_modules") or []
         mouths = [m for m in declared if mouth_doc_class(m) == doc.doc_class]
         if len(mouths) != 1:
