@@ -67,6 +67,11 @@ class ReadingChoiceBody(BaseModel):
     choice: Literal["wait", "reserve"]
 
 
+class RoleChoiceBody(BaseModel):
+    choice: Literal["wait", "pause", "allow_synthetic"]
+    until: str | None = Field(default=None, pattern=r"^\d{4}-\d{2}-\d{2}$")
+
+
 class SkipBody(BaseModel):
     reason: str = Field(min_length=1, max_length=300)
 
@@ -377,6 +382,23 @@ def operator_router(
     def model_roles(rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
         """Every model role (00_LAW §3.5): where it acts, its model, whether it may be called."""
         return rt.model_roles_view()
+
+    @router.post("/model-roles/{role_id}/choice")
+    def model_role_choice(
+        role_id: str,
+        body: RoleChoiceBody,
+        request: Request,
+        rt: Runtime = Depends(operator),
+        operator_name: str | None = Depends(who),
+    ) -> dict[str, Any]:
+        """WP-53 (00_LAW §8 A7): no approved pin passes the data policy — ``wait``, ``pause``
+        the role, or ``allow_synthetic`` until a date (synthetic tenants only). Operators only."""
+        if _builder(request):
+            raise HTTPException(403, "the build agent does not choose model routes")
+        try:
+            return rt.role_choose(role_id, body.choice, body.until, operator_name)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
 
     @router.get("/model-calls")
     def model_calls(

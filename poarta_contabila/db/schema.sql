@@ -206,3 +206,17 @@ CREATE TABLE IF NOT EXISTS domain.reading_choices (
     body       jsonb NOT NULL
 );
 CREATE INDEX IF NOT EXISTS reading_choices_day ON domain.reading_choices (day, seq);
+
+-- WP-53 (00_LAW §8 A7): OpenRouter provider data policies, read daily; one row per provider
+CREATE TABLE IF NOT EXISTS domain.provider_policies (
+    slug  text PRIMARY KEY,
+    body  jsonb NOT NULL
+);
+
+-- WP-53: the operator's choice for a role no approved pin passes (latest holds)
+CREATE TABLE IF NOT EXISTS domain.model_role_choices (
+    seq      bigserial PRIMARY KEY,
+    role_id  text NOT NULL,
+    body     jsonb NOT NULL
+);
+CREATE INDEX IF NOT EXISTS model_role_choices_role ON domain.model_role_choices (role_id, seq);

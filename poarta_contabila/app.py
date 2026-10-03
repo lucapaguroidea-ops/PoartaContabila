@@ -138,6 +138,25 @@ async def _retry_parked_reads(runtime: Callable[[], Any]) -> None:
             log.exception("retrying parked statement reads failed")
 
 
+async def _refresh_provider_policies(runtime: Callable[[], Any]) -> None:
+    """WP-53: read OpenRouter's provider data policies at start and every
+    ``POLICY_REFRESH_SECONDS`` (default a day; 0 = off), so a role moves to an approved
+    alternate the day its provider's policy changes."""
+    from poarta_contabila.provider_policy import REFRESH_SECONDS
+
+    every = float(os.environ.get("POLICY_REFRESH_SECONDS", str(REFRESH_SECONDS)) or 0)
+    if every <= 0:
+        return
+    while True:
+        rt = runtime()
+        if rt is not None and rt.model_mode == "live":
+            try:
+                await asyncio.to_thread(rt.router.refresh)
+            except Exception:
+                log.exception("reading provider policies failed")
+        await asyncio.sleep(every)
+
+
 def create_app(
     database_url: str | None | object = ...,
     *,
@@ -174,8 +193,10 @@ def create_app(
 
             app.state.runtime, app.state.runtime_reason = runtime_from_env(app.state.catalog, dsn)
         retry = asyncio.create_task(_retry_parked_reads(current_runtime))
+        policies = asyncio.create_task(_refresh_provider_policies(current_runtime))
         yield
         retry.cancel()
+        policies.cancel()
 
     app = FastAPI(title="Poarta Primară", version="0.1.0", lifespan=lifespan)
     app.add_middleware(BodyLimit, max_bytes=_max_upload_bytes())

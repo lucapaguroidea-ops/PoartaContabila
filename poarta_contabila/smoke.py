@@ -336,7 +336,18 @@ def run(
     if not all(allow_mode(m) for m in modes):
         raise SmokeRefused(f"MODEL_CALLS is {report.mode}: the smoke run needs off, dry or live")
     keys = sorted({f"{r['key_env']}={'set' if r['key_set'] else 'unset'}" for r in roles.values()})
+    pins = [r.get("pin") or {} for r in roles.values()]
+    moved = sorted(
+        {
+            f"{rid}: {p['reason']}"
+            for rid, p in zip(roles, pins, strict=True)
+            if p.get("on") not in (None, "main")
+        }
+    )
+    keys.append(f"{sum(1 for p in pins if p.get('on') == 'main')} on their main pin")
     report.steps.append(Step("model roles", 200, f"mode {report.mode}; " + ", ".join(keys)))
+    for line in moved:  # WP-53: an alternate, an operator choice, or no passing model
+        report.steps.append(Step("model pin", 200, line[:300]))
     eu = [r for r in roles.values() if r.get("eu_route_set")]
     report.steps.append(
         Step(

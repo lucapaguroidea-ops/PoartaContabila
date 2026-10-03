@@ -11,6 +11,9 @@ the answer and the session records it.
       through the Decisions endpoint; a `noul` comes back as a probability, a `choice` with
       its confidence and per-option probabilities (RESEARCH_LOG R2). Where TypeSafe processes
       data is not documented: synthetic tenants only.
+- [x] **Approved alternates** (2026-10-03, 00_LAW §8 A7): System Two `z-ai/glm-5.3` on
+      `together`, then `moonshotai/kimi-k2.6`; switched to by themselves while Z.AI fails the
+      data policy. If no pin passes: `POST /model-roles/{role_id}/choice`.
 - [x] **Provider pins** (2026-10-03): each model's own provider only — `typesafe`,
       `z-ai`; fallbacks off, data collection denied.
 - [x] **OpenRouter key** on Railway (2026-10-03): `OPENROUTER_SYS2_API_KEY`, one key for Jev

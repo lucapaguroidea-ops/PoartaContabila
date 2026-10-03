@@ -31,6 +31,10 @@ class ExplainError(Exception):
     """The model's answer cannot be shown: the reason is recorded on the call."""
 
 
+class PolicyRefused(ExplainError):
+    """OpenRouter found no endpoint for the request's data policy (HTTP 404; WP-53)."""
+
+
 def _keys(value: Any) -> set[str]:
     if isinstance(value, dict):
         out = set(value)
@@ -95,7 +99,7 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
     return {"explanation": text.strip(), "facts_cited": facts, "missing": missing}
 
 
-def request_body(role: Any, payload: dict[str, Any]) -> dict[str, Any]:
+def request_body(role: Any, payload: dict[str, Any], provider: Any = None) -> dict[str, Any]:
     from poarta_contabila.model_roles import brief
 
     return {
@@ -104,7 +108,7 @@ def request_body(role: Any, payload: dict[str, Any]) -> dict[str, Any]:
             {"role": "system", "content": brief(role)},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False, sort_keys=True)},
         ],
-        "provider": role.provider.model_dump(),
+        "provider": provider if provider is not None else role.provider.model_dump(),
         "response_format": {"type": "json_object"},
         "temperature": 0,
         "max_tokens": MAX_TOKENS,
@@ -112,7 +116,9 @@ def request_body(role: Any, payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def send(role: Any, payload: dict[str, Any], secret: str, http: Any = None) -> dict[str, Any]:
+def send(
+    role: Any, payload: dict[str, Any], secret: str, http: Any = None, provider: Any = None
+) -> dict[str, Any]:
     """POST the question; the checked output plus who answered and the usage.
 
     :class:`ExplainError` on a non-200, an unreachable endpoint or an answer off the card.
@@ -124,7 +130,7 @@ def send(role: Any, payload: dict[str, Any], secret: str, http: Any = None) -> d
         try:
             resp = client.post(
                 CHAT_URL,
-                json=request_body(role, payload),
+                json=request_body(role, payload, provider),
                 headers={"Authorization": f"Bearer {secret}"},
             )
         except httpx.HTTPError as exc:
@@ -134,10 +140,11 @@ def send(role: Any, payload: dict[str, Any], secret: str, http: Any = None) -> d
                 err = resp.json().get("error") or {}
             except ValueError:
                 err = {}
-            raise ExplainError(
-                f"OpenRouter answered HTTP {resp.status_code} {err.get('code', '')}: "
-                f"{str(err.get('message', ''))[:200]}".replace("  ", " ")
-            )
+            msg = str(err.get("message", ""))[:200]
+            reason = f"OpenRouter answered HTTP {resp.status_code} {err.get('code', '')}: {msg}"
+            if resp.status_code == 404 and "data policy" in msg.lower():
+                raise PolicyRefused(reason.replace("  ", " "))
+            raise ExplainError(reason.replace("  ", " "))
         try:
             data = resp.json()
             content = data["choices"][0]["message"]["content"]
