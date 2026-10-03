@@ -12,8 +12,14 @@ is a bucket row or a failed control, never an adjusting entry.
 - **Outbound holes.** Expected jobs not ``acked`` / ``already_in_sink``.
 - **Synthetic parity (C0).** For each watched account, the period turnover the expected
   documents imply (purchase: 401 Cr gross, 4426 Dr VAT; sale: 4111 Dr gross, 4427 Cr
-  VAT; nothing else yet) against the eye's turnover. A movement with no expected source
-  (a payment on 5121 before bank jobs exist) is a difference, on purpose.
+  VAT; a statement line: 5121 on its side) against the eye's turnover. A movement with no
+  expected source (a payment on 5121 before bank jobs exist) is a difference, on purpose.
+- **A statement line's counterpart (WP-46, owner 2026-10-02).** Bound to a customer it
+  implies 4111, to a supplier 401, on the side opposite 5121 (what ``incasare_xml`` /
+  ``plata_xml`` post). Never bound (it was already in the books when it arrived), it counts
+  the books' own counterpart only when its bank document there is one journal line, 401
+  debit for a payment or 4111 credit for a receipt, of exactly the line's amount: the
+  statement proves the amount, the books chose the account. Anything else is a difference.
 - **Controls.** Each catalog row gives PASS / FAIL / INFO. A blocking control that
   cannot be computed for want of an input it needs FAILs; INFO is only for a control
   that does not apply (its ``require`` axes are absent) or whose precondition
@@ -33,6 +39,7 @@ from typing import Any
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.recon.numbers import normalize
 from poarta_contabila.rules import ExplainedRule, explained_turnover
+from poarta_contabila.sinks.exports import synthetic as synthetic_account
 from poarta_contabila.sinks.saga_eye import SagaEye
 from poarta_contabila.types import (
     AccountDelta,
@@ -101,6 +108,51 @@ def expected_turnover(items: list[ExpectedItem]) -> dict[str, dict[str, Decimal]
     return t
 
 
+_COUNTERPART = {"customer": "4111", "supplier": "401"}  # incasare_xml / plata_xml (WP-46)
+_POSTED_COUNTERPART = {"incasare": "4111", "plata": "401"}
+
+
+def bank_counterparts(
+    exp: list[ExpectedJob], matched: dict[str, SinkDoc], lines: list[Any]
+) -> list[tuple[str, str, Decimal]]:
+    """``(account, side, amount)`` the period's statement lines imply opposite 5121 (WP-46).
+
+    *matched*: job id → the bank document the books show for it; *lines*: the month's
+    journal lines. A bound line implies its partner's account; a line never bound implies
+    the books' own counterpart only when that is one line of the posting account below,
+    for exactly the line's amount.
+    """
+    out = []
+    for e in exp:
+        d = e.doc
+        if d.doc_class not in _BANK:
+            continue
+        side = "credit" if d.doc_class == "incasare" else "debit"  # opposite the bank
+        gross = Decimal(d.totals.gross)
+        account = _COUNTERPART.get(d.partner.role)
+        if account is not None:
+            out.append((account, side, gross))
+            continue
+        sd = matched.get(e.job.job_id)
+        if sd is None:
+            continue
+        bank_side = "debit" if side == "credit" else "credit"
+        mine = [
+            ln
+            for ln in lines
+            if normalize(ln.doc_number, "alnum") == normalize(sd.number, "alnum")
+            and ln.date == sd.date
+            and synthetic_account(getattr(ln, bank_side) or "") == "5121"
+        ]
+        if len(mine) != 1:
+            continue
+        ln = mine[0]
+        want = _POSTED_COUNTERPART[d.doc_class]
+        if synthetic_account(getattr(ln, side) or "") == want and Decimal(ln.amount) == gross:
+            out.append((want, side, gross))
+    return out
+
+
 def _match(exp: list[ExpectedJob], sd: SinkDoc) -> ExpectedJob | None:
     for e in exp:
         if e.job.saga.get("saga_doc_key") == sd.saga_key:
@@ -145,6 +197,7 @@ def build_period_diff(
     turnover = eye.turnover(cui, period) if covered else {}
 
     inbound: list[BucketRow] = []
+    matched: dict[str, SinkDoc] = {}  # job id → the books' document for it
     explained_docs: list[tuple[SinkDoc, str]] = []
     counted: set[tuple[str | None, str]] = set()  # sink documents whose postings are counted
     month_lines = eye.journal_lines(cui, period) if covered else []
@@ -178,6 +231,7 @@ def build_period_diff(
                 inbound.append(BucketRow(kind="unexplained", sink=sd, delta_gross=sd.gross))
         else:
             counted.add((normalize(sd.number, "alnum"), sd.date))
+            matched[e.job.job_id] = sd
             inbound.append(
                 BucketRow(
                     kind="expected",
@@ -192,6 +246,8 @@ def build_period_diff(
     watched = list(control.get("watched") or [])
     epsilon = Decimal(str(control.get("epsilon", "0.01")))
     implied = expected_turnover(items)
+    for account, side, amount in bank_counterparts(exp, matched, month_lines):
+        implied.setdefault(account, {"debit": Decimal(0), "credit": Decimal(0)})[side] += amount
     explained_lines = []
     for ln in month_lines if line_rules else []:
         if (normalize(ln.doc_number, "alnum"), ln.date) in counted:

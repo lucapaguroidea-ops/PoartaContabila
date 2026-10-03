@@ -23,6 +23,17 @@ def _serial(d: date) -> int:
 
 
 def saga_rj() -> None:
+    _saga_rj("saga_rj.xls", august=False)
+
+
+def saga_rj_smoke() -> None:
+    """The smoke run's books (WP-47): a clean August holding exactly the smoke's August
+    documents (an SPV purchase, its payment, a customer receipt), then September as in
+    saga_rj.xls, in one export."""
+    _saga_rj("saga_rj_smoke.xls", august=True)
+
+
+def _saga_rj(name: str, *, august: bool) -> None:
     wb = xlwt.Workbook()
     ws = wb.add_sheet("Sheet")
     int_fmt = xlwt.easyxf(num_format_str="########0")
@@ -79,39 +90,61 @@ def saga_rj() -> None:
         ws.write(row, 7, amount, money)
         row += 1
 
+    off = 0  # September's entry numbers follow August's
+    if august:
+        a1, a2, a3 = date(2026, 8, 12), date(2026, 8, 20), date(2026, 8, 25)
+        # the SPV purchase AB 0070 (fixtures/ubl/invoice_inbound.xml renumbered): 21 % and 11 %
+        entry(1, a1, "Intrare ALT FURNIZOR SRL", "AB0070", "604", "401.00002", 580.00, "Intrari",
+              blank_after=False)
+        entry(2, a1, "Intrare ALT FURNIZOR SRL", "AB0070", "604", "401.00002", 95.50, "Intrari",
+              blank_after=False)
+        entry(3, a1, "TVA 21 ALT FURNIZOR SRL", "AB0070", "4426", "401.00002", 121.80, "Intrari",
+              blank_after=False)
+        entry(4, a1, "TVA 11 ALT FURNIZOR SRL", "AB0070", "4426", "401.00002", 10.51, "Intrari")
+        total("Total pe", a1, 807.81)
+        # its payment, and a customer paying an earlier invoice: one line each
+        entry(5, a2, "Achit. ALT FURNIZOR SRL AB0070", "OP-81", "401.00002", "5121.090110",
+              807.81, "Banca")
+        total("Total pe", a2, 807.81)
+        entry(6, a3, "Incasare CLIENT TEST SRL FX-090", "IN-25", "5121.090110", "4111.00001",
+              500.00, "Banca")
+        total("Total pe", a3, 500.00)
+        total("Total luna", 8, 2115.62)
+        off = 6
+
     d1, d2, d3, d4 = date(2026, 9, 3), date(2026, 9, 10), date(2026, 9, 15), date(2026, 9, 30)
     # purchase with a numeric document number, analytic 401.00010 (stored as 401.0001)
-    entry(1, d1, "Intrare FURNIZOR TEST SRL", 1427, "628", "401.00010", 1000.00, "Intrari")
-    entry(2, d1, "TVA 21 FURNIZOR TEST SRL", 1427, "4426", "401.00010", 210.00, "Intrari")
+    entry(off + 1, d1, "Intrare FURNIZOR TEST SRL", 1427, "628", "401.00010", 1000.00, "Intrari")
+    entry(off + 2, d1, "TVA 21 FURNIZOR TEST SRL", 1427, "4426", "401.00010", 210.00, "Intrari")
     total("Total pe", d1, 1210.00)
     # purchase with a series number, two expense lines, no blank rows between them
-    entry(3, d2, "Intrare ALT FURNIZOR SRL", "AB0058", "605", "401.00002", 100.00, "Intrari",
+    entry(off + 3, d2, "Intrare ALT FURNIZOR SRL", "AB0058", "605", "401.00002", 100.00, "Intrari",
           blank_after=False)
-    entry(4, d2, "Intrare ALT FURNIZOR SRL", "AB0058", "605", "401.00002", 50.50, "Intrari",
+    entry(off + 4, d2, "Intrare ALT FURNIZOR SRL", "AB0058", "605", "401.00002", 50.50, "Intrari",
           blank_after=False)
-    entry(5, d2, "TVA 11 ALT FURNIZOR SRL", "AB0058", "4426", "401.00002", 16.56, "Intrari")
+    entry(off + 5, d2, "TVA 11 ALT FURNIZOR SRL", "AB0058", "4426", "401.00002", 16.56, "Intrari")
     # sale to a customer
-    entry(6, d2, "Iesire CLIENT TEST SRL", "FX-101", "4111.00001", "704", 150.50, "Iesiri")
-    entry(7, d2, "TVA 21 CLIENT TEST SRL", "FX-101", "4111.00001", "4427", 31.61, "Iesiri")
+    entry(off + 6, d2, "Iesire CLIENT TEST SRL", "FX-101", "4111.00001", "704", 150.50, "Iesiri")
+    entry(off + 7, d2, "TVA 21 CLIENT TEST SRL", "FX-101", "4111.00001", "4427", 31.61, "Iesiri")
     total("Total pe", d2, 348.67)
     # payment through a 6-decimal bank analytic (5121.090110 stored as 5121.09011)
-    entry(8, d3, "Achit. FURNIZOR TEST SRL", 1, "401.00010", "5121.090110", 1210.00, "Banca")
+    entry(off + 8, d3, "Achit. FURNIZOR TEST SRL", 1, "401.00010", "5121.090110", 1210.00, "Banca")
     total("Total pe", d3, 1210.00)
     # compound closing entry: 121 = % (two expense accounts), then % = 121
-    entry(9, d4, "Inchidere cheltuieli 2026", None, "121", "%", 1150.50, "Inchidere",
+    entry(off + 9, d4, "Inchidere cheltuieli 2026", None, "121", "%", 1150.50, "Inchidere",
           blank_after=False)
     entry(None, d4, "Inchidere cheltuieli 2026", None, "", "628", 1000.00, "Inchidere",
           blank_after=False)
     entry(None, d4, "Inchidere cheltuieli 2026", None, "", "605", 150.50, "Inchidere",
           blank_after=False)
-    entry(10, d4, "Inchidere venituri 2026", None, "%", "121", 150.50, "Inchidere",
+    entry(off + 10, d4, "Inchidere venituri 2026", None, "%", "121", 150.50, "Inchidere",
           blank_after=False)
     entry(None, d4, "Inchidere venituri 2026", None, "704", "", 150.50, "Inchidere")
     total("Total pe", d4, 1301.00)
     total("Total luna", 9, 4069.67)
     row += 3
     ws.write(row, 0, "Pagina 1/1  SAGA C")
-    wb.save(str(HERE / "saga_rj.xls"))
+    wb.save(str(HERE / name))
 
 
 def saga_balanta() -> None:
@@ -291,6 +324,7 @@ def saga_tva_journal(side: str) -> None:
 
 if __name__ == "__main__":
     saga_rj()
+    saga_rj_smoke()
     saga_balanta()
     nextup_rj()
     nextup_balanta()

@@ -5,15 +5,20 @@ model role was given at its place in the flow (``GET /model-calls``, ``MODEL_CAL
 
 1. ``GET /model-roles`` — the mode, and which key variables are set (never their values);
 2. ``PUT /tenants/1000009`` — ``FIRMA TEST SRL``, ``data_class: synthetic``, one bank account;
-3. the registru jurnal (``fixtures/sink/saga_rj.xls``);
+3. the registru jurnal (``fixtures/sink/saga_rj_smoke.xls``): a clean August, then September;
 4. an SPV invoice (``fixtures/ubl``, number ``AB 0099``) → ``v3_approve`` → approve;
 5. a bank statement (header + tables, no Document AI) → the receipt's ``v3_approve`` → bound
    to its partner and invoice;
 6. an expense report → ``decont_split`` → one workings part (evidence, no Job);
 7. ``reconcile_sink`` — ``need_rj_export`` is answered with the uploaded journal; any other
    question is left for a person;
-8. ``monthly_close`` → ``v2_close`` → ``hold`` (nothing is filed);
-9. ``GET /model-calls`` for this firm, grouped by graph and node.
+8. the clean month (WP-47): August's SPV invoice (``AB 0070``) and statement, every document
+   already in the books, so each job ends ``already_in_sink``;
+9. ``monthly_close`` for September, then August → ``v2_close`` → ``hold`` (nothing is filed).
+   September stays material (its packages wait for an agent; its books hold invoices never
+   uploaded here); August should show no blocker. On a lock mismatch (the month's jobs
+   changed since it was locked) the run answers ``reopen`` first and closes again;
+10. ``GET /model-calls`` for this firm, grouped by graph and node.
 
 ``--ocr`` (WP-36) adds one step: a second statement, a real one-page PDF generated here
 (invented firm, invented movement), uploaded **without** its tables, so the server's reader
@@ -53,6 +58,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "fixtures"
 
 CUI, FOLDER, PERIOD = "1000009", "0001", "2026-09"  # invented, valid check digit
+CLEAN = "2026-08"  # WP-47: the month whose books hold exactly what is uploaded here
 PARTNER = "20000005"  # invented, valid check digit
 IBAN = "RO49AAAA1B31007593840000"  # the textbook example IBAN
 TENANT = {
@@ -83,6 +89,28 @@ STATEMENT = {
         },
     ],
     "pdf_b64": base64.b64encode(b"%PDF-1.4 synthetic statement (smoke)").decode(),
+}
+CLEAN_STATEMENT = {  # WP-47: both lines are already in saga_rj_smoke.xls; closing = Sept's opening
+    "meta": {
+        "iban": IBAN,
+        "holder_cui": f"RO{CUI}",
+        "currency": "RON",
+        "opening": "5307.81",
+        "closing": "5000.00",
+        "statement_date": "2026-08-31",
+    },
+    "tables": [
+        {"headers": ["Extras de cont", "", ""], "rows": [["Sold initial", "", "5.307,81"]]},
+        {
+            "headers": ["Data", "Descriere", "Referinta", "Debit", "Credit"],
+            "rows": [
+                ["20.08.2026", "Plata ALT FURNIZOR SRL fact AB 0070", "OP-81", "807,81", ""],
+                ["25.08.2026", "Incasare CLIENT TEST SRL FX-090", "IN-25", "", "500,00"],
+                ["", "Total rulaje", "", "807,81", "500,00"],
+            ],
+        },
+    ],
+    "pdf_b64": base64.b64encode(b"%PDF-1.4 synthetic statement, August (smoke)").decode(),
 }
 RECEIPT_BINDING = {
     "partner": {"cui": PARTNER, "name": "CLIENT TEST SRL", "role": "customer"},
@@ -159,15 +187,24 @@ class Report:
         return all(s.ok for s in self.steps)
 
 
-def spv_invoice() -> bytes:
-    """The fixture invoice as an SPV zip (XML + signature), numbered ``AB 0099``."""
+def spv_invoice(
+    number: str = "AB 0099",
+    *,
+    issued: str = "2026-09-10",
+    due: str = "2026-10-10",
+    spv_id: str = "4100000001",
+) -> bytes:
+    """The fixture invoice as an SPV zip (XML + signature), numbered ``AB 0099`` (or as
+    given: the clean month's ``AB 0070`` of 12.08, WP-47)."""
     xml = (FIXTURES / "ubl/invoice_inbound.xml").read_bytes()
-    xml = xml.replace(b"<cbc:ID>AB 0058</cbc:ID>", b"<cbc:ID>AB 0099</cbc:ID>")
+    xml = xml.replace(b"<cbc:ID>AB 0058</cbc:ID>", f"<cbc:ID>{number}</cbc:ID>".encode())
+    xml = xml.replace(b"<cbc:IssueDate>2026-09-10<", f"<cbc:IssueDate>{issued}<".encode())
+    xml = xml.replace(b"<cbc:DueDate>2026-10-10<", f"<cbc:DueDate>{due}<".encode())
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
         for name, data in (
-            ("4100000001.xml", xml),
-            ("semnatura_4100000001.xml", (FIXTURES / "ubl/semnatura.xml").read_bytes()),
+            (f"{spv_id}.xml", xml),
+            (f"semnatura_{spv_id}.xml", (FIXTURES / "ubl/semnatura.xml").read_bytes()),
         ):
             # a fixed timestamp: the same bytes on every run, so a rerun finds the same Job
             zf.writestr(zipfile.ZipInfo(name, date_time=(2026, 10, 1, 0, 0, 0)), data)
@@ -242,6 +279,45 @@ def _ocr_step(c: Client, report: Report) -> None:
     )
 
 
+def _close(c: Client, report: Report, period: str) -> None:
+    """``monthly_close`` for *period*, answered ``hold`` (nothing is filed). A lock mismatch
+    means the month's jobs changed since it was locked: ``reopen`` first (what a person
+    does), then close again."""
+    note = ""
+    for _ in range(2):
+        resp = c.post(f"/close/{CUI}/{period}", params={"tva": "tva_platitor"})
+        close = _json(resp)
+        if _kind(close) != "v2_close":
+            outcome = f"run {(close.get('run') or {}).get('status')}; asks {_kind(close)}"
+            report.steps.append(
+                Step(f"monthly_close {period}", resp.status_code, outcome, resp.status_code < 400)
+            )
+            return
+        material = close["question"].get("material")
+        blockers = close["question"].get("blockers") or []
+        if not note and any(b.startswith("lock mismatch") for b in blockers):
+            resp = c.post(
+                f"/close/{CUI}/{period}/resume", json={"action": "reopen", "explained_rule": None}
+            )
+            if resp.status_code >= 400:
+                break
+            note = "reopened after a lock mismatch; "
+            continue
+        resp = c.post(
+            f"/close/{CUI}/{period}/resume", json={"action": "hold", "explained_rule": None}
+        )
+        close = _json(resp)
+        outcome = f"{note}material={material}; held ({(close.get('run') or {}).get('status')})"
+        outcome += "".join(f"\n{'':27}blocker: {b}" for b in blockers)
+        report.steps.append(
+            Step(f"monthly_close {period}", resp.status_code, outcome, resp.status_code < 400)
+        )
+        return
+    report.steps.append(
+        Step(f"monthly_close {period}", resp.status_code, _outcome(_json(resp)), False)
+    )
+
+
 def run(
     c: Client,
     *,
@@ -276,7 +352,7 @@ def run(
     resp = _octet(
         c,
         f"/tenants/{CUI}/exports/rj",
-        (FIXTURES / "sink/saga_rj.xls").read_bytes(),
+        (FIXTURES / "sink/saga_rj_smoke.xls").read_bytes(),
         {"filename": "rj.xls", "product": "saga"},
     )
     rj = _json(resp)
@@ -377,20 +453,25 @@ def run(
         )
     )
 
-    resp = c.post(f"/close/{CUI}/{PERIOD}", params={"tva": "tva_platitor"})
-    close = _json(resp)
-    if _kind(close) == "v2_close":
-        material = close["question"].get("material")
-        blockers = close["question"].get("blockers") or []
-        resp = c.post(
-            f"/close/{CUI}/{PERIOD}/resume", json={"action": "hold", "explained_rule": None}
+    # the clean month (WP-47): every document is already in the books, so no question waits
+    invoice = spv_invoice("AB 0070", issued="2026-08-12", due="2026-09-11", spv_id="4100000002")
+    resp = _octet(c, "/ingest", invoice, {"cui": CUI, "filename": "spv-august.zip"})
+    report.steps.append(
+        Step("august invoice", resp.status_code, _outcome(_json(resp)), resp.status_code < 400)
+    )
+    resp = c.post(f"/extras/{CUI}", json=CLEAN_STATEMENT)
+    out = _json(resp)
+    report.steps.append(
+        Step(
+            "august statement",
+            resp.status_code,
+            "; ".join(_outcome(j) for j in out.get("jobs", [])) or _outcome(out),
+            resp.status_code < 400,
         )
-        close = _json(resp)
-        outcome = f"material={material}; held ({(close.get('run') or {}).get('status')})"
-        outcome += "".join(f"\n{'':27}blocker: {b}" for b in blockers)
-    else:
-        outcome = f"run {(close.get('run') or {}).get('status')}; asks {_kind(close)}"
-    report.steps.append(Step("monthly_close", resp.status_code, outcome, resp.status_code < 400))
+    )
+
+    _close(c, report, PERIOD)
+    _close(c, report, CLEAN)
 
     resp = c.get("/model-calls", params={"limit": 500})
     for call in _json(resp) if resp.status_code < 400 else []:
