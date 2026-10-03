@@ -234,7 +234,7 @@ class OnlyReserve(Google):
 
 def test_the_catalog_keeps_reserve_models_out_of_the_daily_order(cat):  # noqa: F811
     role = cat.model_roles["ocr_extract"]
-    assert role.tiers.reserve == ["gemini-3.6-flash", "gemini-3.5-flash"]
+    assert role.tiers.reserve == ["gemini-3.5-flash", "gemini-3-flash-preview", "gemini-3.6-flash"]
     for m in role.tiers.reserve:
         assert role.rate_limits[m].rpd == 20
     o = _ops(cat, Google(), tiers=True)
