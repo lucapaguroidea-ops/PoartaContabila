@@ -985,3 +985,41 @@ The status table in `BUILD.md` stays the index of every WP. Text kept as written
 - Today: 11 of 22 articole, 10 of 27 HITL kinds, 21 of 26 control outcomes, 4 of 10 write
   modules, all 8 filings and both close kinds are reachable; none has a scenario yet.
 - Tests: `tests/test_coverage.py`.
+
+### WP-70 Synthetic firms and books
+- `poarta_contabila/synthetic/`: seeded generators, invented data only (CUIs `1001…` firms,
+  `2001…` partners, all with valid check digits; IBANs on the non-existent bank code `AAAA`;
+  names SINTETIC / FURNIZOR / CLIENT / EXEMPLU). The same `(firm, period, seed)` gives the same
+  bytes: zip members and workbook properties carry fixed timestamps.
+- `firms.py` — five firms whose CO.DiT differs where the paths do: `platitor` (profit, staff),
+  `incasare` (TVA la încasare → `close_tva_incasare`), `neplatitor` (micro, buys EU services),
+  `abroad` (payer, `cross_border: mixed`), `bonuri` (receipts, expense reports, payroll).
+  Between them every filing falls due. `firm(key, book_of_record="nextup")` is a NextUp twin
+  under its own CUI (one book of record per firm-period, A2).
+- `docs.py` — SPV zips (invoice + `semnatura_`) in and out, credit notes both sides (with
+  `BillingReference`), invoices from abroad (UBL XML, reverse charge, EUR; and PDF), bonuri
+  (PDF, with and without our CUI), bank statements (`POST /extras` body: header, tables in
+  the bank's number format, a real PDF), expense reports (container PDF, parts, and the
+  `decont_split` answer naming each part by the hash of the file a person would upload),
+  workings, a payroll statement. `Gen` draws one firm-month and numbers it without repeats.
+- `books.py` — `Book` posts documents the way SAGA posts them, not the way this system
+  expects: VAT on 4426 / 4427, on 4428 for TVA la încasare (moved to 4426 / 4427 as it is
+  paid), into the cost for a neplătitor; reverse charge 4426 = 4427 for a payer, nothing
+  invented for a neplătitor (WP-D3 open); bank lines one journal line per invoice settled;
+  bonuri against 542 (in a report) or 5311; payroll on 641 / 646 / 421 / 431x / 444 / 436.
+  Renders only the shapes in `fixtures/sink/`: SAGA registru jurnal, balanță, jurnal de
+  cumpărări / vânzări (a `Baza 0%` column only when a 0 % base exists); NextUp journal and
+  balance; the SPV register. Journal types `Diverse`, `Casa`, `Salarii` for notes, cash and
+  payroll are `[de confirmat]` on a real book (only `Intrari` / `Iesiri` / `Banca` are read
+  as documents).
+- `months.py` — `month(firm, period, seed, defect)`: a standard month (purchases incl. one from
+  a supplier that is not a VAT payer, sales, a statement that pays, collects and charges a
+  fee, plus what the profile adds), its uploads in order and its exports. Ten named defects,
+  one each: missing from the books, in the books with no document, amount differs, VAT
+  differs, posted another way, duplicate upload, a late document of the prior month, storno of
+  a sale, one bank line paying two invoices, a partial payment. `Book.skew_analytic` breaks
+  an M1 tie on the balanță.
+- Checked: every firm × every defect reads through the real parsers (`parse_ubl`,
+  `parse_statement`, every export reader); a clean month's books hold exactly its documents
+  and its M1 ties hold; the decont answer passes `check_split`.
+- Tests: `tests/test_synthetic.py`.

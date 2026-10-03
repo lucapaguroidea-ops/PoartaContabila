@@ -244,6 +244,7 @@ poarta_contabila/
   sinks/               # SAGA mouth (saga_xml.py), eye (saga_eye.py), witness exports, SPV register
   jev.py model_roles.py explain.py provider_policy.py key_usage.py   # model roles (00_LAW §3.5)
   reading_waits.py ocr_eval.py synthetic_docs.py smoke.py coverage.py agent.py db/schema.sql
+  synthetic/           # seeded invented firms, documents and SAGA books (WP-70)
 ```
 
 No ReAct supervisor. No `Journal.post`.

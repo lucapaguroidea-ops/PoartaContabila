@@ -82,7 +82,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-67 | done | WP-66 | Expense-report splits (`decont_split`) on the review page: a batch index per firm; parts named by a hash the browser computes |
 | WP-68 | done | WP-67 | Tidy: done WPs' details moved to `docs/BUILD_DONE.md`; INDEX, ARCHITECTURE §11 and the loader brought up to date |
 | WP-69 | done | WP-68 | Coverage map: every reachable catalog row × the scenarios and tests that drive it, both ways |
-| WP-70 | todo | WP-69 | Synthetic firms and books: seeded documents per source doc, and SAGA exports that agree (clean and with named defects) |
+| WP-70 | done | WP-69 | Synthetic firms and books: seeded documents per source doc, and SAGA exports that agree (clean and with named defects) |
 | WP-71 | todo | WP-70 | Scenario runner: YAML scenarios with expected paths, run over HTTP with a simulated SAGA agent |
 | WP-72 | todo | WP-71 | Catalog → data: a scenario for every reachable articol de cale, HITL kind, control, recon profile and filing |
 | WP-73 | todo | WP-71 | Data → catalog: realistic months run blind; every gap becomes a proposed draft row in `docs/CATALOG_GAPS.md` |
@@ -123,20 +123,6 @@ tag or export shape beyond what `fixtures/` already holds (AGENTS hard ban); Wri
 `foreign_rc_neplatitor` is always-HITL; WP-D4); a catalog change enters only as `status: draft`
 after the owner accepts it, and graph topology, interrupt kinds or watched accounts need a
 00_LAW amendment (§7): list those, do not make them.
-
-### WP-70 Synthetic firms and books
-- `poarta_contabila/synthetic/`: seeded generators. Firms with CO.DiT profiles that differ where
-  the paths differ: TVA plătitor; TVA la încasare; neplătitor (micro); one trading abroad; one
-  with bonuri and expense reports.
-- Documents for each source doc a path reads: SPV zips (invoice + semnătură) in and out, credit
-  notes (storno intrare / ieșire), foreign invoices (XML and PDF), bonuri fiscale (PDF, with and
-  without our CUI), bank statements (PDF + tables, both directions, several lines), expense
-  reports with parts, payroll statement (evidence), SPV register.
-- The books those documents would leave in SAGA, from the same seed: registru jurnal, balanță,
-  jurnal de cumpărări / vânzări (shapes of `fixtures/sink/`). Clean months, and months with one
-  named defect each: missing from the books, in the books with no document, amount or TVA
-  differs, posted another way (POST), duplicate upload, a late document of the prior month,
-  storno of an acked document, a bank line paying two invoices, a partial payment.
 
 ### WP-71 Scenario runner
 - A scenario is YAML in `fixtures/scenarios/`: firm, months, documents (generator references),
