@@ -30,6 +30,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-17 | parked | — | Engagement backlog / `chat:` face (the review page is WP-66, not this face: A8 §6) |
 | WP-18 | parked | — | Take-on / year-end / D406 producer / FX engine |
 | WP-D3 | decision | WP-11 | Non-payer RC books: 4423 vs 446x on copy-firm note |
+| WP-D4 | decision | WP-35 | The EU route per model family (client data): Vertex `eu` for Gemini; Scaleway or OpenRouter EU for GLM; no EU route for Jev |
 | WP-19 | done | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (R1) |
 | WP-20 | done | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; live through OpenRouter's Decisions endpoint (synthetic only) |
 | WP-21 | done | WP-13 | Statement PDFs read by Google Document AI into the extract contract |
@@ -1033,6 +1034,41 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
 - Until answered: articol exists, `expect_accounts: []`, `nota_nc_dbf` always-HITL, or SAGA-native + `explained_rule`.
 - Do not silently fill 4423 or 446.
+
+### WP-D4 The EU route per model family (`decision`)
+Research of 2026-10-03 (sources below). Until the owner decides, every role keeps `eu_route: null`
+and a client tenant is refused by every model role (Jev: cautious values and a person; System
+Two: the question without an explanation; reading: the statement's tables must be sent).
+
+- **Document reading (Gemini) → Vertex AI, EU multi-region `eu`.** Every model the catalog pins
+  (`gemini-3.5-flash-lite`, `-3.1-flash-lite`, `-3.8-flash`, `-3.7-flash`; reserve `-3.5-flash`,
+  `-3.6-flash`) is GA on the `eu` multi-region, which Google ties to EU ML processing; a
+  regional endpoint alone does not guarantee it. Zero retention: turn off caching and get the
+  abuse-monitoring exception (invoiced billing) or an enterprise ZDR contract
+  (`docs/EU_VERTEX_SETUP.md` §D). Code: `EU_LOCATIONS["vertex"]` lacks `eu`; no Vertex transport.
+- **System Two (GLM) — two candidates:**
+  - **Scaleway Generative APIs, `glm-5.2`** (one version behind the `z-ai/glm-5.3` pin; also
+    `deepseek-v4-flash-0731`). Paris; zero data retention by default; no training; a French
+    company, outside the US CLOUD Act; OpenAI-compatible chat. Caveats: an automatic cache of
+    intermediate values (not prompt text) that cannot be turned off; the full request may be
+    kept up to 2 weeks after a server error (500).
+  - **OpenRouter EU in-region (`https://eu.openrouter.ai/api/v1`), `z-ai/glm-5.3`** on Mistral or
+    Inceptron (Kimi K2.6 on Inceptron). Keeps the current pin and sender, but needs OpenRouter's
+    Business or Enterprise plan (price from sales), and OpenRouter, Inc. (US) stays in the chain.
+- **System One (Jev): no EU route.** `typesafe/jev-1.13` is served only by TypeSafe AI, Inc. (US;
+  operated from the US West Coast per third-party listings; its DPA names no location and uses
+  EU SCC Module 2). Zero data retention for enterprise customers on request. It is not on
+  OpenRouter's EU list. Options: (a) no Jev on client data, its decisions go to a person (how the
+  code behaves today); (b) amend invariant 5 to allow TypeSafe under SCCs plus an enterprise ZDR
+  contract and a transfer assessment; (c) an EU model in System One's place for client data,
+  evaluated against Jev on synthetic data first.
+
+Sources: Scaleway supported models (validated 2026-08-14) and Generative APIs data privacy
+(`github.com/scaleway/docs-content`, `pages/generative-apis/reference-content/`); OpenRouter
+sovereign AI guide (`openrouter.ai/docs/guides/features/sovereign-ai`) and its models API with
+`region=eu` / `eu.openrouter.ai` (read 2026-10-03: 70 EU-eligible models); TypeSafe legal and
+DPA (`docs.typesafe.ai/legal`, `typesafe.ai/legal/data-processing`); Gemini EU listings
+(`opper.ai/models/eu/gemini`) and Google's data residency page (not readable from the session).
 
 ## Definition of done for v1
 
