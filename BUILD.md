@@ -59,6 +59,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-45 | done | WP-44 | A balance or total row is not a line, whatever column its label is in; the brief keeps balances out of tables |
 | WP-46 | done | WP-08, WP-13 | C0 counts a statement line's counterpart: from its binding, or one matching posting in the books |
 | WP-47 | done | WP-29, WP-46 | The smoke run closes a clean August (books hold exactly its documents); September reopens on a lock mismatch |
+| WP-48 | done | WP-43 | Reserve order from the 2026-10-03 evaluation: 3.5 Flash, 3 Flash (preview), 3.6 Flash last |
 
 ## WP details
 
@@ -787,6 +788,16 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
     (`reopened after a lock mismatch; …`).
 - Expected: August `material=False` with no blocker; September material (its packages wait
   for an agent; its books hold invoices never uploaded).
+
+### WP-48 Reserve order from the evaluation
+- Evaluation of 2026-10-03 against production (after the quota reset): `gemini-3.5-flash`
+  6/6 (115/115 lines, 36/36 header); `gemini-3-flash-preview` 6/6 (a preview model: Google
+  may change or withdraw it); `gemini-3.6-flash` 2/6, read right whatever it answered, the
+  other four Google 503s.
+- Owner, 2026-10-03: `tiers.reserve` is `[gemini-3.5-flash, gemini-3-flash-preview,
+  gemini-3.6-flash]` on both document-reading roles; `gemini-3-flash-preview` 5 RPM, 250K TPM,
+  20 RPD (AI Studio's Gemini 3 Flash row). `gemini-2.5-flash` stays out: Google serves 2.5
+  only to projects that used it before (404 here).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
