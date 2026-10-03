@@ -212,6 +212,42 @@ Sources (2026-10-03): `openrouter.ai/api/v1/models/{model}/endpoints`, `openrout
 `pages/generative-apis/` (`faq.mdx`, `concepts.mdx`, `how-to/use-batch-processing.mdx`);
 `ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml`.
 
+**LangSmith (tracing and evaluation), read 2026-10-03** — the owner asked whether to use it,
+host it on Railway, migrate to it, and use its EU option on client data.
+
+- Self-hosting: "Self-hosted LangSmith is an add-on to the Enterprise plan … Contact our sales
+  team if you want to get a license key". It installs on Kubernetes (Helm) with ClickHouse
+  (traces), PostgreSQL, Redis and blob storage. Railway is not Kubernetes, and a single VPS
+  would mean running a cluster for an Enterprise product: in practice it is LangChain's cloud
+  or an Enterprise contract. LangGraph itself (open source) stays on Railway either way.
+- Cloud plans: Developer $0 (1 seat, 5k base traces a month), Plus $39 per seat (10k base
+  traces), Enterprise custom ("Self-hosted and hybrid deployment options"). Base traces are
+  kept 14 days, extended traces 180 days (extra fee).
+- EU: "organizations on https://eu.smith.langchain.com are in GCP EU"; regional instances on
+  all plans, free included; "pricing is the same across supported cloud regions"; paid in USD.
+  GDPR, SOC 2 Type 2, a DPA on request. But: "We do not have a legal entity in the EU for
+  customer contracting today" — a US contracting party, the same concern as OpenRouter above.
+- Migrating what is built: not worth it. The answer log (who answered, append-only), the
+  model-call record (role, pin, card hash, synthetic guard), the catalog, gates, scenarios and
+  coverage map are the system's record and law, kept in our Postgres; a trace store with
+  14 / 180-day retention does not replace them. What LangSmith adds is side-by-side model
+  evaluation (better than `POST /model-roles/{role_id}/compare`) and a run-by-run trace view:
+  an addition, not a migration.
+- Client data: a trace holds the whole document (CUIs, amounts, partners), so LangSmith would be
+  a new place client data goes — under invariant 5 a dated 00_LAW amendment, a DPA and a
+  transfer assessment. Little gain for explanations (what each model was given and answered,
+  under which card, and what the person decided are already recorded; its online scoring
+  would be another model reading client data, and its annotation queues a second review
+  surface beside the review page, which A8 keeps free of outside services). More gain if
+  multi-step AI work on client data is built later: decide it then, with this WP, against a
+  self-hostable open-source tracing tool on our own EU hosting (not checked yet).
+- Recommendation (2026-10-03): migrate nothing now. If the WP-D4 model evaluations want it
+  (Scaleway `glm-5.2`, Kimi, an EU model in Jev's place), the hosted EU free tier on synthetic
+  data only, fed from `fixtures/scenarios/`: no amendment, no migration.
+
+Sources (2026-10-03): `docs.langchain.com/langsmith/self-hosted`,
+`docs.langchain.com/langsmith/regions-faq`, `www.langchain.com/pricing`.
+
 ## Definition of done for v1
 
 WP-00–WP-12 green. WP-13 optional. Parked WPs untouched. No `Journal.post` in the tree. No SYSDBA in env samples. Catalogs that shipped without fixtures remain `draft`.
