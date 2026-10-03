@@ -60,6 +60,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-46 | done | WP-08, WP-13 | C0 counts a statement line's counterpart: from its binding, or one matching posting in the books |
 | WP-47 | done | WP-29, WP-46 | The smoke run closes a clean August (books hold exactly its documents); September reopens on a lock mismatch |
 | WP-48 | done | WP-43 | Reserve order from the 2026-10-03 evaluation: 3.5 Flash, 3 Flash (preview), 3.6 Flash last |
+| WP-49 | done | WP-20 | One OpenRouter key for Jev and System Two: `OPENROUTER_SYS2_API_KEY` |
 
 ## WP details
 
@@ -298,7 +299,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
     `z-ai/glm-5.3` `{only: [z-ai]}`; fallbacks off, data collection denied (RESEARCH_LOG R2).
   - `jev.role_transport`, `MODEL_CALLS=live`, a wired pack (`v3_judge`, `recon_review`,
     `v2_declaration_gate`), a synthetic tenant (`route_check`; a client tenant needs the EU
-    route, which no role has) and `OPENROUTER_JEV_API_KEY` set: `POST
+    route, which no role has) and the OpenRouter key set (`OPENROUTER_SYS2_API_KEY`, WP-49): `POST
     https://openrouter.ai/api/alpha/decisions` with `{model, state: the pack input,
     questions: the role card's questions, provider: the pin}`. Without the key it records as
     in `dry`.
@@ -820,6 +821,14 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   gemini-3.6-flash]` on both document-reading roles; `gemini-3-flash-preview` 5 RPM, 250K TPM,
   20 RPD (AI Studio's Gemini 3 Flash row). `gemini-2.5-flash` stays out: Google serves 2.5
   only to projects that used it before (404 here).
+
+### WP-49 One OpenRouter key
+- Smoke run of 2026-10-03 after WP-20: `/model-roles` showed `OPENROUTER_JEV_API_KEY` unset, so
+  both `jev_v2_gate` calls were recorded, not sent. The owner set one OpenRouter key on Railway,
+  `OPENROUTER_SYS2_API_KEY`, for both systems.
+- `model_roles.KEY_ENV` and the catalog's `systems.system_one.key_env` are
+  `OPENROUTER_SYS2_API_KEY`; `OPENROUTER_JEV_API_KEY` is gone from the `key_env` enum. A test
+  holds the catalog's names to `KEY_ENV`. Jev and System Two share that key's credit limit.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
