@@ -86,7 +86,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-71 | done | WP-70 | Scenario runner: YAML scenarios with expected paths, run over HTTP with a simulated SAGA agent |
 | WP-72 | done | WP-71 | Catalog → data: a scenario for every reachable articol de cale, HITL kind, control, recon profile and filing |
 | WP-73 | done | WP-71 | Data → catalog: realistic months run blind; every gap becomes a proposed draft row in `docs/CATALOG_GAPS.md` |
-| WP-74 | todo | WP-72, WP-73 | A small live sample of the new paths on production's synthetic firms, within a spend limit |
+| WP-74 | done | WP-72, WP-73 | A small live sample of the new paths on production's synthetic firms, within a spend limit |
 | WP-75 | done | WP-73 | `M1_8_4428_open` computed: 4428 still open on unpaid la-încasare documents vs bal(4428) (G7) |
 
 ## WP details
@@ -124,12 +124,6 @@ tag or export shape beyond what `fixtures/` already holds (AGENTS hard ban); Wri
 `foreign_rc_neplatitor` is always-HITL; WP-D4); a catalog change enters only as `status: draft`
 after the owner accepts it, and graph topology, interrupt kinds or watched accounts need a
 00_LAW amendment (§7): list those, do not make them.
-
-### WP-74 Live sample
-- After WP-72 and WP-73 pass dry: at most 10 documents, one approval and one close of the new
-  firms on production (`--base-url`, the build agent's token: synthetic only) with
-  `MODEL_CALLS=live`, to see Jev and System Two on the new paths. Report each key's spend before
-  and after (`GET /model-keys`); stop when a key has less than $0.50 left.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

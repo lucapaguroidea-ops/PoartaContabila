@@ -5,9 +5,6 @@ Each item says where the answer goes. Send the answer and a session records it. 
 
 ## Open — yours to do
 
-- [ ] **Raise the System Two key's limit** (`OPENROUTER_SYS2_API_KEY`): $1.22 left of $2 a month
-      on 2026-10-03, after the model comparisons. Normal use is about $0.003 an explanation;
-      the live sample (WP-74) stops when a key has less than $0.50 left.
 - [ ] **Optional: account-wide spend** (WP-56): add a management key on Railway as
       `OPENROUTER_MANAGEMENT_KEY` (OpenRouter → Settings → Management keys). The service only
       reads with it; it can create and delete keys, so keep it on Railway only.
@@ -59,9 +56,6 @@ From the synthetic-data program (WP-69 – WP-74; `docs/CATALOG_GAPS.md`), 2026-
 - [ ] **Journal types in the synthetic books.** The generator writes `Diverse` (notes), `Casa`
       (cash) and `Salarii` (payroll) as SAGA's journal types; only `Intrari`, `Iesiri`, `Banca`
       are read as documents. Confirm SAGA's names on the copy firm.
-- [ ] **WP-74 go-ahead**: ≤ 10 documents, one approval, one close of the new synthetic firms on
-      production with `MODEL_CALLS=live`, stopping when a key has less than $0.50 left (see the
-      first item above for the System Two key's balance).
 
 - [ ] **WP-D3**: non-payer reverse charge books, 4423 vs 446x. Until then
       `foreign_rc_neplatitor` always goes to a person.
@@ -71,6 +65,10 @@ From the synthetic-data program (WP-69 – WP-74; `docs/CATALOG_GAPS.md`), 2026-
       first client document.
 
 ## Done
+
+- [x] **System Two key's limit** raised to $3 a month; $2.18 left after the WP-74 live sample
+      (2026-10-03). Jev's key: $1 a month, $0.9996 left.
+- [x] **WP-74 go-ahead** (2026-10-03): the live sample ran on production (`live_sample`).
 
 - [x] **Models** (2026-10-03): Jev `typesafe/jev-1.13` on TypeSafe for all System One roles;
       `z-ai/glm-5.3` on Z.AI for every System Two role (WP-51: DeepSeek trains on prompts);

@@ -1,0 +1,36 @@
+name: live_sample
+note: >-
+  WP-74: the small live sample (≤ 10 documents, one approval, one close) for production with
+  MODEL_CALLS=live and the build agent's token (synthetic only): an SPV purchase, an XML
+  invoice from abroad (G1) and the month's statement (4 lines). Only p1 is approved; every
+  other question is left for a person; the close is held. No agent: nothing is imported.
+  Locally it runs dry like every other scenario.
+firm: abroad
+period: "2026-05"
+seed: 74
+upload: [p1, x1, extras]
+agent: false
+answers:
+  v3_approve: leave
+  by_ref:
+    p1: {decision: approve, edit: null}
+expect:
+  documents:
+    p1:
+      source_doc: ro_efactura_ubl
+      articol: ro_efactura_inbound
+      asks: [v3_approve, wait_validare]
+      status: packaged
+      module: intrare_factura_xml
+    x1:
+      source_doc: foreign_invoice_xml
+      job_kind: job_foreign_invoice
+      articol: foreign_invoice_inbound
+      asks: [v3_approve]
+    pay:p1: {source_doc: extras_statement_pdf, articol: extras_statement, asks: [v3_approve]}
+  months:
+    "2026-05":
+      close: close_standard
+      material: true
+      close_asks: [v2_close]
+      v2: hold

@@ -1121,3 +1121,23 @@ The status table in `BUILD.md` stays the index of every WP. Text kept as written
   sale's VAT stays open on 4428: PASS), `incasare_vat_differs` (4428 booked 1.00 higher: FAIL).
   `coverage.OUT_OF_REACH` no longer lists M1_8 PASS.
 - Tests: `tests/test_controls.py::test_m1_8_compares_the_vat_still_open_with_4428`.
+
+### WP-74 Live sample
+- Owner, 2026-10-03: go ahead. Production ran `4a6e654` (WP-75); both keys above the $0.50
+  floor before (Jev $0.9998 left of $1; System Two $2.19 left of $3).
+- `fixtures/scenarios/live_sample.yaml`: the `abroad` firm, 2026-05, seed 74 — an SPV purchase,
+  an XML invoice from abroad (G1) and the month's statement (4 lines): 6 documents. One
+  approval (`p1`), every other question left for a person, one close held. No agent token in
+  the session: nothing was imported (`agent: false`). It runs dry locally like every scenario.
+- `python -m poarta_contabila.scenarios --base-url https://poartacontabila-production.up.railway.app live_sample`
+  with the build agent's token (synthetic only): passed, the same path as the dry run. 22
+  model calls for the firm: Jev `v3_judge` sent 4× (every document: needs_human, risk high,
+  accounts_ok false) and `v2_declaration_gate` 1× (hold, material); System Two
+  (`z-ai/glm-5.3` on Z.AI) explained the 4 approvals and the close (1× each, $0.0025–0.0078
+  each); the shadow roles recorded only.
+- Spend: System One +$0.00015, System Two +$0.0148 (after: Jev $0.9996, System Two $2.1764).
+- What it showed: System Two said the invoice from abroad "was received via SPV" — the stored
+  source kind said so. Fixed in its own commit (`f875da7`): an XML from abroad is `xml`. Its
+  other explanations matched the input (the bank line's settlement proposal named the right
+  invoice; the receipt for an invoice not uploaded had none). Jev never cleared a document on
+  the new paths, so each one asks a person.
