@@ -81,7 +81,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-66 | done | WP-65 | Review page (00_LAW §8 A8): `GET /inbox/{cui}/{period}` and `/review`, a thin page that sends each answer unchanged to its resume route |
 | WP-67 | done | WP-66 | Expense-report splits (`decont_split`) on the review page: a batch index per firm; parts named by a hash the browser computes |
 | WP-68 | done | WP-67 | Tidy: done WPs' details moved to `docs/BUILD_DONE.md`; INDEX, ARCHITECTURE §11 and the loader brought up to date |
-| WP-69 | todo | WP-68 | Coverage map: every reachable catalog row × the scenarios and tests that drive it, both ways |
+| WP-69 | done | WP-68 | Coverage map: every reachable catalog row × the scenarios and tests that drive it, both ways |
 | WP-70 | todo | WP-69 | Synthetic firms and books: seeded documents per source doc, and SAGA exports that agree (clean and with named defects) |
 | WP-71 | todo | WP-70 | Scenario runner: YAML scenarios with expected paths, run over HTTP with a simulated SAGA agent |
 | WP-72 | todo | WP-71 | Catalog → data: a scenario for every reachable articol de cale, HITL kind, control, recon profile and filing |
@@ -123,18 +123,6 @@ tag or export shape beyond what `fixtures/` already holds (AGENTS hard ban); Wri
 `foreign_rc_neplatitor` is always-HITL; WP-D4); a catalog change enters only as `status: draft`
 after the owner accepts it, and graph topology, interrupt kinds or watched accounts need a
 00_LAW amendment (§7): list those, do not make them.
-
-### WP-69 Coverage map
-- `python -m poarta_contabila.coverage [--json]`: every catalog row a document or a month can
-  reach (articole de cale, source docs, job kinds, HITL kinds with their actor, controls, recon
-  profiles, write modules, filings, close kinds) × the scenarios (WP-71) that drive it and the
-  tests that name it. Uncovered rows are listed with their status and why they are out of reach
-  (parked WP, open decision, no code path yet).
-- Both directions in one report: catalog → data (rows with no scenario = scenarios to write)
-  and data → catalog (scenario outcomes that land on `define_articol` / `define_class` /
-  `define_module`, a `needs_human` with no articol, or a close blocker no control explains).
-- Test: the map lists every Flux row; a row counts as covered only when a passing scenario's
-  expected path names it.
 
 ### WP-70 Synthetic firms and books
 - `poarta_contabila/synthetic/`: seeded generators. Firms with CO.DiT profiles that differ where

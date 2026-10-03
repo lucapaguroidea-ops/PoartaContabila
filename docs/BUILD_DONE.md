@@ -960,3 +960,28 @@ The status table in `BUILD.md` stays the index of every WP. Text kept as written
 - `ARCHITECTURE.md` §11 lists the modules as built (it listed `graphs/…`, `maps.py`, which never
   existed). `INDEX.md` names `poarta_contabila/`, `tests/`, `docs/` and marks `docs/harvest/` as
   history next to `annex/`. Nothing deleted.
+
+### WP-69 Coverage map
+- Owner, 2026-10-03: the synthetic-data program (BUILD.md) starts with a map of what is covered.
+- `python -m poarta_contabila.coverage [--json]` (`coverage.py`): every catalog row a document
+  or a month can reach — articole de cale (Flux and Reconcile), source docs, job kinds, HITL
+  kinds with their actor, controls once as PASS and once as FAIL, recon profiles, write
+  modules, filings, close kinds — with the scenarios whose expected path names it and the test
+  files that name it (a quoted id in `tests/*.py`; this reproduces the baseline counts: 6 of 22
+  articole, 17 of 27 HITL kinds, 9 of 13 controls, 6 of 10 write modules).
+- A row is covered only when a *passing* scenario names it; a test naming it is shown, never
+  counted. A reachable row with no scenario is a scenario to write.
+- `OUT_OF_REACH`, written by hand against the code, says why a row cannot be reached today:
+  parked (WP-14: bonuri), decision (WP-D3: `foreign_rc_neplatitor`, `nota_nc_dbf`), no code
+  path (triage articole are never bound; no foreign-invoice route; 13 HITL kinds no node asks;
+  `parteneri_xml` / `articole_xml` / storno mouths not rendered), not computed in v1
+  (`M1_8_4428_open` PASS, `M1_9_4424_watched`), live only (`recon_review_contest`: in dry mode
+  `llm_review` abstains). It is checked both ways: a key that names no row, or a listed row a
+  passing scenario reaches, is a problem (exit code 1).
+- Data → catalog: from a run's actual outcomes (`DocActual`, `MonthActual`), the map lists
+  `define_articol` / `define_class` / `define_module` questions, `needs_human` with no articol,
+  a job minted that never binds one, an upload refused at the door, and a close blocker whose
+  head is no control id. The scenario runner (WP-71) produces these outcomes.
+- Today: 11 of 22 articole, 10 of 27 HITL kinds, 21 of 26 control outcomes, 4 of 10 write
+  modules, all 8 filings and both close kinds are reachable; none has a scenario yet.
+- Tests: `tests/test_coverage.py`.
