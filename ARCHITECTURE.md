@@ -277,7 +277,8 @@ DATABASE_URL=          # one Postgres: schema `domain` + LangGraph checkpointer 
 S3_ENDPOINT= S3_ACCESS_KEY= S3_SECRET_KEY= S3_BUCKET=
 JEV_BASE_URL= JEV_API_KEY=     # only if Jev is not on OpenRouter: direct route (RESEARCH_LOG R2)
 OPENROUTER_BASE_URL=           # https://openrouter.ai/api/v1
-OPENROUTER_SYS2_API_KEY=       # the one OpenRouter key: Jev and System Two roles (WP-49)
+OPENROUTER_SYS1_API_KEY=       # Jev (System One) roles: own key and credit limit (WP-55)
+OPENROUTER_SYS2_API_KEY=       # System Two roles (explanations, rule drafts)
 GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC=  # document reading: Gemini direct, synthetic tenants only (WP-36)
 MODEL_CALLS=off                # off | dry (record only) | live (synthetic: reading, Jev, explanations send)
 POLICY_REFRESH_SECONDS=86400   # OpenRouter provider data policies, re-read (WP-53; 0 = off)

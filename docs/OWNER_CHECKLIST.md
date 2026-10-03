@@ -16,8 +16,8 @@ the answer and the session records it.
       data policy. If no pin passes: `POST /model-roles/{role_id}/choice`.
 - [x] **Provider pins** (2026-10-03): each model's own provider only — `typesafe`,
       `z-ai`; fallbacks off, data collection denied.
-- [x] **OpenRouter key** on Railway (2026-10-03): `OPENROUTER_SYS2_API_KEY`, one key for Jev
-      and System Two (owner, WP-49); there is no `OPENROUTER_JEV_API_KEY`.
+- [x] **OpenRouter keys** on Railway (2026-10-03): `OPENROUTER_SYS1_API_KEY` for Jev and
+      `OPENROUTER_SYS2_API_KEY` for System Two, each with its own credit limit (owner, WP-55).
 - [x] **Gemini direct for synthetic data** (decided 2026-10-02, WP-36): the AI Studio key is
       on Railway as `GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC`. It replaces the OpenRouter BYOK route
       for document reading, so the BYOK key in OpenRouter can be removed.
@@ -48,10 +48,10 @@ the answer and the session records it.
 - [ ] **Gemini API terms for the free tier** (Google's "Unpaid Services"): free tier for synthetic
       tests only; client documents only on the EU host (decided 2026-10-02).
 - [ ] **Railway variables** (project `faithful-mercy`):
-      `OPENROUTER_BASE_URL`, `OPENROUTER_SYS2_API_KEY`,
-      `MODEL_CALLS=dry` to start (`live` for the Gemini step above). One OpenRouter key for Jev and
-      System Two (WP-49), so they share its credit limit. `GET /model-roles` shows which keys are
-      set (never values).
+      `OPENROUTER_BASE_URL`, `OPENROUTER_SYS1_API_KEY`, `OPENROUTER_SYS2_API_KEY`,
+      `MODEL_CALLS=dry` to start (`live` for the Gemini step above). One OpenRouter key per system
+      (WP-55), each with its own credit limit. `GET /model-roles` shows which keys are set (never
+      values).
 - [ ] **Railway domain**: the `PoartaContabila` service has no public domain (checked
       2026-10-02), so the operator API cannot be reached from outside. Generate one (service →
       Settings → Networking) before testing on Railway; it runs PR #5's code until PR #6 merges.

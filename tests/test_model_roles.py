@@ -213,16 +213,18 @@ def test_recon_review_goes_through_its_role_and_abstains(cat):
 
 
 def test_model_roles_view_never_shows_a_key(cat, monkeypatch):
-    monkeypatch.setenv("OPENROUTER_SYS2_API_KEY", "sk-or-test-secret")
+    monkeypatch.setenv("OPENROUTER_SYS1_API_KEY", "sk-or-test-secret")
+    monkeypatch.delenv("OPENROUTER_SYS2_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC", raising=False)
     o = _ops(cat)
     resp = o.http.get("/model-roles", headers=o.op)
     assert "sk-or-test-secret" not in resp.text
     roles = {r["role_id"]: r for r in resp.json()}
-    # WP-49: one OpenRouter key for Jev and System Two
-    for role_id in ("jev_v3_judge", "sys2_explain_approve"):
-        assert roles[role_id]["key_env"] == "OPENROUTER_SYS2_API_KEY"
-        assert roles[role_id]["key_set"] is True
+    # WP-55: Jev has its own key; System Two keeps OPENROUTER_SYS2_API_KEY
+    assert roles["jev_v3_judge"]["key_env"] == "OPENROUTER_SYS1_API_KEY"
+    assert roles["jev_v3_judge"]["key_set"] is True
+    assert roles["sys2_explain_approve"]["key_env"] == "OPENROUTER_SYS2_API_KEY"
+    assert roles["sys2_explain_approve"]["key_set"] is False
     assert roles["ocr_extract"]["key_set"] is False
     assert roles["jev_v3_judge"]["callable_in_dry_run"] is True
 

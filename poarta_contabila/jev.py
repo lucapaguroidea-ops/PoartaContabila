@@ -11,8 +11,8 @@
 - **Layer 2 cannot clear ``material``**: ``close.py`` drops such suggestions.
 
 The wire (WP-20, RESEARCH_LOG.md R2): OpenRouter's Decisions endpoint (``POST
-/api/alpha/decisions``, bearer ``OPENROUTER_SYS2_API_KEY``: one OpenRouter key for both
-systems, WP-49) with the role's pinned model and provider, ``state`` = the pack input and
+/api/alpha/decisions``, bearer ``OPENROUTER_SYS1_API_KEY``: System One's own key, WP-55)
+with the role's pinned model and provider, ``state`` = the pack input and
 ``questions`` = the role card's questions. Each
 answer (``noul`` probability; ``choice`` + ``confidence``) is mapped onto the pack's closed
 model by the card's thresholds; below them a field takes its cautious value (``CAUTIOUS``).

@@ -66,6 +66,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-52 | done | WP-51 | GLM answers: reasoning off, a larger budget, JSON read from inside prose, a bad answer quoted |
 | WP-53 | done | WP-51 | Provider data policies read daily; approved alternates by themselves; the operator's choice when none passes (00_LAW §8 A7) |
 | WP-54 | done | WP-52 | GLM 5.3 needs reasoning: low effort, left out of the answer, 6000 tokens |
+| WP-55 | done | WP-49 | Jev back on its own key: `OPENROUTER_SYS1_API_KEY` (System Two keeps `OPENROUTER_SYS2_API_KEY`) |
 
 ## WP details
 
@@ -304,7 +305,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
     `z-ai/glm-5.3` `{only: [z-ai]}`; fallbacks off, data collection denied (RESEARCH_LOG R2).
   - `jev.role_transport`, `MODEL_CALLS=live`, a wired pack (`v3_judge`, `recon_review`,
     `v2_declaration_gate`), a synthetic tenant (`route_check`; a client tenant needs the EU
-    route, which no role has) and the OpenRouter key set (`OPENROUTER_SYS2_API_KEY`, WP-49): `POST
+    route, which no role has) and the OpenRouter key set (`OPENROUTER_SYS1_API_KEY`, WP-55): `POST
     https://openrouter.ai/api/alpha/decisions` with `{model, state: the pack input,
     questions: the role card's questions, provider: the pin}`. Without the key it records as
     in `dry`.
@@ -892,6 +893,13 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - The request asks `reasoning: {effort: low, exclude: true}` (the answer carries no reasoning)
   and allows 6000 tokens, reasoning included. Policies and pins were fine: every OpenRouter
   role on its main pin, policies read at start.
+
+### WP-55 Jev's own key
+- Smoke run of 2026-10-03 after WP-54: the shared key (`OPENROUTER_SYS2_API_KEY`, WP-49) could
+  afford 4137 more tokens (OpenRouter HTTP 402), so Jev and System Two would run dry together.
+- Owner, 2026-10-03: Jev uses `OPENROUTER_SYS1_API_KEY`. `model_roles.KEY_ENV["system_one"]`
+  and the catalog's `systems.system_one.key_env` name it; System Two keeps
+  `OPENROUTER_SYS2_API_KEY`. Each system spends against its own key's credit limit.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

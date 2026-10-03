@@ -37,7 +37,7 @@ System Two explanations (OpenRouter chat, WP-50); every other role records as in
 CALL_MODES = ("off", "dry", "live")
 Route = Literal["openrouter", "google_ai_studio"]
 KEY_ENV = {
-    "system_one": "OPENROUTER_SYS2_API_KEY",  # one OpenRouter key for both systems (WP-49)
+    "system_one": "OPENROUTER_SYS1_API_KEY",  # Jev: its own key and credit limit (WP-55)
     "system_two": "OPENROUTER_SYS2_API_KEY",
     "document_reading": "GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC",  # direct to AI Studio (WP-36)
 }
