@@ -11,6 +11,12 @@ the answer and the session records it.
       through the Decisions endpoint; a `noul` comes back as a probability, a `choice` with
       its confidence and per-option probabilities (RESEARCH_LOG R2). Where TypeSafe processes
       data is not documented: synthetic tenants only.
+- [ ] **Spend per key** (WP-56): `GET /model-keys` reads each key's spend and what is left
+      from OpenRouter (`/api/v1/key`, with the key itself) — nothing to set up. For the whole
+      account (credits bought and used, every key by name), optionally add a management key on
+      Railway as `OPENROUTER_MANAGEMENT_KEY` (OpenRouter → Settings → Management keys). The
+      service only reads with it; a management key can create and delete keys, so keep it on
+      Railway only.
 - [x] **Approved alternates** (2026-10-03, 00_LAW §8 A7): System Two `z-ai/glm-5.3` on
       `together`, then `moonshotai/kimi-k2.6`; switched to by themselves while Z.AI fails the
       data policy. If no pin passes: `POST /model-roles/{role_id}/choice`.

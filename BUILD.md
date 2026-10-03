@@ -67,6 +67,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-53 | done | WP-51 | Provider data policies read daily; approved alternates by themselves; the operator's choice when none passes (00_LAW §8 A7) |
 | WP-54 | done | WP-52 | GLM 5.3 needs reasoning: low effort, left out of the answer, 6000 tokens |
 | WP-55 | done | WP-49 | Jev back on its own key: `OPENROUTER_SYS1_API_KEY` (System Two keeps `OPENROUTER_SYS2_API_KEY`) |
+| WP-56 | done | WP-55 | `GET /model-keys`: each OpenRouter key's spend and what is left, read from OpenRouter; the account's with a management key |
 
 ## WP details
 
@@ -900,6 +901,17 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - Owner, 2026-10-03: Jev uses `OPENROUTER_SYS1_API_KEY`. `model_roles.KEY_ENV["system_one"]`
   and the catalog's `systems.system_one.key_env` name it; System Two keeps
   `OPENROUTER_SYS2_API_KEY`. Each system spends against its own key's credit limit.
+
+### WP-56 Spend per key, from OpenRouter
+- Owner, 2026-10-03: read the actual spend per key from OpenRouter instead of estimating it.
+- `GET /model-keys` (operator and build agent; tenantless): for each OpenRouter `key_env` the
+  catalog uses, `GET https://openrouter.ai/api/v1/key` with that key → `usage` (all time),
+  `usage_daily`, `usage_weekly`, `usage_monthly`, `limit`, `limit_remaining`, `limit_reset`,
+  `is_free_tier`, and the roles that spend it. OpenRouter's `label` is dropped (it can show part
+  of the key); no key value is ever answered or logged.
+- With `OPENROUTER_MANAGEMENT_KEY` set (optional): `GET /api/v1/credits` (credits bought and
+  used) and `GET /api/v1/keys` (every key by name: spend, limit, left, disabled). Read only.
+- The smoke run prints one line per key (`openrouter key`), as OpenRouter gave the figures.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

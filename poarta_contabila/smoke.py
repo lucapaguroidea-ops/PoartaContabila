@@ -54,6 +54,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
+from poarta_contabila.key_usage import describe
+
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "fixtures"
 
@@ -348,6 +350,10 @@ def run(
     report.steps.append(Step("model roles", 200, f"mode {report.mode}; " + ", ".join(keys)))
     for line in moved:  # WP-53: an alternate, an operator choice, or no passing model
         report.steps.append(Step("model pin", 200, line[:300]))
+    resp = c.get("/model-keys")  # WP-56: OpenRouter's own spend per key (never a key value)
+    if resp.status_code < 400:
+        for line in describe(resp.json()):
+            report.steps.append(Step("openrouter key", 200, line[:300]))
     eu = [r for r in roles.values() if r.get("eu_route_set")]
     report.steps.append(
         Step(

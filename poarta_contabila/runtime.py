@@ -323,6 +323,12 @@ class Runtime:
             )
         return out
 
+    def key_usage(self) -> dict[str, Any]:
+        """WP-56: OpenRouter's own figures for each key the catalog uses (``key_usage``)."""
+        from poarta_contabila.key_usage import key_usage
+
+        return key_usage(self.catalog.model_roles, http=self.jev_http)
+
     def _pin_view(self, role: Any) -> dict[str, Any] | None:
         """WP-53: the pin the data policy allows now, and why (OpenRouter roles)."""
         if role.route != "openrouter" or role.model is None:

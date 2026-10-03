@@ -60,7 +60,13 @@ class RuleRequest(RuleBody):
 
 
 SYSBUILDER = "claude-sysbuilder"
-_TENANTLESS = {"/model-roles", "/model-calls", "/answers", "/rules"}  # filtered or body-checked
+_TENANTLESS = {
+    "/model-roles",
+    "/model-calls",
+    "/model-keys",
+    "/answers",
+    "/rules",
+}  # filtered or body-checked
 
 
 class ReadingChoiceBody(BaseModel):
@@ -382,6 +388,12 @@ def operator_router(
     def model_roles(rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
         """Every model role (00_LAW §3.5): where it acts, its model, whether it may be called."""
         return rt.model_roles_view()
+
+    @router.get("/model-keys")
+    def model_keys(rt: Runtime = Depends(operator)) -> dict[str, Any]:
+        """WP-56: what each OpenRouter key has spent and has left, read from OpenRouter now
+        (and the account's credits when a management key is set). Never a key value."""
+        return rt.key_usage()
 
     @router.post("/model-roles/{role_id}/choice")
     def model_role_choice(
