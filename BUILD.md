@@ -72,6 +72,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-58 | done | WP-57 | System Two brief: never an empty explanation, never an empty field cited; an answer off the card is asked once more with its reason |
 | WP-59 | done | WP-58 | `POST /model-roles/{role_id}/compare`: main pin vs each approved alternate on the latest synthetic questions, first answer only; nothing recorded |
 | WP-60 | done | WP-59 | A placeholder explanation is refused; reasoning settings sent to GLM only; a reasoning-only answer is named; compare defaults to one run |
+| WP-61 | done | WP-60 | `compare` one candidate on one question per request (`candidate`, `skip`): the edge closes at 300 s |
 
 ## WP details
 
@@ -953,6 +954,12 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   as `the model wrote only reasoning`, so the cause shows.
 - `compare` defaults to `runs=1` (at most 3): a call takes ~40 s and 18 calls ran past the edge
   timeout.
+
+### WP-61 Compare one call per request
+- After WP-60 a 6-call comparison ran past the edge's 300 s (HTTP 499): without GLM's reasoning
+  settings a call can take a minute or more.
+- `candidate` (0 = main pin, N = alternate N) and `skip` (start after that many of the latest
+  questions) let a request send exactly one call (`inputs=1`).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

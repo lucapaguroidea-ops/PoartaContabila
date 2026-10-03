@@ -324,3 +324,17 @@ def test_an_answer_written_only_as_reasoning_says_so(cat):
     role = cat.model_roles["sys2_explain_close"]
     with pytest.raises(ExplainError, match="only reasoning"):
         send(role, {"kind": "v2_close"}, KEY, http=httpx.Client(transport=httpx.MockTransport(api)))
+
+
+def test_one_candidate_on_one_question_at_a_time(cat, monkeypatch):
+    api = OpenRouter()
+    o = _ops(cat, api, monkeypatch)
+    o.ingest(NEW_INVOICE)
+    sent = len(api.chat())
+    url = "/model-roles/sys2_explain_approve/compare"
+    resp = o.http.post(url, params={"candidate": 2, "inputs": 1}, headers=o.op).json()
+    (row,) = resp["candidates"]
+    assert row["model"] == "moonshotai/kimi-k2.6" and row["tries"] == 1
+    assert len(api.chat()) - sent == 1
+    assert o.http.post(url, params={"candidate": 9}, headers=o.op).status_code == 422
+    assert o.http.post(url, params={"skip": 5}, headers=o.op).status_code == 422

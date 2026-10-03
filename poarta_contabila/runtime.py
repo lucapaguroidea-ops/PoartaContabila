@@ -364,10 +364,19 @@ class Runtime:
         self.router.choices.put(row)
         return {"role_id": role_id, "choice": row.model_dump(), "pin": self._pin_view(role)}
 
-    def model_compare(self, role_id: str, inputs: int, runs: int) -> dict[str, Any]:
+    def model_compare(
+        self,
+        role_id: str,
+        inputs: int,
+        runs: int,
+        candidate: int | None = None,
+        skip: int = 0,
+    ) -> dict[str, Any]:
         """WP-59: the questions a System Two role last explained for synthetic tenants, each
         sent *runs* times to the main pin and to every approved alternate, first answer only
-        (no retry). Returned, not recorded: a comparison decides nothing and feeds no node."""
+        (no retry). Returned, not recorded: a comparison decides nothing and feeds no node.
+        *candidate*: 0 the main pin, N the Nth alternate (one at a time, WP-61); *skip*: start
+        after that many of the latest questions."""
         from poarta_contabila.explain import ExplainError, send
 
         role = self.catalog.model_roles.get(role_id)
@@ -382,14 +391,19 @@ class Runtime:
         for call in self.model_calls.recent(role_id, 500):
             if call.tenant_cui and self._synthetic(call.tenant_cui):
                 questions.setdefault(call.input_hash, call.input)
-            if len(questions) == inputs:
+            if len(questions) == skip + inputs:
                 break
+        questions = dict(list(questions.items())[skip:])
         if not questions:
             raise IngestRefused(f"{role_id}: no synthetic question to compare on yet")
         candidates = [("main", role.model, role.provider.model_dump())] + [
             (f"alternate {i}", a.model, a.provider.model_dump())
             for i, a in enumerate(role.alternates, 1)
         ]
+        if candidate is not None:
+            if not 0 <= candidate < len(candidates):
+                raise IngestRefused(f"{role_id} has no candidate {candidate}")
+            candidates = [candidates[candidate]]
         out = []
         for on, model, provider in candidates:
             used = role.model_copy(update={"model": model})

@@ -418,13 +418,16 @@ def operator_router(
     def model_role_compare(
         role_id: str,
         inputs: int = Query(default=2, ge=1, le=5),
-        runs: int = Query(default=1, ge=1, le=3),  # ~40 s a call: keep under the edge timeout
+        runs: int = Query(default=1, ge=1, le=3),
+        candidate: int | None = Query(default=None, ge=0, description="0 main, N alternate N"),
+        skip: int = Query(default=0, ge=0, le=20),
         rt: Runtime = Depends(operator),
     ) -> dict[str, Any]:
         """WP-59: the main pin against each approved alternate on the role's latest synthetic
-        questions, first answer only. Nothing is recorded or changed."""
+        questions, first answer only. Nothing is recorded or changed. A call can take a minute
+        and the edge closes at 300 s: compare one candidate on one question per request."""
         try:
-            return rt.model_compare(role_id, inputs, runs)
+            return rt.model_compare(role_id, inputs, runs, candidate, skip)
         except IngestRefused as exc:
             raise HTTPException(422, str(exc)) from exc
 
