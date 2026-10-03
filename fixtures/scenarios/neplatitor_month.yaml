@@ -1,0 +1,135 @@
+name: neplatitor_month
+note: 'A neplătitor (micro) buying EU services: d301 and d390 fall due. Known gaps (WP-73): the XML invoice
+  from abroad is refused (no RO CUI for the identity gate), so it sits in the books unexplained (C2);
+  VAT carried in the cost is not the 4426 Layer 1 implies (C0).'
+firm: neplatitor
+period: 2026-05
+seed: 1
+upload:
+- p1
+- p2
+- p3
+- s1
+- s2
+- x1
+- extras
+expect:
+  documents:
+    p1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    p2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    p3:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    s1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: iesire_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    s2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: iesire_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    x1:
+      source_doc: ro_efactura_ubl
+      refused: emit gates failed
+    pay:p1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: plata_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    get:s1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: incasare_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    fee:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: []
+      status: already_in_sink
+      pre: pre_extras_date_gross
+  months:
+    2026-05:
+      close: close_standard
+      material: true
+      blockers:
+      - C0_synthetic_parity
+      - C2_unexplained_empty
+      controls:
+        C0_synthetic_parity: FAIL
+        C1_outbound_complete: PASS
+        C2_unexplained_empty: FAIL
+        M1_1_payables_tie: PASS
+        M1_2_receivables_tie: PASS
+        T_regime_4428: PASS
+        T_regime_442x: PASS
+      filings:
+      - d100_micro
+      - d301_neplatitor_rc
+      - d390_rc
+      - d406_saft
+      recon_asks: []
+      close_asks:
+      - v2_close
+      v2: hold

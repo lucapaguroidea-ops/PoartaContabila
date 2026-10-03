@@ -1,0 +1,132 @@
+name: platitor_books_late
+note: 'Documents arrive before any books: PRE waits; reconcile_sink asks need_rj_export, answered once
+  the journal is uploaded; then the month runs clean.'
+firm: platitor
+period: 2026-05
+seed: 1
+books: late
+expect:
+  documents:
+    p1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    p2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    p3:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    s1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: iesire_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    s2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: iesire_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    salary:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: []
+      status: already_in_sink
+      pre: pre_extras_date_gross
+    pay:p1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: plata_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    get:s1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: incasare_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    fee:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: []
+      status: already_in_sink
+      pre: pre_extras_date_gross
+  months:
+    2026-05:
+      close: close_standard
+      material: false
+      blockers: []
+      controls:
+        C0_synthetic_parity: PASS
+        C1_outbound_complete: PASS
+        C2_unexplained_empty: PASS
+        M1_1_payables_tie: PASS
+        M1_2_receivables_tie: PASS
+        T_regime_4428: PASS
+        T_regime_442x: PASS
+      filings:
+      - d100_profit
+      - d112_payroll
+      - d300_platitor
+      - d394_platitor
+      - d406_saft
+      recon_asks:
+      - need_rj_export
+      - need_rj_export
+      close_asks:
+      - v2_close
+      v2: hold

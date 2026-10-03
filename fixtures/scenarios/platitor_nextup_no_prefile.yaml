@@ -1,0 +1,103 @@
+name: platitor_nextup_no_prefile
+note: 'Documents of a NextUp firm before they are posted there: approved, then refused at the package
+  (no PreFile, A2 §3); the month stays material (C1). How such a job settles is a question for the owner.'
+firm: platitor
+period: 2026-05
+seed: 1
+book_of_record: nextup
+expect:
+  documents:
+    p1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      status: needs_human
+      pre: pre_doc_nr_date
+    p2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      status: needs_human
+      pre: pre_doc_nr_date
+    p3:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      status: needs_human
+      pre: pre_doc_nr_date
+    s1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      status: needs_human
+      pre: pre_doc_nr_date
+    s2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      status: needs_human
+      pre: pre_doc_nr_date
+    salary:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: []
+      status: already_in_sink
+      pre: pre_extras_date_gross
+    pay:p1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      status: needs_human
+      pre: pre_extras_date_gross
+    get:s1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      status: needs_human
+      pre: pre_extras_date_gross
+    fee:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: []
+      status: already_in_sink
+      pre: pre_extras_date_gross
+  months:
+    2026-05:
+      close: close_standard
+      material: true
+      blockers:
+      - C1_outbound_complete
+      controls:
+        C0_synthetic_parity: PASS
+        C1_outbound_complete: FAIL
+        C2_unexplained_empty: PASS
+        M1_1_payables_tie: PASS
+        M1_2_receivables_tie: PASS
+        T_regime_4428: PASS
+        T_regime_442x: PASS
+      filings:
+      - d100_profit
+      - d112_payroll
+      - d300_platitor
+      - d394_platitor
+      - d406_saft
+      recon_asks: []
+      close_asks:
+      - v2_close
+      v2: hold

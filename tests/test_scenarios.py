@@ -22,10 +22,24 @@ from poarta_contabila.scenarios import (
 ALL = scenarios()
 
 
-@pytest.mark.parametrize("sc", ALL, ids=[s.name for s in ALL])
-def test_every_scenario_passes(sc):
-    result = run_one(sc)
-    assert result.passed, render([result])
+@pytest.fixture(scope="module")
+def results():
+    """Every scenario, run once for this module (each on a fresh in-memory runtime)."""
+    return {sc.name: run_one(sc) for sc in ALL}
+
+
+@pytest.mark.parametrize("name", [s.name for s in ALL])
+def test_every_scenario_passes(results, name):
+    assert results[name].passed, render([results[name]])
+
+
+def test_every_reachable_catalog_row_has_a_passing_scenario(results):
+    """WP-72, catalog → data: a row is reachable or listed out of reach with its reason."""
+    cmap = build_map(load_catalog(), [r.outcome() for r in results.values()])
+    assert cmap.problems == []
+    assert [f"{r.table} {r.key}" for r in cmap.to_scenario()] == []
+    for r in cmap.rows:
+        assert r.covered or (r.reach is not None and r.reach.note), (r.table, r.key)
 
 
 def test_a_wrong_expectation_fails_with_its_difference():

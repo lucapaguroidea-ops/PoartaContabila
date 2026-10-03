@@ -84,7 +84,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-69 | done | WP-68 | Coverage map: every reachable catalog row × the scenarios and tests that drive it, both ways |
 | WP-70 | done | WP-69 | Synthetic firms and books: seeded documents per source doc, and SAGA exports that agree (clean and with named defects) |
 | WP-71 | done | WP-70 | Scenario runner: YAML scenarios with expected paths, run over HTTP with a simulated SAGA agent |
-| WP-72 | todo | WP-71 | Catalog → data: a scenario for every reachable articol de cale, HITL kind, control, recon profile and filing |
+| WP-72 | done | WP-71 | Catalog → data: a scenario for every reachable articol de cale, HITL kind, control, recon profile and filing |
 | WP-73 | todo | WP-71 | Data → catalog: realistic months run blind; every gap becomes a proposed draft row in `docs/CATALOG_GAPS.md` |
 | WP-74 | todo | WP-72, WP-73 | A small live sample of the new paths on production's synthetic firms, within a spend limit |
 
@@ -123,11 +123,6 @@ tag or export shape beyond what `fixtures/` already holds (AGENTS hard ban); Wri
 `foreign_rc_neplatitor` is always-HITL; WP-D4); a catalog change enters only as `status: draft`
 after the owner accepts it, and graph topology, interrupt kinds or watched accounts need a
 00_LAW amendment (§7): list those, do not make them.
-
-### WP-72 Catalog → data
-- One scenario per reachable row: each articol de cale, each HITL kind whose actor is
-  `accountant`, each control (passing and failing), each recon profile, each filing, both close
-  kinds. Unreachable rows stay listed in the WP-69 map with the reason; none is forced.
 
 ### WP-73 Data → catalog
 - Realistic months (three firms × two months, 30–60 documents each), generated without choosing

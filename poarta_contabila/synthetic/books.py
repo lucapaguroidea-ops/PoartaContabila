@@ -90,6 +90,7 @@ class Book:
         self.entries: list[Entry] = []
         self.invoices: dict[str, Invoice] = {}
         self.skew: dict[str, int] = {}  # balanță: synthetic row off its analytics (cents)
+        self.opening_extra: dict[str, int] = {}  # more opening balances (+debit/−credit)
 
     # ----- posting -----
 
@@ -390,6 +391,36 @@ class Book:
             raise ValueError(f"{ref!r} has no VAT line to post another way")
         return self
 
+    def open(self, account: str, cents: int) -> Book:
+        """An opening balance the firm's profile does not carry (+debit / −credit)."""
+        self.opening_extra[account] = self.opening_extra.get(account, 0) + cents
+        return self
+
+    def move_vat(self, ref: str, account: str) -> Book:
+        """The document's VAT posted on *account* (e.g. a neplătitor's VAT on 4428 / 4423)."""
+        changed = False
+        for i in self._of(ref):
+            e = self.entries[i]
+            if e.kind == "vat" and e.partner is not None and e.credit == e.partner.analytic:
+                self.entries[i] = replace(e, debit=account)
+                changed = True
+        if not changed:
+            raise ValueError(f"{ref!r} has no VAT line to move")
+        return self
+
+    def repost_party(self, ref: str, root: str) -> Book:
+        """The partner's analytic posted under another root (401.00002 → 408.00002)."""
+        for i in self._of(ref):
+            e = self.entries[i]
+            moved = {}
+            for side in ("debit", "credit"):
+                acct = getattr(e, side)
+                if e.partner is not None and acct == e.partner.analytic:
+                    moved[side] = f"{root}.{acct.split('.', 1)[1]}"
+            if moved:
+                self.entries[i] = replace(e, **moved)
+        return self
+
     def skew_analytic(self, root: str, delta: int) -> Book:
         """balanță: the synthetic *root* row closes *delta* cents off the sum of its analytics."""
         self.skew[root] = self.skew.get(root, 0) + delta
@@ -407,6 +438,7 @@ class Book:
         out.entries = [e for e in self.entries if e.ref not in refs]
         out.invoices = dict(self.invoices)
         out.skew = dict(self.skew)
+        out.opening_extra = dict(self.opening_extra)
         return out
 
     # ----- reading -----
@@ -427,7 +459,7 @@ class Book:
         out: dict[str, dict[str, int]] = defaultdict(
             lambda: {"open_d": 0, "open_c": 0, "prev_d": 0, "prev_c": 0, "run_d": 0, "run_c": 0}
         )
-        for account, cents in self.firm.opening.items():
+        for account, cents in [*self.firm.opening.items(), *self.opening_extra.items()]:
             out[account]["open_d" if cents > 0 else "open_c"] += abs(cents)
         for e in self.entries:
             if e.day[:4] != year or e.day[:7] > period:

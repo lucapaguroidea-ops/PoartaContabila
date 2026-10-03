@@ -15,9 +15,16 @@ the pipeline does with it:
     posted_another_way      a purchase's VAT went into the cost (not 4426 / 4428)
     duplicate_upload        the same SPV zip is uploaded twice
     late_prior_month        a purchase of the month before arrives now (booked in its month)
-    storno_of_acked         a credit note reverses a sale of the month
+    storno_of_acked         credit notes reverse a sale and a purchase of the month
     bank_line_two_invoices  one payment settles two purchases
     partial_payment         a customer pays half of a sale
+    posted_on_other_accounts  a purchase on 408 with its VAT in the cost (none of 401 / 4426)
+    payables_skew           balanță: 401 closes 10.00 off the sum of its analytics
+    receivables_skew        balanță: 4111 closes 10.00 off the sum of its analytics
+    trade_accounts          balanță: analytics under 408 and 418 that tie
+    trade_accounts_skew     … and 408 / 418 that do not
+    vat_on_4428             a purchase's VAT on 4428 (wrong for a neplătitor)
+    vat_on_4423             a purchase's VAT on 4423 (wrong for a neplătitor)
 
 The same ``(firm, period, seed, defect)`` gives the same documents and the same bytes.
 """
@@ -134,6 +141,8 @@ def month(firm: Firm, period: str, *, seed: int = 0, defect: str | None = None) 
         for i, x in enumerate(firm.foreign, start=1):
             m.add(g.foreign_purchase(f"x{i}", partner=x.key, day=14 + i), upload=False)
             # the XML arrives by e-mail, not SPV: uploaded only by a scenario that asks
+    if firm.key == "abroad":
+        _abroad_report(m)
     if firm.key == "bonuri":
         _expense_report(m)
         pay = m.add(g.payroll("payroll", employees=2, day=10), upload=False)
@@ -182,6 +191,21 @@ def _expense_report(m: Month) -> ExpenseReport:
     return report
 
 
+def _abroad_report(m: Month) -> ExpenseReport:
+    """A trip abroad: a foreign invoice (printed) and a RO invoice whose XML never came."""
+    g = m.gen
+    hotel = g.foreign_purchase("dec_abroad", partner="x2", items=1, day=13)
+    taxi = g.purchase("dec_pdf", partner="s3", items=1, day=13)
+    report = g.expense_report(
+        "decont_abroad", [(hotel, "pdf"), (taxi, "pdf"), (g.workings("diurna"), "pdf")]
+    )
+    for doc in (hotel, taxi):
+        m.add(doc, upload=False, via="542")
+    m.docs["decont_abroad"] = report
+    m.uploads.append(Upload("decont_abroad", "decont", report))
+    return report
+
+
 # ----- the named defects -----
 
 
@@ -215,6 +239,28 @@ def _late(m: Month, d: dict[str, Invoice]) -> None:
 
 def _storno(m: Month, d: dict[str, Invoice]) -> None:
     m.add(m.gen.credit_note("s1_storno", d["s1"], day=25))
+    m.add(m.gen.credit_note("p1_storno", d["p1"], day=26, share=50))
+
+
+def _other_accounts(m: Month, d: dict[str, Invoice]) -> None:
+    m.book.posted_another_way("p2").repost_party("p2", "408")
+
+
+def _skew(root: str):
+    return lambda m, d: m.book.skew_analytic(root, 1_000)
+
+
+def _trade(skew: bool):
+    def apply(m: Month, d: dict[str, Invoice]) -> None:
+        m.book.open("408.00002", -30_000).open("418.00001", 45_000).open("117", -15_000)
+        if skew:
+            m.book.skew_analytic("408", 1_000).skew_analytic("418", -1_000)
+
+    return apply
+
+
+def _vat_on(account: str):
+    return lambda m, d: m.book.move_vat("p1", account)
 
 
 def _bank_only(m: Month, d: dict[str, Invoice]) -> None:
@@ -232,6 +278,13 @@ DEFECTS: dict[str, Callable[[Month, dict[str, Invoice]], None]] = {
     "storno_of_acked": _storno,
     "bank_line_two_invoices": _bank_only,
     "partial_payment": _bank_only,
+    "posted_on_other_accounts": _other_accounts,
+    "payables_skew": _skew("401"),
+    "receivables_skew": _skew("4111"),
+    "trade_accounts": _trade(False),
+    "trade_accounts_skew": _trade(True),
+    "vat_on_4428": _vat_on("4428"),
+    "vat_on_4423": _vat_on("4423"),
 }
 
 

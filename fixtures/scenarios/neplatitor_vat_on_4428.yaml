@@ -1,0 +1,124 @@
+name: neplatitor_vat_on_4428
+note: 'A neplătitor whose purchase VAT sits on 4428: T_regime_4428 fails (blocking).'
+firm: neplatitor
+period: 2026-05
+seed: 1
+defect: vat_on_4428
+expect:
+  documents:
+    p1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    p2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    p3:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    s1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: iesire_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    s2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: iesire_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    pay:p1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: plata_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    get:s1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: incasare_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    fee:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: []
+      status: already_in_sink
+      pre: pre_extras_date_gross
+  months:
+    2026-05:
+      close: close_standard
+      material: true
+      blockers:
+      - C0_synthetic_parity
+      - C2_unexplained_empty
+      - T_regime_4428
+      controls:
+        C0_synthetic_parity: FAIL
+        C1_outbound_complete: PASS
+        C2_unexplained_empty: FAIL
+        M1_1_payables_tie: PASS
+        M1_2_receivables_tie: PASS
+        T_regime_4428: FAIL
+        T_regime_442x: PASS
+      filings:
+      - d100_micro
+      - d301_neplatitor_rc
+      - d390_rc
+      - d406_saft
+      recon_asks: []
+      close_asks:
+      - v2_close
+      v2: hold

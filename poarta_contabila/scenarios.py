@@ -119,7 +119,7 @@ class Scenario(Closed):
     period: Period
     seed: int = 0
     defect: str | None = None
-    books: Literal["agent", "in_books", "none"] = "agent"
+    books: Literal["agent", "late", "in_books", "none"] = "agent"
     report_pack: bool = False  # also upload SAGA's purchase / sales journals
     upload: list[str] | None = None  # refs to upload, in order (default: the month's)
     agent: bool = True
@@ -510,7 +510,7 @@ class Runner:
     # -- 4. the simulated SAGA agent --
 
     def saga_agent(self) -> None:
-        if self.agent is None or not self.sc.agent or self.sc.books != "agent":
+        if self.agent is None or not self.sc.agent or self.sc.books not in ("agent", "late"):
             self.step("agent: not run")
             return
         pulled = self.agent.get("/agent/pull").json()
@@ -701,11 +701,19 @@ class Runner:
 
     def run(self) -> Result:
         self.setup()
+        before = self.m.book.without(self.our_refs())
         if self.sc.books == "agent":
-            self.books(self.m.book.without(self.our_refs()), "before")
+            self.books(before, "before")
         elif self.sc.books == "in_books":
             self.books(self.m.book, "holding every document")
         self.upload_all()
+        self.answer_jobs()
+        if self.sc.books == "late":  # the books come after the documents: PRE waits on them
+            for p in self.periods:
+                self.reconcile(p)  # asks for the books (need_rj_export); none to name yet
+            self.books(before, "uploaded late")
+        for p in self.periods:
+            self.reconcile(p)
         self.answer_jobs()
         self.saga_agent()
         for p in self.periods:

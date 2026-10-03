@@ -223,6 +223,13 @@ def test_each_named_defect_does_what_it_says(tmp_path):
         "storno_of_acked",
         "bank_line_two_invoices",
         "partial_payment",
+        "posted_on_other_accounts",
+        "payables_skew",
+        "receivables_skew",
+        "trade_accounts",
+        "trade_accounts_skew",
+        "vat_on_4428",
+        "vat_on_4423",
     }
 
     m = month(f, PERIOD, seed=1, defect="missing_from_books")
@@ -281,3 +288,25 @@ def test_the_same_seed_gives_the_same_bytes_and_another_seed_does_not():
 
     assert digest(7) == digest(7)
     assert digest(7) != digest(8)
+
+
+def test_the_account_level_defects(tmp_path):
+    f = FIRMS["platitor"]
+    m = month(f, PERIOD, seed=1, defect="posted_on_other_accounts")
+    p2 = [e for e in m.book.entries if e.ref == "p2"]
+    assert {e.credit.split(".")[0] for e in p2} == {"408"} and not any(
+        e.debit in ("4426", "4428") for e in p2
+    )
+    for defect, root in (("payables_skew", "401"), ("receivables_skew", "4111")):
+        eye = _eye(tmp_path, month(f, PERIOD, seed=1, defect=defect))
+        kids = eye.analytic(f.cui, PERIOD, root)
+        net = sum(Decimal(v["debit"]) - Decimal(v["credit"]) for v in kids.values())
+        sold = eye.solduri(f.cui, PERIOD)[root]
+        assert net != Decimal(sold["debit"]) - Decimal(sold["credit"])
+    eye = _eye(tmp_path, month(f, PERIOD, seed=1, defect="trade_accounts"))
+    assert eye.analytic(f.cui, PERIOD, "408") and eye.analytic(f.cui, PERIOD, "418")
+    n = month(FIRMS["neplatitor"], PERIOD, seed=1, defect="vat_on_4423")
+    assert any(e.debit == "4423" for e in n.book.entries if e.ref == "p1")
+    a = month(FIRMS["abroad"], PERIOD, seed=1)
+    ids = [p["source_doc_id"] for p in a.docs["decont_abroad"].split_answer(a.firm)["parts"]]
+    assert ids == ["foreign_invoice", "ro_efactura_pdf", "workings"]

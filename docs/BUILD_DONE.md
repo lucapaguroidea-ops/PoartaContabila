@@ -1057,3 +1057,25 @@ The status table in `BUILD.md` stays the index of every WP. Text kept as written
   bank documents, so no statement line is found in the books; bon parts of an expense report
   mint a job that never binds and that the close never counts.
 - Tests: `tests/test_scenarios.py` (every scenario passes locally; runner mechanics).
+
+### WP-72 Catalog → data
+- 21 scenarios in `fixtures/scenarios/` (5 firms; clean months, the ten WP-70 defects and seven
+  more: `posted_on_other_accounts`, `payables_skew`, `receivables_skew`, `trade_accounts`,
+  `trade_accounts_skew`, `vat_on_4428`, `vat_on_4423`; `storno_of_acked` reverses a sale and
+  a purchase; the `abroad` firm adds an expense report with a foreign and a PDF-only part).
+  Each says in its `note` what it shows and which parts are known gaps for WP-73.
+- Every reachable row has a passing scenario: 11 of 22 articole, 12 of 18 source docs, 5 of
+  6 job kinds, 10 of 27 HITL kinds, 21 of 26 control outcomes (each control passing and
+  failing where it can), 4 of 6 recon profiles, the 4 rendered write modules, all 8 filings,
+  both close kinds. The rest stay listed with their reason (`coverage.OUT_OF_REACH`); none
+  is forced. `tests/test_scenarios.py` asserts it.
+- The runner gained `books: late` (documents before the books: `need_rj_export` is asked,
+  then answered once the journal is uploaded) and a recon pass before the agent.
+- Found and fixed in its own commit: nothing enforced 00_LAW §8 A2 §3 — a NextUp firm's
+  documents were packaged for SAGA. The package step now refuses for a non-SAGA book of
+  record (needs_human). How such a job then settles is for the owner.
+- Found for WP-73 (unchanged; see the scenario notes): no PRE row takes a storno; storno mouths
+  are not rendered; TVA la încasare and neplătitor books fail C0 (Layer 1 implies 4426 /
+  4427); M1_8 is not computed; XML invoices from abroad are refused at the identity gate;
+  foreign and bon parts of an expense report mint jobs that never start; autolichidare
+  4426 = 4427 is not implied.

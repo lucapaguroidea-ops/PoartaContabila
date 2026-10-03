@@ -1,0 +1,165 @@
+name: abroad_month
+note: 'A payer trading abroad: d390 falls due. Known gaps (WP-73): both XML invoices from abroad are refused;
+  the expense report''s foreign part mints job_foreign_invoice, which never starts; the RO part with no
+  XML waits in _incomplete_spv (no Job); autolichidare 4426 = 4427 is not implied (C0) and the refused
+  invoices stay unexplained (C2).'
+firm: abroad
+period: 2026-05
+seed: 1
+upload:
+- p1
+- p2
+- p3
+- s1
+- s2
+- x1
+- x2
+- decont_abroad
+- extras
+expect:
+  documents:
+    p1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    p2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    p3:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    s1:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: iesire_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    s2:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: iesire_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    x1:
+      source_doc: ro_efactura_ubl
+      refused: emit gates failed
+    x2:
+      source_doc: ro_efactura_ubl
+      refused: emit gates failed
+    decont_abroad:
+      source_doc: decont_cheltuieli
+      asks:
+      - decont_split
+    dec_abroad:
+      source_doc: foreign_invoice
+      job_kind: job_foreign_invoice
+      asks: []
+      status: ingested
+    dec_pdf:
+      source_doc: ro_efactura_pdf
+      asks: []
+    diurna:
+      source_doc: workings
+      asks: []
+    salary:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: []
+      status: already_in_sink
+      pre: pre_extras_date_gross
+    pay:p1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: plata_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    get:s1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks:
+      - v3_approve
+      - wait_validare
+      status: acked
+      module: incasare_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    fee:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: []
+      status: already_in_sink
+      pre: pre_extras_date_gross
+  months:
+    2026-05:
+      close: close_standard
+      material: true
+      blockers:
+      - C0_synthetic_parity
+      - C2_unexplained_empty
+      controls:
+        C0_synthetic_parity: FAIL
+        C1_outbound_complete: PASS
+        C2_unexplained_empty: FAIL
+        M1_1_payables_tie: PASS
+        M1_2_receivables_tie: PASS
+        T_regime_4428: PASS
+        T_regime_442x: PASS
+      filings:
+      - d100_profit
+      - d112_payroll
+      - d300_platitor
+      - d390_rc
+      - d394_platitor
+      - d406_saft
+      recon_asks: []
+      close_asks:
+      - v2_close
+      v2: hold
