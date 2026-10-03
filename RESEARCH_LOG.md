@@ -254,3 +254,51 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
   that region". Observed with `GET /api/v1/models?region=eu`: 70 models, `z-ai/glm-5.3` (on
   Inceptron, Mistral) and `moonshotai/kimi-k2.6` (Inceptron) among them; Jev is not listed
   (it is on the Decisions endpoint, R2). The EU decision itself is WP-D4.
+
+## R5 · SAGA WEB API, Claude in Chrome, Firebird drivers — the "Claude Code access to SAGA" note
+
+- Question: an owner's working note (2026-10-03, not in this repo) proposed giving Claude Code
+  access to SAGA through SAGA WEB's API and Claude in Chrome, else a Firebird copy of SAGA C.
+  What do the official pages say, and what may this system take from it?
+- Official URLs, read 2026-10-03: https://web0.sagasoft.ro/sagac/DocumentatieAPI,
+  https://code.claude.com/docs/en/chrome, https://pypi.org/project/firebird-driver/ (2.0.3),
+  https://pypi.org/project/fdb/ (2.0.4), https://pypi.org/project/windows-mcp/ (0.8.7).
+  Not read (refused): forum.sagasoft.ro (thread t=60757), https://web.sagasoft.ro/test/Firme,
+  github.com/danieleteti/mcp-firebird. So SAGA C's default Firebird password, "ODS 12 since
+  3.0.583" and the test tenant stay `[de confirmat]`.
+- SAGA WEB API (`https://web.sagasoft.ro/api/v20260225/`), quotes:
+  - Three calls: `Import` (POST, multipart/form-data), `Situatii/GetStocArticol` (GET,
+    `codArticol` required, `gestiune`, `data` "in format dd.MM.yyyy (orice alt format va returna
+    o eroare)"), `Situatii/GetSituatieStocuri` (GET, `dataStart`, `dataEnd`; HTTP 200 is the XML
+    file, otherwise JSON `{Success, Message}`). The section "Preluare sold conturi" repeats the
+    `Import` URL: no balance read exists. No read of journal, invoices, partners or balance.
+  - Import is staged: "Pentru finalizarea importului, trebuie sa accesati ecranul Diverse →
+    Import date din Saga Web." The upload answers only `{Success, Message}`.
+  - Auth: `Authorization: Bearer <key>` and `X-Saga-Cod-Fiscal: <cif>`. Key: "Utilizatori →
+    Integrare API → Genereaza cheie de acces"; "Ecranul "Integrare API" poate fi accesat doar de
+    utilizatori de tip Admin." Rotation: "In anumite situatii, raspunsul va contine … o noua
+    cheie de acces in header-ul X-Saga-Refresh-Token. Aceasta trebuie salvata … In caz contrar,
+    cheia de acces va fi blocata."
+  - File names as SAGA C (R1): `F_`, `I_`, `P_`, `CLI_`, `FUR_`, `ART_`, plus `C_` (comenzi).
+    Every tag `sinks/saga_xml.py` writes is on the page. Optional tags not in R1: `FacturaTip`
+    values (" " factură, "A" aviz, "B" bon de casă, "T" taxare inversă, "C" bon de casă cu cod
+    fiscal), `FacturaIndexDescarcareSPV` ("ID-ul recipisei e-Facturilor"), a partner `Cod`
+    ("codul de client sau furnizor din Saga"), `TipDeducere` on purchase lines ("N50" 50 %,
+    "I" nedeductibil). dd.MM.yyyy is stated for query parameters only, not for XML tags.
+- Claude in Chrome, quotes: extension "version 1.0.36 or later"; "A direct Anthropic plan (Pro,
+  Max, Team, or Enterprise)" and `/login` (off with an API key, `setup-token`, Bedrock or
+  Vertex); "isn't supported in Windows Subsystem for Linux (WSL)"; uploads "up to 10 MB"; it
+  "shares your browser's login state, so it can access any site you're already signed into";
+  "In auto mode, when the auto mode classifier itself approves a browser call to a site, the
+  extension skips its own per-site check for that call, unless your permission rules deny any
+  site to Claude in Chrome."
+- Firebird drivers: `fdb` is "LEGACY … Firebird version 2.5, with limited support for Firebird
+  3.0. It does NOT support Firebird 4 and newer"; `firebird-driver` "Requires: Firebird 3+".
+  Its `connect()` takes no client-library argument: the library is set with
+  `driver_config.fb_client_library.value` before connecting (read in the 2.0.3 wheel).
+- Code takes: nothing yet. Tags stay R1's until a copy-firm import proves more (AGENTS).
+  Claude Code or Claude in Chrome never touches a client's firm (00_LAW §3.5); mouths stay
+  deterministic (§1). SAGA C is tested first (`docs/COPY_FIRM_TEST.md` §1–§10); SAGA WEB as a
+  mouth would be a sink-product change (a dated amendment), only once a client is on it. Open
+  for Saga: does one key reach every firm of the account, does a new key end the old one, can
+  a key belong to a non-Admin user, does the web finish screen keep sync "Nr.+data".

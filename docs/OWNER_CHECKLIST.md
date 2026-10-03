@@ -21,6 +21,9 @@ Each item says where the answer goes. Send the answer and a session records it. 
       - §3: SAGA's own sample XML (`FMT-1` and its storno `FMT-1s`);
       - §4: what to send back;
       - §5 (optional): the TVA la încasare firm, for the 4428 bookings.
+      - §6: the `AGENT` user's rights; §7: the report pack exports; §8: backup and restore;
+      - §9–§10 (optional): a read-only copy of the database (WP-15), Import date without a person.
+      SAGA C first; SAGA WEB repeats it later (R5).
 - [ ] **Housekeeping, when convenient** (nothing depends on it):
       - Railway variable `OPENROUTER_BASE_URL` is read by no code (ARCHITECTURE §14): remove it.
       - The previous deployment's Railway project (`comfortable-nature`, 00_LAW §8 A1 §6) is not

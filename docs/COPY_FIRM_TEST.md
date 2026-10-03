@@ -60,9 +60,15 @@ Then **Stornare** on `FMT-1` (gives `FMT-1s`, negative), Validare, and print it 
 "Formular PDF" the same way. This second XML shows how SAGA writes a storno, which the
 storno mouths need before they are built.
 
+Then one more invoice by hand in Ieșiri, `FMT-2` of 30.09.2026, to a new **foreign** client
+`Client Extern BV`, country `NL`, VAT id typed as **`NL000099998B57`** (invented), one line
+100.00 with the VAT SAGA proposes for an EU service; Validare, print with "Formular PDF". Its XML
+shows how SAGA writes a foreign VAT id in `ClientCIF` and the country tag (OWNER_CHECKLIST,
+foreign VAT id on the mouth).
+
 ## 4. Send back
 
-1. The two XML files from `TEMP\Facturi` (`FMT-1` and `FMT-1s`); the PDFs are optional.
+1. The three XML files from `TEMP\Facturi` (`FMT-1`, `FMT-1s`, `FMT-2`); the PDFs are optional.
 2. For each of the four imports and the two guard tests: SAGA's message, and whether the
    result matches the table (screenshot of the document is enough).
 3. After steps 1–2 (invoices validated): the **notă contabilă** of each invoice (screenshot of
@@ -95,3 +101,86 @@ which columns carry the neexigible VAT (control `M1_8_4428_open`).
 
 Each green answer goes on the module row (`fixture`, `approved_at`) in
 `catalog/30_cale/ARTICOLE_WRITE_MODULE_v1.yaml`; a module becomes `active` only then.
+
+## 6. The agent's user (settles ARCHITECTURE §13)
+
+§4.5 asks which user ran the import. Here it is tested on purpose:
+
+1. Administrare → Configurare utilizatori: add a user `AGENT`, type **Operare**, with
+   validare, devalidare, modificare and ștergere **off**, access to `Firma Test SRL` only.
+2. Logged in as `AGENT`: Diverse → Import date on a copy of `iesire.xml` with its number changed
+   by hand to `FX-102` (so sync "Nr.+data" lets it in).
+3. Still as `AGENT`: try to validate it, and to devalidate `FX-101`. Both must be refused.
+4. As Admin: close September. As `AGENT`: import a file dated in September again.
+
+Send back: whether step 2 worked (if not, SAGA's message: the agent then needs another type
+of user, and ARCHITECTURE §13 changes), the messages of steps 3 and 4.
+
+## 7. Reading back: the report pack
+
+The eye reads SAGA's exports, so it needs SAGA's real files, not our renderer's.
+
+After §2 (FX-101 and A-77 validated, both bank lines in), for September, export **the way you
+export them for a client**, in Excel:
+
+- Registru jurnal (RJ);
+- Balanța de verificare;
+- Jurnal de cumpărări and Jurnal de vânzări.
+
+Send the four files. They are invented data, so they can become fixtures in this repo. The code
+then parses them with `sinks/exports.py` and `ReportPackEye` on a synthetic tenant: passes when
+every column is read without a guess and the snapshot shows FX-101 and A-77 validated.
+
+## 8. Backup and restore
+
+1. Before an import, Salvare → note the archive name.
+2. Import `incasare.xml` a second time **without** sync (a duplicate bank line appears).
+3. Administrare → Întreținere BD → restore that archive.
+
+Send back: the archive name and folder, and whether the duplicate is gone after the restore
+(the agent logs label → archive; restore stays a person's step).
+
+## 9. Optional — a read-only copy of the database (prepares WP-15)
+
+Only on `Firma Test SRL`, never on a client's folder.
+
+1. Close SAGA. Copy the firm's folder (e.g. `C:\SAGA C.3.0\0001`) to `D:\saga-sandbox\0001`.
+2. Make the copy read-only for the engine: `gfix -mode read_only D:\saga-sandbox\0001\CONT_BAZA.FDB`
+   (with the `gfix` of SAGA's Firebird). A write then fails in the engine, whatever runs the
+   query.
+3. Read it with `firebird-driver` (not `fdb`, which is for Firebird 2.5):
+
+   ```python
+   import os
+   from firebird.driver import connect, driver_config
+
+   driver_config.fb_client_library.value = r"C:\Program Files\Firebird\Firebird30_Saga\fbclient.dll"
+   con = connect(
+       r"D:\saga-sandbox\0001\CONT_BAZA.FDB",
+       user="SYSDBA",
+       password=os.environ["SAGA_FB_PASSWORD"],
+       charset="UTF8",
+   )
+   ```
+
+   The password stays in a local environment variable: never in a file, this repo or Railway
+   (00_LAW §3.2). The folder of the client library may be named differently on your machine.
+
+Send back: SAGA C's version (Help → Despre), the Firebird version, the list of tables, and the
+query that finds FX-101 and A-77 with number, date, total and validated flag. Claude Code may
+help map the tables here, because the data is invented. Passes when the query's totals and
+flags equal §7's exports.
+
+## 10. Optional — Import date without a person
+
+The agent must press Import date; SAGA's help documents only the screen. On the test firm only:
+can a script drive Diverse → Import date (folder, sync "Nr.+data", Import) at a fixed window
+size, twice in a row, with no manual rescue? If not, v1 stays: the agent prepares the folder and
+a person presses Import. Exploring the screen with a model (computer use, Windows-MCP) is
+allowed here only, never on a client's firm.
+
+## Then SAGA WEB
+
+The same fixtures and §2–§7 again through SAGA WEB's `Import` and its finish screen
+(`RESEARCH_LOG.md` R5). Passes when the result equals SAGA C's: same notes, partners,
+analytics, exports. Only once a client is on SAGA WEB.
