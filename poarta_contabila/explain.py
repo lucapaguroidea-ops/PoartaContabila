@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date
 from typing import Any
 
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -125,14 +126,19 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
     return {"explanation": text.strip(), "facts_cited": kept, "missing": missing}
 
 
-def request_body(role: Any, payload: dict[str, Any], provider: Any = None) -> dict[str, Any]:
+def request_body(
+    role: Any, payload: dict[str, Any], provider: Any = None, as_of: str | None = None
+) -> dict[str, Any]:
     from poarta_contabila.model_roles import brief
 
+    # WP-63: today's date goes with the question, not into the recorded input (its hash finds
+    # the explanation again on later days)
+    asked = {**payload, "as_of": as_of or date.today().isoformat()}
     body = {
         "model": role.model,
         "messages": [
             {"role": "system", "content": brief(role)},
-            {"role": "user", "content": json.dumps(payload, ensure_ascii=False, sort_keys=True)},
+            {"role": "user", "content": json.dumps(asked, ensure_ascii=False, sort_keys=True)},
         ],
         "provider": provider if provider is not None else role.provider.model_dump(),
         "response_format": {"type": "json_object"},

@@ -68,7 +68,11 @@ systems:
         - "If a fact needed to understand the question is missing, list it under `missing`; never guess it."
         - "No figures that are not in the input; no recomputed totals."
         - "No legal advice beyond what the input's own fields state."
-      language: "Romanian, plain and short; amounts and dates exactly as in the input."
+        - "Rules apply as of the input's `as_of` date. Your knowledge of Romanian rules may be out of date: where it differs from the input, the input is right. Never state a rule from memory."
+      # English (owner, 2026-10-03): fewer tokens and fewer slips than generated Romanian.
+      language: >-
+        English, plain and short. Romanian domain words stay Romanian (00_LAW: the terms below,
+        SAGA's names, field values); amounts and dates exactly as in the input.
       terms:
         - "document primar (the source document), not notă contabilă: SAGA posts the notă"
         - "articol de cale (the walk a document takes), poartă (the gate that must open)"

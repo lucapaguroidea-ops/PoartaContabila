@@ -359,3 +359,15 @@ def test_an_empty_fact_is_dropped_and_a_made_up_one_still_refused(empty):
         check_explanation(
             question, json.dumps({**GOOD, "facts_cited": [{"field": "nope", "value": []}]})
         )
+
+
+def test_the_card_is_english_dated_and_keeps_romanian_terms(cat):
+    from poarta_contabila.explain import request_body
+    from poarta_contabila.model_roles import brief
+
+    role = cat.model_roles["sys2_explain_close"]
+    text = brief(role)
+    assert "Language: English" in text and "Romanian domain words stay Romanian" in text
+    assert "registru jurnal" in text and "Never state a rule from memory" in text
+    body = request_body(role, {"kind": "v2_close", "question": {}}, as_of="2026-10-03")
+    assert json.loads(body["messages"][1]["content"])["as_of"] == "2026-10-03"

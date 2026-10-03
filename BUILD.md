@@ -74,6 +74,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-60 | done | WP-59 | A placeholder explanation is refused; reasoning settings sent to GLM only; a reasoning-only answer is named; compare defaults to one run |
 | WP-61 | done | WP-60 | `compare` one candidate on one question per request (`candidate`, `skip`): the edge closes at 300 s |
 | WP-62 | done | WP-61 | An answer wrapped once around the card's fields is unwrapped; a cited fact with an empty value is dropped, not refused |
+| WP-63 | done | WP-62 | System Two answers in English, Romanian domain words kept; each question carries `as_of`; the model's own memory of Romanian rules never wins over the input |
 
 ## WP details
 
@@ -971,6 +972,17 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - A cited fact whose value is empty (`[]`, `{}`, `""`, null) claims nothing: it is dropped. Its
   field must still be in the question; any other value must still be found there.
 - Kimi stays an approved alternate but is not used by choice until its call is reworked.
+
+### WP-63 English, dated
+- Owner, 2026-10-03: write and answer in English (fewer tokens; GLM's generated Romanian had
+  slips such as "bloqueazători"); frame it as Romanian accounting as of today.
+- Card `language`: English; Romanian domain words stay Romanian (00_LAW: the card's terms,
+  SAGA's names, field values).
+- Each question is sent with `as_of` (today, UTC date) next to its fields. It is not part of
+  the recorded input, so the explanation's input hash stays the same on later days.
+- New card limit: rules apply as of `as_of`; the model's knowledge of Romanian rules may be out
+  of date, the input wins, and no rule is stated from memory. A rule that matters reaches the
+  model as an input field from the catalog.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
