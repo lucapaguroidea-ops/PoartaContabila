@@ -208,15 +208,23 @@ Agent token ≠ operator token ≠ model keys. No `SAGA_SYSDBA` in Railway env.
 
 ## 11. Package
 
+As built (2026-10-03). Four compiled graphs, one module each; glue is the Postgres domain store.
+
 ```
 poarta_contabila/
-  types/
-  graphs/document.py period.py reconcile.py triage.py
-  jev/packs/v3_classify.json v3_judge.json v2_declaration_gate.json
-  sinks/saga_xml.py saga_eye.py
-  controls.py          # ArticoleControls
-  period_diff.py       # Layer 1 only
-  maps.py idempotency.py agent_api.py
+  triage.py ingest.py reconcile.py close.py   # the four graphs: folder_triage, ingest_source_doc,
+                                              #   reconcile_sink, monthly_close
+  runtime.py           # wiring: stores, bucket, checkpointer, graphs, model gateway, inbox
+  app.py operator_api.py agent_api.py review.py ui/   # HTTP; the review page (00_LAW §8 A8)
+  catalog.py flux.py hitl.py jsonlogic.py     # Catalog Cale loader, matches(), typed HITL
+  types/               # closed domain types; money and fiscal dates are strings
+  jobs.py packages.py registry.py storage.py answers.py rules.py codit.py filings.py
+  extract/             # XML first (ubl.py); statements (statement.py, document_ai.py, gemini.py)
+  recon/               # PRE / POST / settle (deterministic, no model)
+  period_diff.py       # Layer 1 + ArticoleControls; not a ledger
+  sinks/               # SAGA mouth (saga_xml.py), eye (saga_eye.py), witness exports, SPV register
+  jev.py model_roles.py explain.py provider_policy.py key_usage.py   # model roles (00_LAW §3.5)
+  reading_waits.py ocr_eval.py synthetic_docs.py smoke.py agent.py db/schema.sql
 ```
 
 No ReAct supervisor. No `Journal.post`.

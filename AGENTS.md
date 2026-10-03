@@ -18,7 +18,7 @@ write or extend a failing test named in the WP
 smallest change that passes
 run targeted tests, then the pack tests listed in the WP
 update catalog status only when the WP says the fixture is green
-mark the WP done in BUILD.md in the same change
+mark the WP done in BUILD.md in the same change; move its details to docs/BUILD_DONE.md
 ```
 
 ## Hard bans

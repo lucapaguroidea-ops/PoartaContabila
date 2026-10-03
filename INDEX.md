@@ -5,9 +5,9 @@ This directory is the source of truth. Do not open the Word drafts, the harvest 
 ```
 INDEX.md                 this file
 AGENTS.md                how a coding agent must work
-00_LAW.md                unit, lexicon, invariants, locked decisions
+00_LAW.md                unit, lexicon, invariants, locked decisions (§8 amendments)
 ARCHITECTURE.md          system to build (self-contained)
-BUILD.md                 work packages an agent may pick
+BUILD.md                 work packages: the status table, and the open WPs' details
 EXTRACT.md               extract adaptor contract
 IDEMPOTENCY.md           keys
 RESEARCH_LOG.md          external formats/APIs quoted from official pages (or why not)
@@ -19,8 +19,11 @@ catalog/                 Catalog Cale — executable law
   40_sink                Reconcile, Close
   50_control             HITL, Jev, model roles
   60_harvest             Controls, Filings, CO.DiT axes, extra HITL — added from practice
-fixtures/                json-logic + jev tests
-annex/                   superseded briefs and old contract — not SoT
+poarta_contabila/        the package (ARCHITECTURE §11); ui/ = the review page
+tests/                   pytest; DB tests need POARTA_TEST_DSN
+fixtures/                synthetic documents and exports, json-logic, jev tests (no client data)
+docs/                    owner guides (copy firm, EU route, checklist); BUILD_DONE.md = done WPs
+annex/, docs/harvest/    superseded briefs and harvest notes — history, not SoT
 ```
 
 **Unit you think in:** articol de cale.
