@@ -15,6 +15,7 @@ invoice XML is a ``ro_efactura_ubl`` part, never a PDF part.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Any, Literal, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -189,6 +190,45 @@ def child_pack(cat: Catalog, container: Pack, part: SplitPart) -> Pack:
         identity_ok=container.identity_ok,
         bon_our_cui_on_doc=part.bon_our_cui_on_doc,
     )
+
+
+# ----- which batches a firm has (WP-67): the review page lists their questions -----
+
+
+@dataclass
+class InMemoryBatchIndex:
+    rows: dict[str, tuple[str, str]] = field(default_factory=dict)  # batch_id → (cui, period)
+
+    def add(self, cui: str, batch_id: str, period: str) -> None:
+        self.rows.setdefault(batch_id, (cui, period))
+
+    def for_tenant(self, cui: str) -> list[str]:
+        return [b for b, (c, _) in reversed(self.rows.items()) if c == cui]
+
+
+class PostgresBatchIndex:
+    """``domain.triage_batches``: one row per folder_triage batch (insert once)."""
+
+    def __init__(self, dsn: str) -> None:
+        import psycopg
+
+        self._dsn, self._psycopg = dsn, psycopg
+
+    def add(self, cui: str, batch_id: str, period: str) -> None:
+        with self._psycopg.connect(self._dsn, autocommit=True) as conn:
+            conn.execute(
+                "INSERT INTO domain.triage_batches (batch_id, cui, period) VALUES (%s, %s, %s)"
+                " ON CONFLICT (batch_id) DO NOTHING",
+                (batch_id, cui, period),
+            )
+
+    def for_tenant(self, cui: str) -> list[str]:
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT batch_id FROM domain.triage_batches WHERE cui = %s ORDER BY at DESC",
+                (cui,),
+            ).fetchall()
+        return [r[0] for r in rows]
 
 
 class TriageState(TypedDict, total=False):

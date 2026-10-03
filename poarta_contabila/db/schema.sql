@@ -220,3 +220,12 @@ CREATE TABLE IF NOT EXISTS domain.model_role_choices (
     body     jsonb NOT NULL
 );
 CREATE INDEX IF NOT EXISTS model_role_choices_role ON domain.model_role_choices (role_id, seq);
+
+-- WP-67: the folder_triage batches of each firm, so the review page can list their questions
+CREATE TABLE IF NOT EXISTS domain.triage_batches (
+    batch_id  text PRIMARY KEY,
+    cui       text NOT NULL,
+    period    text NOT NULL,
+    at        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS triage_batches_cui ON domain.triage_batches (cui, at);

@@ -79,6 +79,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-64 | done | WP-63 | Smoke leaves a September invoice (`AB 0102`) at `v3_approve` and reports its System Two explanation |
 | WP-65 | done | WP-64 | A close or reconcile run stopped between nodes (process died) continues when started again |
 | WP-66 | done | WP-65 | Review page (00_LAW §8 A8): `GET /inbox/{cui}/{period}` and `/review`, a thin page that sends each answer unchanged to its resume route |
+| WP-67 | done | WP-66 | Expense-report splits (`decont_split`) on the review page: a batch index per firm; parts named by a hash the browser computes |
 
 ## WP details
 
@@ -1029,6 +1030,20 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   in again; four cards; an invoice whose supplier name is an `<img onerror>` payload shows as
   text and runs nothing; a bad answer is refused readably; approve and hold go through and the
   cards leave; no horizontal scroll at 390 px; sign out forgets the token.
+
+### WP-67 Expense-report splits on the review page
+- Owner, 2026-10-03: put `decont_split` on the review page.
+- `domain.triage_batches` (`InMemoryBatchIndex` / `PostgresBatchIndex`): every folder_triage
+  batch with its firm and month, written when a report is uploaded (again, for a report
+  uploaded before this WP). The inbox lists each batch's waiting question, whatever the month
+  shown; its answer goes to `POST /triage/{batch_id}/resume` (A8 §1).
+- The page's split form: one row per part; the person chooses the part's file, the browser
+  computes its SHA-256 (`crypto.subtle`) and reads the kind from the extension; the file is
+  never uploaded (the answer names parts by hash, as the API does). Then what the part is
+  (the question's `children`), whether our CUI is on a bon, and the counterparty CUI. Send stays
+  disabled until a part has a file; `check_split` still judges the answer.
+- Checked in Chromium: hashes equal the files' SHA-256; the only request is the JSON answer
+  (374 bytes); the card leaves once the split is accepted.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

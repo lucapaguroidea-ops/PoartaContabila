@@ -20,6 +20,7 @@
     explained_rule: "Explain with a rule",
     patch_maps: "Map a partner to an analytic",
     v4_codit: "Confirm CO.DiT",
+    decont_split: "Name the parts of an expense report (decont)",
     codit_combo: "Choose the CO.DiT axes",
   };
 
@@ -222,6 +223,9 @@
         totals.gross && `${totals.gross} ${doc.currency || ""}`.trim(), q.articol_id && `articol de cale ${q.articol_id}`,
       ].filter(Boolean).join(" · "));
     }
+    if (q.kind === "decont_split") {
+      return el("p", { class: "muted" }, `Expense report (decont de cheltuieli) · sha256 ${String(q.source_hash || "").slice(0, 12)}…`);
+    }
     if (q.period) return el("p", { class: "muted" }, `Firm ${q.cui || ""} · ${q.period}${q.material ? " · material" : ""}`);
     return el("p", { class: "muted" }, "");
   }
@@ -266,6 +270,79 @@
     return box;
   }
 
+  // ----- decont_split: the parts of an expense report (WP-67) -----
+
+  const PART_LABELS = {
+    bon_fiscal: "bon fiscal",
+    foreign_invoice: "foreign invoice",
+    ro_efactura_ubl: "e-Factura (the XML from SPV)",
+    ro_efactura_pdf: "e-Factura PDF (no XML)",
+    workings: "workings (evidence only)",
+  };
+  const KIND_BY_EXT = {
+    pdf: "pdf", xml: "xml", zip: "ubl_spv", jpg: "jpeg", jpeg: "jpeg", png: "png",
+    xls: "xls", xlsx: "xlsx", csv: "csv", eml: "eml", msg: "msg",
+  };
+
+  async function sha256(file) {
+    const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+    return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+
+  // Each part is named by its file's SHA-256, computed here: the file is read, never uploaded.
+  function splitEditor(question, onChange) {
+    const children = Array.isArray(question.children) ? question.children : [];
+    const rows = [];
+    const list = el("div", {});
+
+    function body() {
+      return {
+        parts: rows.filter((r) => r.hash).map((r) => ({
+          part_hash: r.hash,
+          source_doc_id: r.doc.value,
+          kinds: [r.kind],
+          bon_our_cui_on_doc: r.bon.value === "" ? null : r.bon.value === "yes",
+          counterparty_cui: r.cui.value.trim() || null,
+        })),
+      };
+    }
+    const changed = () => onChange(body());
+
+    function addRow() {
+      const row = { hash: "", kind: "unknown" };
+      const status = el("p", { class: "small muted" }, "Choose the part's file.");
+      const file = el("input", {
+        type: "file",
+        "aria-label": "Part file",
+        onchange: async () => {
+          const f = file.files && file.files[0];
+          row.hash = "";
+          if (!f) { status.textContent = "Choose the part's file."; changed(); return; }
+          status.textContent = "Reading…";
+          row.hash = await sha256(f);
+          row.kind = KIND_BY_EXT[(f.name.split(".").pop() || "").toLowerCase()] || "unknown";
+          status.textContent = `${f.name} · ${row.kind} · sha256 ${row.hash.slice(0, 12)}… (computed here; the file is not uploaded)`;
+          changed();
+        },
+      });
+      row.doc = el("select", { "aria-label": "What this part is", onchange: changed },
+        children.map((c) => el("option", { value: c }, PART_LABELS[c] || c)));
+      row.bon = el("select", { "aria-label": "Our CUI on the receipt", onchange: changed },
+        el("option", { value: "" }, "our CUI on the bon: not a bon"),
+        el("option", { value: "yes" }, "our CUI on the bon: yes"),
+        el("option", { value: "no" }, "our CUI on the bon: no"));
+      row.cui = el("input", { type: "text", inputmode: "numeric", placeholder: "counterparty CUI (optional)", "aria-label": "Counterparty CUI", oninput: changed });
+      const node = el("div", { class: "part" }, file, status, el("div", { class: "part-fields" }, row.doc, row.bon, row.cui),
+        el("button", { type: "button", onclick: () => { rows.splice(rows.indexOf(row), 1); node.remove(); changed(); } }, "Remove this part"));
+      rows.push(row);
+      list.append(node);
+    }
+
+    addRow();
+    return el("div", {}, el("p", { class: "small muted" }, "Name every part of the report. A part already in SPV is the XML (e-Factura), never its PDF."),
+      list, el("div", { class: "choices" }, el("button", { type: "button", onclick: addRow }, "Add a part")));
+  }
+
   // ----- the answer: the catalog's shape, sent unchanged -----
 
   function spec(value) {
@@ -295,7 +372,13 @@
     const json = el("details", {}, el("summary", {}, "Answer as JSON"), box);
     const choices = [];
 
-    for (const [field, value] of Object.entries(schema)) {
+    if (item.kind === "decont_split") {
+      choices.push(splitEditor(item.question, (body) => {
+        box.value = JSON.stringify(body, null, 2);
+        send.disabled = body.parts.length === 0;
+      }));
+    }
+    for (const [field, value] of Object.entries(item.kind === "decont_split" ? {} : schema)) {
       const s = spec(value);
       if (!s.isEnum) continue;
       const row = el("div", { class: "choices", role: "group", "aria-label": field });
@@ -347,6 +430,7 @@
     // nothing is sent until the person chooses or writes an answer
     send.disabled = true;
     box.addEventListener("input", () => { send.disabled = false; });
+    if (item.kind === "decont_split") box.value = JSON.stringify({ parts: [] }, null, 2);
     json.open = choices.length === 0;
     return el("div", {},
       el("h3", {}, "Your answer"),

@@ -98,3 +98,51 @@ def test_the_build_agent_sees_synthetic_firms_only(cat):
     body = {"cui": CUI, "name": "F", "saga_firm_folder": FOLDER, "data_class": "synthetic"}
     o.http.put(f"/tenants/{CUI}", json=body, headers=o.op)
     assert builder.get(f"/inbox/{CUI}/{PERIOD}").status_code == 200
+
+
+def test_an_expense_report_split_waits_in_the_inbox_until_answered(cat):
+    import base64
+
+    from tests.test_decont_http import WORKINGS_PART
+
+    o = Ops(_runtime(cat))
+    o.tenant()
+    o.upload_rj()
+    body = {
+        "filename": "decont.pdf",
+        "period": PERIOD,
+        "file_b64": base64.b64encode(b"%PDF-1.4 synthetic expense report").decode(),
+        "tenant_on_doc": True,
+    }
+    batch_id = o.http.post(f"/decont/{CUI}", json=body, headers=o.op).json()["batch_id"]
+    (item,) = _items(o)
+    assert item["kind"] == "decont_split" and item["actor"] == "accountant"
+    assert item["answer_path"] == f"/triage/{batch_id}/resume"
+    assert "parts" in item["answer_schema"] and "workings" in item["question"]["children"]
+    assert _items(o, "2026-08") == _items(o)  # a report's split waits whatever the month shown
+
+    resp = o.http.post(
+        item["answer_path"],
+        json={"parts": [WORKINGS_PART]},
+        headers={**o.op, "X-Operator-Name": "Ana"},
+    )
+    assert resp.status_code == 200 and resp.json()["question"] is None
+    assert _items(o) == []
+
+
+def test_postgres_batch_index():
+    import os
+
+    dsn = os.environ.get("POARTA_TEST_DSN")
+    if not dsn:
+        pytest.skip("set POARTA_TEST_DSN to a scratch Postgres")
+    from poarta_contabila.jobs import PostgresJobStore
+    from poarta_contabila.triage import PostgresBatchIndex
+
+    PostgresJobStore(dsn, reset=True)
+    index = PostgresBatchIndex(dsn)
+    assert index.for_tenant(CUI) == []
+    index.add(CUI, "decont-a", PERIOD)
+    index.add(CUI, "decont-a", "2026-08")  # once: the first month stays
+    index.add("20000005", "decont-b", PERIOD)
+    assert index.for_tenant(CUI) == ["decont-a"]

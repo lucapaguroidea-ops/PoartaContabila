@@ -92,7 +92,13 @@ from poarta_contabila.registry import (
     rj_eye,
     witnesses_provider,
 )
-from poarta_contabila.triage import Pack, build_triage_graph, decide_emit
+from poarta_contabila.triage import (
+    InMemoryBatchIndex,
+    Pack,
+    PostgresBatchIndex,
+    build_triage_graph,
+    decide_emit,
+)
 from poarta_contabila.types import CanonicalDocument, JobRecord, SourceRef, TenantRef
 
 SETTLE_MONTHS = 3
@@ -165,12 +171,15 @@ class Runtime:
     reading_choices: Any = None  # InMemoryReadingChoiceStore | Postgres… (WP-43)
     provider_policies: Any = None  # InMemoryPolicyStore | PostgresPolicyStore (WP-53)
     role_choices: Any = None  # InMemoryRoleChoiceStore | PostgresRoleChoiceStore (WP-53)
+    batches: Any = None  # InMemoryBatchIndex | PostgresBatchIndex (WP-67)
 
     def __post_init__(self) -> None:
         if self.model_calls is None:
             self.model_calls = InMemoryModelCallStore()
         if self.answers is None:
             self.answers = InMemoryAnswerLog()
+        if self.batches is None:
+            self.batches = InMemoryBatchIndex()
         if self.model_mode not in CALL_MODES:
             self.model_mode = "off"  # an unknown mode calls nothing
         self.router = Router(
@@ -484,8 +493,9 @@ class Runtime:
     )
 
     def inbox(self, cui: str, period: str) -> dict[str, Any]:
-        """Every question waiting on an accountant for *cui*: its open jobs (any month), and
-        the reconcile_sink and monthly_close runs of *period*. Each item names where its
+        """Every question waiting on an accountant for *cui*: its open jobs (any month), its
+        expense-report batches (WP-67), and the reconcile_sink and monthly_close runs of
+        *period*. Each item names where its
         answer goes and the answer's shape (ArticoleHITL); a question for the SAGA agent is
         left out. A job that needs a person but asks nothing is listed with its error."""
         if self.registry.tenant(cui) is None:
@@ -497,6 +507,10 @@ class Runtime:
                 if question is None and status != "needs_human":
                     continue
                 items.append(self._inbox_item(question, cui, f"/jobs/{job.job_id}/resume", job=job))
+        for batch_id in self.batches.for_tenant(cui):
+            question = self._waiting(self.triage, self._batch_cfg(batch_id))
+            if question is not None:
+                items.append(self._inbox_item(question, cui, f"/triage/{batch_id}/resume"))
         for graph, cfg, path in (
             (self.reconcile, self._recon_cfg(cui, period), f"/recon/{cui}/{period}/resume"),
             (self.close, self._close_cfg(cui, period), f"/close/{cui}/{period}/resume"),
@@ -1338,6 +1352,7 @@ class Runtime:
         source_hash = hashlib.sha256(data).hexdigest()
         batch_id = f"decont-{cui}-{source_hash[:32]}"
         cfg = self._batch_cfg(batch_id)
+        self.batches.add(cui, batch_id, period)  # a report uploaded again is listed too
         if self.triage.get_state(cfg).values:
             return {"created": False, **self.batch_view(batch_id)}
         self.blobs.put(
@@ -1529,6 +1544,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         answers=PostgresAnswerLog(dsn),
         provider_policies=PostgresPolicyStore(dsn),
         role_choices=PostgresRoleChoiceStore(dsn),
+        batches=PostgresBatchIndex(dsn),
     )
     # WP-36: Gemini reads synthetic tenants' statements directly (MODEL_CALLS=live + key)
     runtime.gemini_reader = gemini_reader_from_env(
