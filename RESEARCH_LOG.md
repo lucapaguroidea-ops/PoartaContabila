@@ -215,3 +215,42 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
   reads `GOOGLE_APPLICATION_CREDENTIALS` first.
 - Not read (owner's choice, recorded open in BUILD): which processor type returns
   `pages[].tables` for these statements; the processor's location (EU recommended).
+
+## R4 · OpenRouter: chat, provider data policies, key spend, the free tier — WP-50 – WP-63
+
+- Question: how System Two is sent through OpenRouter, how a provider's data policy is known
+  and enforced, how each key's spend is read, and what the pinned models do in practice.
+- Official URLs: https://openrouter.ai/docs/guides/routing/provider-selection,
+  https://openrouter.ai/docs/guides/features/sovereign-ai (read 2026-10-03). Most points below
+  are **observed** on 2026-10-03 from OpenRouter's own answers to this service (quoted), not
+  from documentation; each is marked so.
+- Chat: `POST https://openrouter.ai/api/v1/chat/completions` with `provider: {only: [...],
+  allow_fallbacks: false, data_collection: "deny"}`. A pin whose provider trains on prompts is
+  refused, observed: HTTP 404 "No endpoints found matching your data policy (Paid model
+  training)". The code reads 404 + "data policy" as `PolicyRefused` (A7).
+- Provider data policies, observed: `GET https://openrouter.ai/api/frontend/v1/all-providers`
+  carries `dataPolicy: {training, retainsPrompts}` per provider (a front-end endpoint, not in
+  the API reference). A provider passes when both are false; 52 of 92 passed on 2026-10-03.
+- Spend per key, observed: `GET /api/v1/key` with the key itself → `usage`, `usage_daily`,
+  `usage_weekly`, `usage_monthly`, `limit`, `limit_remaining`, `limit_reset`, `is_free_tier`,
+  `label` (`label` can show part of the key: never passed on). A management key reads
+  `GET /api/v1/credits` and `GET /api/v1/keys`.
+- The free tier, observed: while the account had never bought credits (`is_free_tier: true`),
+  each request was capped by what the free pool could pay, whatever the key's own limit:
+  HTTP 402 "This request requires more credits, or fewer max_tokens. You requested up to 6000
+  tokens, but can only afford 4137." Buying credits set `is_free_tier: false` on every key and
+  the cap went.
+- `z-ai/glm-5.3` on Z.AI, observed: reasoning cannot be turned off (HTTP 400 "Reasoning is
+  mandatory for this endpoint and cannot be disabled"), so the code sends `reasoning: {effort:
+  "low", exclude: true}` with `max_tokens` 6000. Its JSON answer sometimes comes wrapped as
+  `{"answer": {...}}` or `{"answer": "<the JSON as a string>"}`, and it may cite an empty list
+  as a fact; English answers had fewer slips than Romanian ones (WP-62, WP-63).
+- `moonshotai/kimi-k2.6` on Moonshot AI, observed (6 tries): with no `reasoning` field it wrote
+  only reasoning and an empty answer 5 times, ~139 s and ~$0.02 a call (WP-61).
+- Railway's edge closes a request at 300 s (observed HTTP 499 from the edge): a long model
+  comparison must be split into single calls (WP-61).
+- EU in-region routing (docs): `https://eu.openrouter.ai/api/v1` on the Business and Enterprise
+  plans only, "decrypted within the designated region and routed only to provider endpoints in
+  that region". Observed with `GET /api/v1/models?region=eu`: 70 models, `z-ai/glm-5.3` (on
+  Inceptron, Mistral) and `moonshotai/kimi-k2.6` (Inceptron) among them; Jev is not listed
+  (it is on the Decisions endpoint, R2). The EU decision itself is WP-D4.

@@ -180,31 +180,50 @@ Agent never devalidates. Agent never auto-restores. Archive metadata must includ
 
 ## 10. HTTP
 
+As built (2026-10-03). Operator routes take `GRAPHUSERTOKEN_OPERATOR`, or the build agent's
+`GRAPHUSERTOKEN_CLAUDE_SYSBUILDER` for synthetic tenants only (WP-38); every answer may carry
+`X-Operator-Name` (WP-33). Agent routes take `GRAPHUSERTOKEN_AGENT_SHARED`.
+
 ```
-PUT  /tenants/{cui}                 # name, firm folder, book of record, bank_accounts (IBAN → 5121.x)
+GET  /health  /ready                          # liveness; readiness and token strength (WP-34)
+GET  /review  /review/{file}                  # the review page, no token (00_LAW §8 A8)
+
+# tenants and witnesses
+PUT  /tenants/{cui}                           # name, firm folder, book of record, bank accounts, data_class
 POST /tenants/{cui}/exports/{rj|balanta|spv_register}
-POST /ingest
-POST /decont/{cui}                  # an expense report → folder_triage (WP-28); a person names the parts
-GET  /triage/{batch_id}             # …/resume answers decont_split
-GET  /answers                       # every submitted answer (WP-33); X-Operator-Name names its author
-POST /ocr-eval/{cui}                # the reading evaluation (WP-37): synthetic, live, scored
-GET  /inbox/{cui}/{period}           # what waits on an accountant (WP-66, 00_LAW §8 A8)
-GET  /review                        # the review page: a client of the resume routes (A8)
-GET  /jobs/{id}
-POST /jobs/{id}/resume
-POST /recon/{cui}/{period}          # one reconcile_sink pass (WP-23); GET shows; …/resume answers
-GET  /close/{cui}/{period}
-POST /close/{cui}/{period}/resume
-GET  /agent/pull
-POST /agent/imported
-POST /agent/snapshot
-POST /agent/ack-backup
-POST /maps
-POST /rules
-POST /filings/{id}/receipt
+PUT  /codit/{cui}/{period}   GET /codit/{cui}/{period}            # CO.DiT (WP-11)
+
+# documents in
+POST /ingest                                  # SPV zip / UBL XML → Job (XML first)
+POST /extras/{cui}                            # bank statement: PDF + header (+ tables)
+POST /decont/{cui}                            # expense report → folder_triage (WP-28)
+GET  /reading/{cui}/budget  /reading/{cui}/waiting                 # document reading (A5, A6)
+POST /reading/{cui}/choice  /reading/{cui}/retry  /reading/{cui}/waiting/{wait_id}/skip
+
+# questions and answers (the HITL surface; the review page is a client of it)
+GET  /inbox/{cui}/{period}                    # what waits on an accountant (WP-66, WP-67)
+GET  /jobs/{job_id}              POST /jobs/{job_id}/resume          # ingest_source_doc
+GET  /triage/{batch_id}          POST /triage/{batch_id}/resume      # folder_triage
+POST /recon/{cui}/{period}  GET …  POST /recon/{cui}/{period}/resume # reconcile_sink
+POST /close/{cui}/{period}  GET …  POST /close/{cui}/{period}/resume # monthly_close
+GET  /answers                                 # every answer, who gave it (WP-33)
+
+# the month
+GET  /periods/{cui}/{period}/diff             # Layer 1: PeriodDiff and controls
+POST /filings/{cui}/{period}  GET …  POST /filings/{cui}/{period}/{filing_id}/receipt
+POST /rules                      GET /rules/{cui}                    # explained rules
+
+# model roles
+GET  /model-roles  /model-calls  /model-keys  # pins, what was sent, spend per key (WP-56)
+POST /model-roles/{role_id}/choice            # operators only (A7)
+POST /model-roles/{role_id}/compare           # main pin vs approved alternates (WP-59)
+POST /ocr-eval/{cui}                          # the reading evaluation (WP-37)
+
+# the Windows agent
+GET  /agent/pull   POST /agent/imported  /agent/snapshot  /agent/ack-backup
 ```
 
-Agent token ≠ operator token ≠ model keys. No `SAGA_SYSDBA` in Railway env.
+Agent token ≠ operator token ≠ build agent's token ≠ model keys. No `SAGA_SYSDBA` in Railway env.
 
 ## 11. Package
 
@@ -282,25 +301,31 @@ matching document validated. A snapshot never moves a job out of `acked`.
 
 ## 14. Env
 
+As read by the code (2026-10-03).
+
 ```
 DATABASE_URL=          # one Postgres: schema `domain` + LangGraph checkpointer tables
-S3_ENDPOINT= S3_ACCESS_KEY= S3_SECRET_KEY= S3_BUCKET=
-JEV_BASE_URL= JEV_API_KEY=     # only if Jev is not on OpenRouter: direct route (RESEARCH_LOG R2)
-OPENROUTER_BASE_URL=           # https://openrouter.ai/api/v1
-OPENROUTER_SYS1_API_KEY=       # Jev (System One) roles: own key and credit limit (WP-55)
-OPENROUTER_SYS2_API_KEY=       # System Two roles (explanations, rule drafts)
-OPENROUTER_MANAGEMENT_KEY=     # optional: GET /model-keys also reads the account's credits and keys (WP-56)
-GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC=  # document reading: Gemini direct, synthetic tenants only (WP-36)
-MODEL_CALLS=off                # off | dry (record only) | live (synthetic: reading, Jev, explanations send)
-POLICY_REFRESH_SECONDS=86400   # OpenRouter provider data policies, re-read (WP-53; 0 = off)
-MAX_UPLOAD_MB=32               # request-body cap; over it → 413 (WP-34)
-DOCUMENT_AI_PROCESSOR=          # projects/{p}/locations/{eu}/processors/{id} (WP-21)
-DOCUMENT_AI_CREDENTIALS_JSON=   # service-account key; else Application Default Credentials
+S3_ENDPOINT= S3_REGION= S3_ACCESS_KEY= S3_SECRET_KEY= S3_BUCKET=
 GRAPHUSERTOKEN_AGENT_SHARED=       # the Windows agent (old name AGENT_SHARED_TOKEN)
 GRAPHUSERTOKEN_OPERATOR=           # people: tenants, uploads, ingest, answers (≠ agent token;
                                    #   old name OPERATOR_TOKEN)
 GRAPHUSERTOKEN_CLAUDE_SYSBUILDER=  # the build agent: operator routes, synthetic tenants only (WP-38)
-ANAF_SPV_CLIENT_ID= ANAF_SPV_CLIENT_SECRET=   # SPV register / e-Factura pull (WP-05)
+MODEL_CALLS=off                # off | dry (record only) | live (synthetic tenants only)
+OPENROUTER_SYS1_API_KEY=       # Jev (System One) roles: own key and credit limit (WP-55)
+OPENROUTER_SYS2_API_KEY=       # System Two roles (explanations, rule drafts)
+OPENROUTER_MANAGEMENT_KEY=     # optional: GET /model-keys also reads the account's credits and keys (WP-56)
+POLICY_REFRESH_SECONDS=86400   # OpenRouter provider data policies, re-read (WP-53; 0 = off)
+GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC=  # document reading: Gemini direct, synthetic tenants only (WP-36)
+READING_RETRY_SECONDS=60       # parked statements read again (A5; 0 = off)
+DOCUMENT_AI_PROCESSOR=          # projects/{p}/locations/{eu}/processors/{id} (WP-21)
+DOCUMENT_AI_CREDENTIALS_JSON=   # service-account key; else Application Default Credentials
+JEV_BASE_URL= JEV_API_KEY=      # only for a direct Jev route; on OpenRouter these stay unset
+MAX_UPLOAD_MB=32               # request-body cap; over it → 413 (WP-34)
+POARTA_CATALOG_DIR=            # optional: another catalog/ directory (tests)
 ```
+
+Not read by any code (planned, or left from earlier designs): `OPENROUTER_BASE_URL`,
+`ANAF_SPV_CLIENT_ID`, `ANAF_SPV_CLIENT_SECRET`. EU-route variables are named per role in the
+catalog's `eu_route` once WP-D4 is decided (`docs/EU_VERTEX_SETUP.md` §E).
 
 Absent: `SAGA_SYSDBA`, Firebird write password, `CIEL_SA`, `NEXTUP_*`.
