@@ -148,7 +148,7 @@ def _transport(cat, api, *, synthetic=True, key=KEY, mode="live"):
         calls=calls,
         synthetic=lambda cui: synthetic,
         http=httpx.Client(transport=httpx.MockTransport(api)),
-        key=lambda name: key if name == "OPENROUTER_JEV_API_KEY" else None,
+        key=lambda name: key if name == "OPENROUTER_SYS2_API_KEY" else None,
     )
     return send, calls
 
@@ -183,7 +183,7 @@ def test_a_synthetic_tenant_is_decided_through_openrouter(cat):
 def test_without_the_key_it_records_and_sends_nothing(cat):
     api = OpenRouter({"*": JUDGE_OK})
     send, calls = _transport(cat, api, key=None)
-    with pytest.raises(JevError, match="OPENROUTER_JEV_API_KEY is not set"):
+    with pytest.raises(JevError, match="OPENROUTER_SYS2_API_KEY is not set"):
         send("v3_judge", PAYLOAD, 20.0)
     assert api.requests == [] and [r.status for r in calls.rows] == ["recorded"]
 
@@ -234,7 +234,7 @@ def test_an_unreachable_openrouter_fails_closed(cat):
 
 
 def _ops(cat, api, monkeypatch):
-    monkeypatch.setenv("OPENROUTER_JEV_API_KEY", KEY)
+    monkeypatch.setenv("OPENROUTER_SYS2_API_KEY", KEY)
     rt = _runtime(cat, model_mode="live", jev_http=httpx.Client(transport=httpx.MockTransport(api)))
     o = Ops(rt)
     body = {"cui": CUI, "name": "F", "saga_firm_folder": FOLDER, "data_class": "synthetic"}

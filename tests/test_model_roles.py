@@ -7,12 +7,14 @@ import shutil
 from pathlib import Path
 
 import pytest
+import yaml
 
 from poarta_contabila.catalog import CatalogError, load_catalog
-from poarta_contabila.model_roles import RouteRefused, load_roles, route_check
+from poarta_contabila.model_roles import KEY_ENV, RouteRefused, load_roles, route_check
 from tests.test_runtime import CUI, FOLDER, NEW_INVOICE, Ops, _runtime
 
 CATALOG = Path(__file__).resolve().parents[1] / "catalog"
+ROLES_YAML = CATALOG / "50_control" / "ARTICOLE_MODEL_ROLES_v1.yaml"
 MODEL = "vendor/model-2026-09-15"  # placeholder id for tests; the owner picks real ones
 
 
@@ -208,14 +210,26 @@ def test_recon_review_goes_through_its_role_and_abstains(cat):
 
 
 def test_model_roles_view_never_shows_a_key(cat, monkeypatch):
-    monkeypatch.setenv("OPENROUTER_JEV_API_KEY", "sk-or-test-secret")
+    monkeypatch.setenv("OPENROUTER_SYS2_API_KEY", "sk-or-test-secret")
+    monkeypatch.delenv("GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC", raising=False)
     o = _ops(cat)
     resp = o.http.get("/model-roles", headers=o.op)
     assert "sk-or-test-secret" not in resp.text
     roles = {r["role_id"]: r for r in resp.json()}
-    assert roles["jev_v3_judge"]["key_set"] is True
-    assert roles["sys2_explain_approve"]["key_set"] is False
+    # WP-49: one OpenRouter key for Jev and System Two
+    for role_id in ("jev_v3_judge", "sys2_explain_approve"):
+        assert roles[role_id]["key_env"] == "OPENROUTER_SYS2_API_KEY"
+        assert roles[role_id]["key_set"] is True
+    assert roles["ocr_extract"]["key_set"] is False
     assert roles["jev_v3_judge"]["callable_in_dry_run"] is True
+
+
+def test_the_catalog_names_the_key_each_system_uses():
+    doc = yaml.safe_load(ROLES_YAML.read_text(encoding="utf-8"))
+    assert {name: s["key_env"] for name, s in doc["systems"].items()} == {
+        name: KEY_ENV[name] for name in doc["systems"]
+    }
+    assert sorted(doc["enums"]["key_env"]) == sorted(set(KEY_ENV.values()))
 
 
 # ----- role cards (WP-25) -----

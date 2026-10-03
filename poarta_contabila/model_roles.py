@@ -37,7 +37,7 @@ role records as in ``dry``."""
 CALL_MODES = ("off", "dry", "live")
 Route = Literal["openrouter", "google_ai_studio"]
 KEY_ENV = {
-    "system_one": "OPENROUTER_JEV_API_KEY",
+    "system_one": "OPENROUTER_SYS2_API_KEY",  # one OpenRouter key for both systems (WP-49)
     "system_two": "OPENROUTER_SYS2_API_KEY",
     "document_reading": "GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC",  # direct to AI Studio (WP-36)
 }
