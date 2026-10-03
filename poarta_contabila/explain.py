@@ -18,7 +18,7 @@ from typing import Any
 
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 TIMEOUT_S = 30.0
-MAX_TOKENS = 6000  # reasoning counts against it (WP-54)
+MAX_TOKENS = 4000  # reasoning counts against it; free-tier caps per-request budget (WP-54)
 EXCERPT = 160  # of an answer that is not JSON, kept in the call's reason (synthetic only)
 MAX_SENTENCES = 5
 FIELDS = ("explanation", "facts_cited", "missing")

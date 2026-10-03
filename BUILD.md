@@ -68,6 +68,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-54 | done | WP-52 | GLM 5.3 needs reasoning: low effort, left out of the answer, 6000 tokens |
 | WP-55 | done | WP-49 | Jev back on its own key: `OPENROUTER_SYS1_API_KEY` (System Two keeps `OPENROUTER_SYS2_API_KEY`) |
 | WP-56 | done | WP-55 | `GET /model-keys`: each OpenRouter key's spend and what is left, read from OpenRouter; the account's with a management key |
+| WP-57 | done | WP-54 | Free-tier token cap: `max_tokens` 6000 → 4000 so the request fits the per-call budget OpenRouter enforces on `is_free_tier` keys |
 
 ## WP details
 
@@ -912,6 +913,14 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - With `OPENROUTER_MANAGEMENT_KEY` set (optional): `GET /api/v1/credits` (credits bought and
   used) and `GET /api/v1/keys` (every key by name: spend, limit, left, disabled). Read only.
 - The smoke run prints one line per key (`openrouter key`), as OpenRouter gave the figures.
+
+### WP-57 Free-tier token cap
+- Owner, 2026-10-03: System Two calls fail HTTP 402 "can only afford 4137" despite the key
+  showing $0.98 left of $1.00. Root cause: `is_free_tier: true` makes OpenRouter cap the
+  per-request token budget to what the free credit pool can cover (~4137 tokens ≈ $0.018).
+  The key's own limit ($1.00) is irrelevant under the free-tier constraint.
+- Fix: `MAX_TOKENS` 6000 → 4000. A 5-sentence JSON explanation needs ~500 output tokens;
+  4000 leaves headroom for reasoning while staying under the free-tier cap.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
