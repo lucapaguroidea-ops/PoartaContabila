@@ -57,8 +57,8 @@ class OpenRouter:
         return httpx.Response(
             200,
             json={
-                "model": "deepseek/deepseek-v4.1-flash",
-                "provider": "DeepSeek",
+                "model": "z-ai/glm-5.3",
+                "provider": "Z.AI",
                 "choices": [{"message": {"role": "assistant", "content": content}}],
                 "usage": {"prompt_tokens": 900, "completion_tokens": 120, "cost": 0.0001},
             },
@@ -125,14 +125,14 @@ def test_the_approval_question_comes_with_its_explanation(cat, monkeypatch):
     explanation = out["explanation"]
     assert explanation["role_id"] == "sys2_explain_approve"
     assert explanation["explanation"] == GOOD["explanation"]
-    assert explanation["served_by"] == "deepseek/deepseek-v4.1-flash via DeepSeek"
+    assert explanation["served_by"] == "z-ai/glm-5.3 via Z.AI"
 
     (req,) = api.chat()
     body = json.loads(req.content)
     assert req.headers["Authorization"] == f"Bearer {KEY}"
-    assert body["model"] == "deepseek/deepseek-v4.1-flash"
+    assert body["model"] == "z-ai/glm-5.3"
     assert body["provider"] == {
-        "only": ["deepseek"],
+        "only": ["z-ai"],
         "allow_fallbacks": False,
         "data_collection": "deny",
     }
