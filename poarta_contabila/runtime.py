@@ -146,7 +146,7 @@ class Runtime:
     filings: Any = None  # InMemoryFilingStore | PostgresFilingStore
     jev: Any = None  # jev.Jev; None = not wired (fail closed)
     jev_cache: Any = None  # InMemoryJevCache | PostgresJevCache (answers paid for once)
-    jev_http: Any = None  # httpx.Client for the Jev sender (tests); None = a fresh one per call
+    jev_http: Any = None  # httpx.Client for OpenRouter: Jev and System Two (tests); None = per call
     statement_reader: Any = None  # (pdf, *, tenant_cui) -> Extraction; DocumentAiReader
     gemini_reader: Any = None  # GeminiStatementReader: synthetic tenants only (WP-36)
     extracts: Any = None  # InMemoryExtractStore | PostgresExtractStore
@@ -180,6 +180,7 @@ class Runtime:
             calls=self.model_calls,
             mode=self.model_mode,
             synthetic=self._synthetic,
+            http=self.jev_http,
         )
         self.deps = IngestDeps(
             catalog=self.catalog,
@@ -320,7 +321,11 @@ class Runtime:
         job = self.jobs.get(job_id)
         tasks = self.ingest.get_state(self._cfg(job_id)).tasks
         question = next((i.value for t in tasks for i in t.interrupts), None)
-        return {"job": job.model_dump(), "question": question}
+        return {
+            "job": job.model_dump(),
+            "question": question,
+            "explanation": self.gateway.explanation(question, job.tenant.cui),
+        }
 
     def resume(self, job_id: str, payload: Any, operator: str | None = None) -> dict[str, Any]:
         job = self.jobs.get(job_id)  # KeyError for an unknown job
@@ -482,6 +487,7 @@ class Runtime:
         question = next((i.value for t in state.tasks for i in t.interrupts), None)
         return {
             "question": question,
+            "explanation": self.gateway.explanation(question, cui),
             "settled": state.values.get("settled") or [],
             "waiting": [w.job.job_id for w in self.recon_waiting(cui, period)],
             "post_open": self.post_open(cui, period),
@@ -1013,7 +1019,11 @@ class Runtime:
         state = self.close.get_state(self._close_cfg(cui, period))
         question = next((i.value for t in state.tasks for i in t.interrupts), None)
         stored = self.closes.get(cui, period)
-        return {"run": stored.model_dump() if stored else None, "question": question}
+        return {
+            "run": stored.model_dump() if stored else None,
+            "question": question,
+            "explanation": self.gateway.explanation(question, cui),
+        }
 
     def start_close(self, cui: str, period: str, axes: dict[str, str]) -> dict[str, Any]:
         cfg = self._close_cfg(cui, period)

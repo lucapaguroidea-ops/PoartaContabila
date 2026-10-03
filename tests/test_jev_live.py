@@ -250,7 +250,7 @@ def test_the_judge_answers_live_on_the_real_flow(cat, monkeypatch):
     judge = out["question"]["judge"]
     assert judge["judge"] == "jev" and judge["risk"] == "low" and judge["accounts_ok"] is True
     assert out["question"]["kind"] == "v3_approve"  # first_n: a person still approves
-    assert len(api.requests) == 1
+    assert [r.url.path for r in api.requests].count("/api/alpha/decisions") == 1
     calls = o.http.get("/model-calls", params={"role": "jev_v3_judge"}, headers=o.op).json()
     assert [c["status"] for c in calls] == ["sent"]
 

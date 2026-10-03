@@ -32,8 +32,8 @@ System = Literal["system_one", "system_two", "document_reading"]
 CallMode = Literal["off", "dry", "live"]
 """``off``: nothing. ``dry``: every role records what it would be sent, nothing is sent.
 ``live``: a role with a built sender sends, synthetic tenants only: document reading
-(Google AI Studio, WP-36) and the wired Jev packs (OpenRouter Decisions, WP-20); every other
-role records as in ``dry``."""
+(Google AI Studio, WP-36), the wired Jev packs (OpenRouter Decisions, WP-20) and the wired
+System Two explanations (OpenRouter chat, WP-50); every other role records as in ``dry``."""
 CALL_MODES = ("off", "dry", "live")
 Route = Literal["openrouter", "google_ai_studio"]
 KEY_ENV = {
@@ -473,6 +473,15 @@ class InMemoryModelCallStore:
         rows = [c for c in self.rows if role_id in (None, c.role_id)]
         return list(reversed(rows))[:limit]
 
+    def sent(self, role_id: str, input_hash: str) -> ModelCall | None:
+        """The latest ``sent`` call of *role_id* for this input (WP-50)."""
+        rows = [
+            c
+            for c in self.rows
+            if c.role_id == role_id and c.input_hash == input_hash and c.status == "sent"
+        ]
+        return rows[-1] if rows else None
+
 
 class PostgresModelCallStore:
     """``domain.model_calls``: one row per recorded (or refused) call."""
@@ -508,6 +517,17 @@ class PostgresModelCallStore:
             ).fetchall()
         return [ModelCall.model_validate(r[0], strict=False) for r in rows]
 
+    def sent(self, role_id: str, input_hash: str) -> ModelCall | None:
+        """The latest ``sent`` call of *role_id* for this input (WP-50)."""
+        with self._psycopg.connect(self._dsn) as conn:
+            row = conn.execute(
+                "SELECT body FROM domain.model_calls WHERE role_id = %s"
+                " AND body->>'input_hash' = %s AND body->>'status' = 'sent'"
+                " ORDER BY at DESC LIMIT 1",
+                (role_id, input_hash),
+            ).fetchone()
+        return ModelCall.model_validate(row[0], strict=False) if row else None
+
 
 # ----- shadow roles: observed at their place in the flow (WP-26) -----
 
@@ -516,15 +536,18 @@ class PostgresModelCallStore:
 class ModelGateway:
     """Where a ``shadow`` role would be called, record what it would be sent (dry only).
 
-    Never blocks the flow: any failure here is logged and the node goes on. Nothing is sent;
-    the role's answer would decide nothing. A node that runs again on resume records the same
-    input once (``seen``).
+    Never blocks the flow: any failure here is logged and the node goes on. A shadow role's
+    answer would decide nothing. A node that runs again on resume records the same input once
+    (``seen``). A wired System Two role (WP-50) is sent in ``live`` (``explain.send``) and its
+    explanation shown next to the question (:meth:`explanation`); it never feeds a node.
     """
 
     roles: dict[str, ModelRole]
     calls: Any
     mode: str = "off"
     synthetic: Any = lambda cui: False  # Callable[[str | None], bool]
+    http: Any = None  # httpx.Client for the System Two sender (tests)
+    key: Any = None  # Callable[[str], str | None]; None = os.environ.get
 
     def observe(self, role_id: str, payload: dict[str, Any], tenant_cui: str | None) -> None:
         try:
@@ -538,13 +561,43 @@ class ModelGateway:
             if role.system == "system_two" and kind in role.hitl_kinds:
                 self.observe(role.role_id, {"kind": kind, "question": payload}, tenant_cui)
 
+    def explanation(self, question: Any, tenant_cui: str | None) -> dict[str, Any] | None:
+        """The sent explanation of the question a person sees now, if there is one."""
+        if not isinstance(question, dict) or not isinstance(question.get("kind"), str):
+            return None
+        kind = question["kind"]
+        payload = {k: v for k, v in question.items() if k not in ("kind", "error")}
+        try:
+            for role in self.roles.values():
+                if role.system != "system_two" or kind not in role.hitl_kinds:
+                    continue
+                probe = record(
+                    role,
+                    {"kind": kind, "question": payload},
+                    mode=self.mode,
+                    tenant_cui=tenant_cui,
+                    status="recorded",
+                    reason="",
+                )
+                call = self.calls.sent(role.role_id, probe.input_hash)
+                if call is not None and call.output is not None:
+                    keep = ("explanation", "facts_cited", "missing", "served_by")
+                    return {
+                        "role_id": role.role_id,
+                        **{k: call.output.get(k) for k in keep},
+                    }
+        except Exception:
+            log.exception("model gateway: no explanation for %s", kind)
+        return None
+
     def _observe(self, role_id: str, payload: dict[str, Any], tenant_cui: str | None) -> None:
         role = self.roles.get(role_id)
         if self.mode not in ("dry", "live") or role is None:
             return
         # shadow roles; and a wired document-reading role where its reader is not called
         reading = role.status == "wired" and role.system == "document_reading"
-        if role.status != "shadow" and not reading:
+        explains = role.status == "wired" and role.system == "system_two"
+        if role.status != "shadow" and not reading and not explains:
             return
         synthetic = self.synthetic(tenant_cui)
         try:
@@ -560,14 +613,57 @@ class ModelGateway:
                 eu=not synthetic,
             )
         else:
+            if explains and self.mode == "live":
+                self._explain(role, payload, tenant_cui)
+                return
             call = record(
                 role,
                 payload,
                 mode=self.mode,
                 tenant_cui=tenant_cui,
                 status="recorded",
-                reason="shadow: recorded, not sent; its answer would decide nothing",
+                reason=(
+                    "dry run: recorded, not sent"
+                    if explains
+                    else "shadow: recorded, not sent; its answer would decide nothing"
+                ),
                 eu=not synthetic,
             )
         if not self.calls.seen(role_id, call.input_hash):
             self.calls.add(call)
+
+    def _explain(self, role: ModelRole, payload: dict[str, Any], tenant_cui: str | None) -> None:
+        """Send a wired System Two role once per question (synthetic tenant, live)."""
+        import os
+
+        from poarta_contabila.explain import ExplainError, send
+
+        def add(status: Literal["recorded", "sent", "failed"], reason: str, output=None) -> None:
+            self.calls.add(
+                record(
+                    role,
+                    payload,
+                    mode=self.mode,
+                    tenant_cui=tenant_cui,
+                    status=status,
+                    reason=reason,
+                    output=output,
+                )
+            )
+
+        probe = record(
+            role, payload, mode=self.mode, tenant_cui=tenant_cui, status="sent", reason=""
+        )
+        if self.calls.sent(role.role_id, probe.input_hash) is not None:
+            return  # explained already: a resume does not pay twice
+        secret = (self.key or os.environ.get)(role.key_env)
+        if not secret:
+            if not self.calls.seen(role.role_id, probe.input_hash):
+                add("recorded", f"{role.key_env} is not set: recorded, not sent")
+            return
+        try:
+            out = send(role, payload, secret, http=self.http)
+        except ExplainError as exc:
+            add("failed", str(exc))
+            return
+        add("sent", f"explained by {out['served_by']} (OpenRouter)", out)

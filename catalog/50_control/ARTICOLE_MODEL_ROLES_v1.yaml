@@ -294,7 +294,7 @@ roles:
     pack: null
     hitl_kinds: [v3_approve]
     output: "plain-language explanation shown with the question"
-    status: shadow
+    status: wired   # WP-50: explains the question; no node reads it
     model: deepseek/deepseek-v4.1-flash   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [deepseek], allow_fallbacks: false, data_collection: deny}
     card:
@@ -336,7 +336,7 @@ roles:
     pack: null
     hitl_kinds: [recon_ambiguous, need_rj_export, recon_review_contest]
     output: "plain-language explanation shown with the question"
-    status: shadow
+    status: wired   # WP-50: explains the question; no node reads it
     model: deepseek/deepseek-v4.1-flash   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [deepseek], allow_fallbacks: false, data_collection: deny}
     card:
@@ -392,7 +392,7 @@ roles:
     pack: null
     hitl_kinds: [v2_close, control_disposition]
     output: "plain-language explanation shown with the question"
-    status: shadow
+    status: wired   # WP-50: explains the question; no node reads it
     model: deepseek/deepseek-v4.1-flash   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [deepseek], allow_fallbacks: false, data_collection: deny}
     card:
