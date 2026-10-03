@@ -61,6 +61,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-47 | done | WP-29, WP-46 | The smoke run closes a clean August (books hold exactly its documents); September reopens on a lock mismatch |
 | WP-48 | done | WP-43 | Reserve order from the 2026-10-03 evaluation: 3.5 Flash, 3 Flash (preview), 3.6 Flash last |
 | WP-49 | done | WP-20 | One OpenRouter key for Jev and System Two: `OPENROUTER_SYS2_API_KEY` |
+| WP-50 | done | WP-32, WP-49 | System Two sender: a person's question comes with a checked explanation (DeepSeek through OpenRouter) |
 
 ## WP details
 
@@ -829,6 +830,22 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - `model_roles.KEY_ENV` and the catalog's `systems.system_one.key_env` are
   `OPENROUTER_SYS2_API_KEY`; `OPENROUTER_JEV_API_KEY` is gone from the `key_env` enum. A test
   holds the catalog's names to `KEY_ENV`. Jev and System Two share that key's credit limit.
+
+### WP-50 System Two explains the question
+- Owner, 2026-10-03: build the System Two sender. `sys2_explain_approve`, `sys2_explain_recon`
+  and `sys2_explain_close` are `wired`; `sys2_draft_rule` stays `shadow` (recorded only).
+- `MODEL_CALLS=live`, a synthetic tenant (`route_check`; a client tenant is refused) and
+  `OPENROUTER_SYS2_API_KEY` set: `POST https://openrouter.ai/api/v1/chat/completions` with
+  the role's pinned model and provider (fallbacks off, data collection denied), the card's
+  brief as the system message and `{kind, question}` as JSON. Once per question: a node that
+  runs again on resume does not send again. Without the key it records; in `dry` it records.
+- `explain.check_explanation`: the answer is exactly `explanation` (at most five sentences),
+  `facts_cited` (each `{field, value}` found in the question: a made-up fact is refused) and
+  `missing`. Off the card, a non-200 or unreachable → recorded `failed`; the question is
+  shown without an explanation and nothing waits on it.
+- The job, reconcile and close views carry `explanation` (`role_id`, `explanation`,
+  `facts_cited`, `missing`, `served_by`) next to `question`. No node reads it; it cannot
+  approve, hold, file or post anything.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.

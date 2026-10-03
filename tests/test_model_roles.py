@@ -40,6 +40,9 @@ def test_every_model_call_site_has_one_role(cat):
         "jev_v2_gate",
         "jev_recon_review",
         "ocr_extract",  # WP-36: reads synthetic statements directly (Google AI Studio)
+        "sys2_explain_approve",  # WP-50: explanations shown next to the question
+        "sys2_explain_recon",
+        "sys2_explain_close",
     }
     assert {r.pack for r in roles.values() if r.status == "wired" and r.pack} == {
         "v3_judge",
@@ -407,6 +410,19 @@ def test_postgres_model_call_store(cat):
     (got,) = store.recent("jev_v3_judge")
     assert got.card_hash == judge.card_hash and got.questions == judge.questions()
     assert {c.role_id for c in store.recent()} == {"jev_v3_judge", "jev_v2_gate"}
+    # WP-50: the latest sent call for an input; a recorded one is not an explanation
+    assert store.sent("jev_v3_judge", got.input_hash) is None
+    sent = record(
+        judge,
+        {"tenant_cui": CUI},
+        mode="live",
+        tenant_cui=CUI,
+        status="sent",
+        reason="s",
+        output={"explanation": "e"},
+    )
+    store.add(sent)
+    assert store.sent("jev_v3_judge", got.input_hash).call_id == sent.call_id
 
 
 # ----- shadow roles at their place in the flow (WP-26) -----
@@ -424,8 +440,9 @@ def test_shadow_roles_record_at_triage_bind_and_the_approval_question(cat):
         seen
     )
     assert "jev_flux" not in seen  # one articol matched: Jev is skipped (JevAnnex)
-    for rid in ("jev_source_doc", "jev_our_role", "jev_v3_classify", "sys2_explain_approve"):
+    for rid in ("jev_source_doc", "jev_our_role", "jev_v3_classify"):
         assert seen[rid]["status"] == "recorded" and seen[rid]["reason"].startswith("shadow")
+    assert seen["sys2_explain_approve"]["reason"] == "dry run: recorded, not sent"  # WP-50
     assert seen["jev_our_role"]["input"]["supplier"]["cui"] == "20000005"
     explain = seen["sys2_explain_approve"]
     assert explain["input"]["kind"] == "v3_approve"
