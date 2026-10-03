@@ -1023,3 +1023,37 @@ The status table in `BUILD.md` stays the index of every WP. Text kept as written
   `parse_statement`, every export reader); a clean month's books hold exactly its documents
   and its M1 ties hold; the decont answer passes `check_split`.
 - Tests: `tests/test_synthetic.py`.
+
+### WP-71 Scenario runner
+- A scenario is YAML in `fixtures/scenarios/` (closed schema, named after its file): a firm
+  and month of `poarta_contabila/synthetic` with a seed and at most one named defect; how the
+  books stand when documents arrive (`books: agent | in_books | none`; `report_pack: true`
+  also uploads SAGA's purchase / sales journals); scripted answers per question kind; and
+  `expect:` — per document its source doc, job kind, articol de cale, questions in order,
+  final status, SAGA mouth, PRE and POST profiles and POST verdict; per month the close
+  kind, `material`, the blockers by head (a control id or the words before `:`), control
+  outcomes, filings due, receipts, the recon and close questions and the V2 action.
+- `python -m poarta_contabila.scenarios [--local | --base-url URL] [names] [--json | --actual]`
+  drives the operator API like the smoke run (a fresh in-memory runtime per scenario, dry):
+  tenant, CO.DiT, rules; the books as SAGA holds them before our packages; uploads (SPV zips,
+  statements, expense reports and their split, an XML part's zip after the split); a person's
+  answers (approve invoices; bind a bank line to the partner and invoice it settles); a
+  **simulated SAGA agent**, labelled in every report: pull, backup label, import, the books
+  uploaded again as after the import, a validated snapshot (net / VAT / partner CUI only with
+  the report pack, ARCHITECTURE §13); then reconcile_sink, monthly_close (hold, or file and
+  `v4_codit`), filings and receipts, the period's controls. Every expectation is compared;
+  any difference fails. `--actual` prints what happened in `expect:` shape, for review.
+- The job view (`GET /jobs/{id}`) now shows its PRE verdict and profile; POST settlements in
+  `GET /recon` carry their profile (additive).
+- The coverage map runs every scenario by default (`--no-run` to skip): a passing scenario's
+  expected path names its rows; what actually happened feeds data → catalog.
+- Found and fixed in its own commit: a packaged bank line never acked and POST never found
+  its posting — SAGA holds it under the bank's reference, in `Banca`
+  (`saga_xml.packaged_number`).
+- First scenarios: `platitor_clean` (filed, every control passing, all documents through the
+  agent), `platitor_posted_another_way` (VAT carried in the cost: POST accepts it, C0 does
+  not), `bonuri_decont` (the expense report; bon parts stall as `job_bon` — a WP-73 finding).
+- Found for WP-73 (not changed): with the report pack's journals uploaded the eye holds no
+  bank documents, so no statement line is found in the books; bon parts of an expense report
+  mint a job that never binds and that the close never counts.
+- Tests: `tests/test_scenarios.py` (every scenario passes locally; runner mechanics).

@@ -1,0 +1,22 @@
+name: platitor_posted_another_way
+note: >-
+  SAGA carried a purchase's VAT in the cost instead of 4426. The snapshot shows only the gross
+  (no report pack), so the job is acked; POST accepts it (401 is among the expected accounts
+  and its amount agrees); C0 sees 4426 short and the month stays material.
+firm: platitor
+period: "2026-05"
+seed: 1
+defect: posted_another_way
+expect:
+  documents:
+    p2:
+      articol: ro_efactura_inbound
+      status: acked
+      post: post_doc_how
+      post_verdict: how_ok
+  months:
+    "2026-05":
+      material: true
+      blockers: [C0_synthetic_parity]
+      controls: {C0_synthetic_parity: FAIL, C1_outbound_complete: PASS, C2_unexplained_empty: PASS}
+      v2: hold

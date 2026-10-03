@@ -142,6 +142,7 @@ def test_a_mismatch_is_asked_and_a_storno_request_stays_open_for_the_close(cat):
         "verdict": "storno_requested",
         "by": "person",
         "stage": "post",
+        "profile_id": "post_doc_how",
     }
     assert _recon(o)["question"] is None  # not asked again for the same posting
     assert o.rt.post_open(CUI, PERIOD) == [job_id]  # but open until SAGA's posting changes

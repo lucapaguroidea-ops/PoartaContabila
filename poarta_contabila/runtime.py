@@ -462,10 +462,12 @@ class Runtime:
 
     def view(self, job_id: str) -> dict[str, Any]:
         job = self.jobs.get(job_id)
-        tasks = self.ingest.get_state(self._cfg(job_id)).tasks
-        question = next((i.value for t in tasks for i in t.interrupts), None)
+        state = self.ingest.get_state(self._cfg(job_id))
+        question = next((i.value for t in state.tasks for i in t.interrupts), None)
+        pre = (state.values or {}).get("pre") or {}
         return {
             "job": job.model_dump(),
+            "pre": {k: pre.get(k) for k in ("verdict", "profile_id")} if pre else None,
             "question": question,
             "explanation": self.gateway.explanation(question, job.tenant.cui),
         }

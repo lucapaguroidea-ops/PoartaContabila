@@ -125,8 +125,8 @@ def test_data_to_catalog_findings(cat):
 
 
 def test_the_cli_prints_text_and_json(capsys):
-    assert main([]) == 0
+    assert main(["--no-run"]) == 0
     assert "articole de cale: 22 rows" in capsys.readouterr().out
-    assert main(["--json"]) == 0
+    assert main(["--json", "--no-run"]) == 0
     data = json.loads(capsys.readouterr().out)
     assert data["summary"]["articol"]["rows"] == 22 and data["problems"] == []

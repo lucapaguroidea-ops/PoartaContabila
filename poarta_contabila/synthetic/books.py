@@ -400,6 +400,15 @@ class Book:
         self.entries.append(entry)
         return self
 
+    def without(self, refs: set[str]) -> Book:
+        """The same book before the documents *refs* were posted (what SAGA held before
+        the agent imported their packages)."""
+        out = Book(self.firm)
+        out.entries = [e for e in self.entries if e.ref not in refs]
+        out.invoices = dict(self.invoices)
+        out.skew = dict(self.skew)
+        return out
+
     # ----- reading -----
 
     def periods(self) -> list[str]:

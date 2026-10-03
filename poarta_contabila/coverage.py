@@ -19,7 +19,9 @@ Two directions in one report:
 names no catalog row, or a row a passing scenario reaches although it is listed out of reach,
 is a problem (exit code 1), so the table cannot go stale silently.
 
-    uv run python -m poarta_contabila.coverage [--json]
+    uv run python -m poarta_contabila.coverage [--json] [--no-run]
+
+By default every scenario in ``fixtures/scenarios/`` is run locally first (WP-71).
 """
 
 from __future__ import annotations
@@ -492,8 +494,14 @@ def main(argv: list[str] | None = None) -> int:
         prog="poarta_contabila.coverage", description=__doc__.split("\n")[0]
     )
     ap.add_argument("--json", action="store_true", help="print the map as JSON")
+    ap.add_argument("--no-run", action="store_true", help="do not run the scenarios (tests only)")
     args = ap.parse_args(argv)
-    cmap = build_map(load_catalog())
+    outcomes = []
+    if not args.no_run:
+        from poarta_contabila.scenarios import run_all
+
+        outcomes = [r.outcome() for r in run_all()]
+    cmap = build_map(load_catalog(), outcomes)
     if args.json:
         print(json.dumps(cmap.as_dict(), indent=2, ensure_ascii=False))
     else:

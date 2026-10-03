@@ -1,0 +1,33 @@
+name: bonuri_decont
+note: >-
+  An expense report split into its parts (two bonuri, one with our CUI; an SPV invoice whose
+  zip is uploaded after the split; a workings sheet). Known gaps, kept as they are for WP-73:
+  a bon part mints job_bon, whose thread never starts (it stays ingested and the close never
+  counts it); the books carry the deductible bon's VAT on 4426, which C0 cannot explain.
+firm: bonuri
+period: "2026-05"
+seed: 1
+expect:
+  documents:
+    decont: {source_doc: decont_cheltuieli, asks: [decont_split]}
+    bon1: &bon {source_doc: bon_fiscal, job_kind: job_bon, asks: [], status: ingested}
+    bon2: *bon
+    dec_inv:
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks: [v3_approve, wait_validare]
+      status: acked
+      module: intrare_factura_xml
+      post_verdict: how_ok
+    calc: {source_doc: workings, asks: []}
+    p1: {articol: ro_efactura_inbound, status: acked}
+    s1: {articol: ro_efactura_outbound, status: acked}
+  months:
+    "2026-05":
+      close: close_standard
+      material: true
+      blockers: [C0_synthetic_parity]
+      controls: {C0_synthetic_parity: FAIL, C1_outbound_complete: PASS, C2_unexplained_empty: PASS}
+      filings: [d100_micro, d112_payroll, d300_platitor, d394_platitor, d406_saft]
+      v2: hold

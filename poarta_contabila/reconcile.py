@@ -130,7 +130,7 @@ class ReconState(TypedDict, total=False):
     job_id: str
     question: dict[str, Any]
     det: dict[str, Any]
-    settled: list[dict[str, str]]  # PRE entries; POST entries also carry "stage": "post"
+    settled: list[dict[str, str]]  # PRE entries; POST ones also carry "stage" and "profile_id"
     status: str
 
 
@@ -186,7 +186,13 @@ def build_reconcile_graph(deps: ReconDeps, *, checkpointer: Any):
             if res.verdict == "how_ok":
                 deps.post.settle(w, res)
                 settled.append(
-                    {"job_id": w.job.job_id, "verdict": "how_ok", "by": "det", "stage": "post"}
+                    {
+                        "job_id": w.job.job_id,
+                        "verdict": "how_ok",
+                        "by": "det",
+                        "stage": "post",
+                        "profile_id": res.profile_id,
+                    }
                 )
             elif res.verdict == "need_rj_export":
                 missing[w.job.job_id] = res.missing
@@ -323,7 +329,13 @@ def build_reconcile_graph(deps: ReconDeps, *, checkpointer: Any):
             post.settle(w, person)
             verdict = "storno_requested" if storno else "how_mismatch_acknowledged"
             settled.append(
-                {"job_id": w.job.job_id, "verdict": verdict, "by": "person", "stage": "post"}
+                {
+                    "job_id": w.job.job_id,
+                    "verdict": verdict,
+                    "by": "person",
+                    "stage": "post",
+                    "profile_id": res.profile_id,
+                }
             )
             return {"status": "settled", "settled": settled}
         w = by_id(state["cui"], state["period"]).get(state["job_id"])

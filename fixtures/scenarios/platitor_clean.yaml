@@ -1,0 +1,81 @@
+name: platitor_clean
+note: >-
+  A clean month of a TVA payer: SPV purchases and sales, a statement that pays one purchase,
+  collects one sale and carries a fee and salaries; everything through the simulated SAGA agent;
+  the month is filed.
+firm: platitor
+period: "2026-05"
+seed: 1
+answers:
+  v2_close: file
+  filing_receipts: [d300_platitor]
+expect:
+  documents:
+    p1: &purchase
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_inbound
+      asks: [v3_approve, wait_validare]
+      status: acked
+      module: intrare_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    p2: *purchase
+    p3: *purchase
+    s1: &sale
+      source_doc: ro_efactura_ubl
+      job_kind: job_ro_efactura
+      articol: ro_efactura_outbound
+      asks: [v3_approve, wait_validare]
+      status: acked
+      module: iesire_factura_xml
+      pre: pre_doc_nr_date
+      post: post_doc_how
+      post_verdict: how_ok
+    s2: *sale
+    pay:p1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: [v3_approve, wait_validare]
+      status: acked
+      module: plata_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    get:s1:
+      source_doc: extras_statement_pdf
+      job_kind: job_extras_line
+      articol: extras_statement
+      asks: [v3_approve, wait_validare]
+      status: acked
+      module: incasare_xml
+      pre: pre_extras_date_gross
+      post: post_doc_how
+      post_verdict: how_ok
+    fee: &in_books
+      source_doc: extras_statement_pdf
+      articol: extras_statement
+      asks: []
+      status: already_in_sink
+      pre: pre_extras_date_gross
+    salary: *in_books
+  months:
+    "2026-05":
+      close: close_standard
+      material: false
+      blockers: []
+      recon_asks: []
+      close_asks: [v2_close, v4_codit]
+      v2: file
+      controls:
+        C0_synthetic_parity: PASS
+        C1_outbound_complete: PASS
+        C2_unexplained_empty: PASS
+        M1_1_payables_tie: PASS
+        M1_2_receivables_tie: PASS
+        T_regime_4428: PASS
+        T_regime_442x: PASS
+      filings: [d100_profit, d112_payroll, d300_platitor, d394_platitor, d406_saft]
+      receipts: [d300_platitor]
