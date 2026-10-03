@@ -296,6 +296,7 @@ def role_transport(
     synthetic: Callable[[str | None], bool],
     http: Any = None,
     key: Callable[[str], str | None] = os.environ.get,
+    router: Any = None,
 ) -> Transport:
     """The transport behind the model-role catalog (``model_roles``).
 
@@ -305,6 +306,8 @@ def role_transport(
     ``live`` (WP-20): a wired role of a synthetic tenant is sent to OpenRouter's Decisions
     endpoint when its key is set, and recorded ``sent`` (or ``failed``); without the key it
     records as in ``dry``. *http*: an ``httpx.Client`` (tests); *key*: the env lookup.
+    *router* (``provider_policy.Router``, WP-53): the pin the data policy allows now; a
+    data-policy refusal reads the policies again and tries the new pin once.
     """
     from poarta_contabila.model_roles import RouteRefused, record, role_for_pack, route_check
 
@@ -351,22 +354,37 @@ def role_transport(
                 )
             )
             raise JevError(f"{role.role_id}: {reason}")
-        return _send(role, pack, payload, cui, secret, timeout_s)
+        p = router.pick(role) if router is not None else None
+        try:
+            return _send(role, pack, payload, cui, secret, timeout_s, p)
+        except _PolicyRefused as exc:
+            again = router.pick(role) if router is not None and router.refused(str(exc)) else p
+            if again is None or again == p:
+                raise JevError(str(exc)) from None
+            return _send(role, pack, payload, cui, secret, timeout_s, again)
 
-    def _send(role, pack, payload, cui, secret, timeout_s) -> dict[str, Any]:
+    def _send(role, pack, payload, cui, secret, timeout_s, p=None) -> dict[str, Any]:
         import httpx
+
+        note = f" [{p.reason}]" if p is not None and p.reason else ""
+        if p is not None:
+            role = role.model_copy(update={"model": p.model or role.model})
 
         def failed(reason: str) -> JevError:
             calls.add(
-                record(role, payload, mode=mode, tenant_cui=cui, status="failed", reason=reason)
+                record(
+                    role, payload, mode=mode, tenant_cui=cui, status="failed", reason=reason + note
+                )
             )
-            return JevError(f"{role.role_id}: {reason}")
+            return JevError(f"{role.role_id}: {reason}{note}")
 
+        if p is not None and p.model is None:
+            raise failed(p.reason)
         body = {
             "model": role.model,
             "state": payload,
             "questions": decision_questions(role),
-            "provider": role.provider.model_dump(),
+            "provider": p.provider if p is not None else role.provider.model_dump(),
         }
         client = http or httpx.Client(timeout=timeout_s)
         try:
@@ -388,9 +406,11 @@ def role_transport(
         if resp.status_code != 200:
             err = (data or {}).get("error") or {}
             msg = str(err.get("message") or "")[:200]
-            raise failed(
-                f"OpenRouter answered HTTP {resp.status_code} {err.get('code', '')}: {msg}"
-            )
+            reason = f"OpenRouter answered HTTP {resp.status_code} {err.get('code', '')}: {msg}"
+            exc = failed(reason)
+            if resp.status_code == 404 and "data policy" in msg.lower():
+                raise _PolicyRefused(str(exc))
+            raise exc
         try:
             mapped = map_answers(role, pack, (data or {}).get("answers"))
         except JevError as exc:
@@ -402,7 +422,8 @@ def role_transport(
                 mode=mode,
                 tenant_cui=cui,
                 status="sent",
-                reason=f"decided by {data.get('model')} via {data.get('provider')} (OpenRouter)",
+                reason=f"decided by {data.get('model')} via {data.get('provider')} (OpenRouter)"
+                + note,
                 output={
                     "answers": data.get("answers"),
                     "fields": mapped,
@@ -413,6 +434,10 @@ def role_transport(
         return mapped
 
     return call
+
+
+class _PolicyRefused(JevError):
+    """OpenRouter found no endpoint for the request's data policy (HTTP 404)."""
 
 
 def jev_from_env(cache: Any) -> Jev | None:

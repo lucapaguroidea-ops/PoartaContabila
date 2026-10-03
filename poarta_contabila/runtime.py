@@ -59,6 +59,14 @@ from poarta_contabila.jev import (
 from poarta_contabila.model_roles import CALL_MODES, InMemoryModelCallStore, ModelGateway, brief
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
+from poarta_contabila.provider_policy import (
+    InMemoryPolicyStore,
+    InMemoryRoleChoiceStore,
+    PostgresPolicyStore,
+    PostgresRoleChoiceStore,
+    RoleChoice,
+    Router,
+)
 from poarta_contabila.reading_waits import (
     InMemoryReadingChoiceStore,
     InMemoryReadingWaitStore,
@@ -155,6 +163,8 @@ class Runtime:
     answers: Any = None  # InMemoryAnswerLog | PostgresAnswerLog (WP-33)
     reading_waits: Any = None  # InMemoryReadingWaitStore | PostgresReadingWaitStore (WP-42)
     reading_choices: Any = None  # InMemoryReadingChoiceStore | Postgres… (WP-43)
+    provider_policies: Any = None  # InMemoryPolicyStore | PostgresPolicyStore (WP-53)
+    role_choices: Any = None  # InMemoryRoleChoiceStore | PostgresRoleChoiceStore (WP-53)
 
     def __post_init__(self) -> None:
         if self.model_calls is None:
@@ -163,6 +173,11 @@ class Runtime:
             self.answers = InMemoryAnswerLog()
         if self.model_mode not in CALL_MODES:
             self.model_mode = "off"  # an unknown mode calls nothing
+        self.router = Router(
+            policies=self.provider_policies or InMemoryPolicyStore(),
+            choices=self.role_choices or InMemoryRoleChoiceStore(),
+            http=self.jev_http,
+        )
         if self.jev is None and self.model_mode in ("dry", "live"):
             self.jev = Jev(
                 transport=role_transport(
@@ -171,6 +186,7 @@ class Runtime:
                     calls=self.model_calls,
                     synthetic=self._synthetic,
                     http=self.jev_http,
+                    router=self.router,
                 ),
                 cache=self.jev_cache if self.jev_cache is not None else InMemoryJevCache(),
                 pin=role_pin(self.catalog.model_roles),
@@ -181,6 +197,7 @@ class Runtime:
             mode=self.model_mode,
             synthetic=self._synthetic,
             http=self.jev_http,
+            router=self.router,
         )
         self.deps = IngestDeps(
             catalog=self.catalog,
@@ -301,9 +318,45 @@ class Runtime:
                     ),
                     "card_hash": role.card_hash,
                     "brief": brief(role),
+                    "pin": self._pin_view(role),
                 }
             )
         return out
+
+    def _pin_view(self, role: Any) -> dict[str, Any] | None:
+        """WP-53: the pin the data policy allows now, and why (OpenRouter roles)."""
+        if role.route != "openrouter" or role.model is None:
+            return None
+        p = self.router.pick(role)
+        choice = self.router.choices.latest(role.role_id)
+        return {
+            "on": p.on,
+            "model": p.model,
+            "provider": (p.provider or {}).get("only"),
+            "reason": p.reason,
+            "policies_checked_at": self.router.policies.checked_at(),
+            "choice": choice.model_dump() if choice else None,
+        }
+
+    def role_choose(
+        self, role_id: str, choice: str, until: str | None, operator: str | None
+    ) -> dict[str, Any]:
+        """WP-53 (00_LAW §8 A7): the operator's choice for a role no approved pin passes,
+        kept with who chose it (``domain.model_role_choices``; the latest holds)."""
+        role = self.catalog.model_roles.get(role_id)
+        if role is None or role.route != "openrouter":
+            raise IngestRefused(f"{role_id!r} is not an OpenRouter model role")
+        if choice == "allow_synthetic" and not until:
+            raise IngestRefused("allow_synthetic needs an until date (YYYY-MM-DD)")
+        row = RoleChoice(
+            role_id=role_id,
+            choice=choice,
+            until=until if choice == "allow_synthetic" else None,
+            operator=operator,
+            at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
+        self.router.choices.put(row)
+        return {"role_id": role_id, "choice": row.model_dump(), "pin": self._pin_view(role)}
 
     def _treasury_account(self, cui: str, iban: str) -> str | None:
         tenant = self.registry.tenant(cui)
@@ -1323,6 +1376,8 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         reading_waits=PostgresReadingWaitStore(dsn),
         reading_choices=PostgresReadingChoiceStore(dsn),
         answers=PostgresAnswerLog(dsn),
+        provider_policies=PostgresPolicyStore(dsn),
+        role_choices=PostgresRoleChoiceStore(dsn),
     )
     # WP-36: Gemini reads synthetic tenants' statements directly (MODEL_CALLS=live + key)
     runtime.gemini_reader = gemini_reader_from_env(

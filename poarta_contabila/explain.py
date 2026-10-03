@@ -18,7 +18,8 @@ from typing import Any
 
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 TIMEOUT_S = 30.0
-MAX_TOKENS = 800
+MAX_TOKENS = 2000
+EXCERPT = 160  # of an answer that is not JSON, kept in the call's reason (synthetic only)
 MAX_SENTENCES = 5
 FIELDS = ("explanation", "facts_cited", "missing")
 
@@ -28,6 +29,10 @@ _SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
 
 class ExplainError(Exception):
     """The model's answer cannot be shown: the reason is recorded on the call."""
+
+
+class PolicyRefused(ExplainError):
+    """OpenRouter found no endpoint for the request's data policy (HTTP 404; WP-53)."""
 
 
 def _keys(value: Any) -> set[str]:
@@ -58,10 +63,15 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
     A cited fact must come from the question: the last part of its ``field`` is a key there
     and its ``value`` is one of the question's values (a fact the model made up is refused).
     """
+    if not isinstance(content, str) or not content.strip():
+        raise ExplainError("the answer is empty")
+    text = _FENCE.sub("", content.strip())
+    start, end = text.find("{"), text.rfind("}")
     try:
-        out = json.loads(_FENCE.sub("", content.strip()))
-    except (json.JSONDecodeError, AttributeError):
-        raise ExplainError("the answer is not JSON") from None
+        out = json.loads(text[start : end + 1] if 0 <= start < end else text)
+    except json.JSONDecodeError:
+        excerpt = " ".join(content.split())[:EXCERPT]
+        raise ExplainError(f"the answer is not JSON: {excerpt!r}") from None
     if not isinstance(out, dict) or set(out) != set(FIELDS):
         got = sorted(out) if isinstance(out, dict) else type(out).__name__
         raise ExplainError(f"the answer must have exactly {list(FIELDS)}, not {got}")
@@ -89,7 +99,7 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
     return {"explanation": text.strip(), "facts_cited": facts, "missing": missing}
 
 
-def request_body(role: Any, payload: dict[str, Any]) -> dict[str, Any]:
+def request_body(role: Any, payload: dict[str, Any], provider: Any = None) -> dict[str, Any]:
     from poarta_contabila.model_roles import brief
 
     return {
@@ -98,14 +108,17 @@ def request_body(role: Any, payload: dict[str, Any]) -> dict[str, Any]:
             {"role": "system", "content": brief(role)},
             {"role": "user", "content": json.dumps(payload, ensure_ascii=False, sort_keys=True)},
         ],
-        "provider": role.provider.model_dump(),
+        "provider": provider if provider is not None else role.provider.model_dump(),
         "response_format": {"type": "json_object"},
         "temperature": 0,
         "max_tokens": MAX_TOKENS,
+        "reasoning": {"enabled": False},  # WP-52: GLM spent the budget thinking, no answer
     }
 
 
-def send(role: Any, payload: dict[str, Any], secret: str, http: Any = None) -> dict[str, Any]:
+def send(
+    role: Any, payload: dict[str, Any], secret: str, http: Any = None, provider: Any = None
+) -> dict[str, Any]:
     """POST the question; the checked output plus who answered and the usage.
 
     :class:`ExplainError` on a non-200, an unreachable endpoint or an answer off the card.
@@ -117,7 +130,7 @@ def send(role: Any, payload: dict[str, Any], secret: str, http: Any = None) -> d
         try:
             resp = client.post(
                 CHAT_URL,
-                json=request_body(role, payload),
+                json=request_body(role, payload, provider),
                 headers={"Authorization": f"Bearer {secret}"},
             )
         except httpx.HTTPError as exc:
@@ -127,10 +140,11 @@ def send(role: Any, payload: dict[str, Any], secret: str, http: Any = None) -> d
                 err = resp.json().get("error") or {}
             except ValueError:
                 err = {}
-            raise ExplainError(
-                f"OpenRouter answered HTTP {resp.status_code} {err.get('code', '')}: "
-                f"{str(err.get('message', ''))[:200]}".replace("  ", " ")
-            )
+            msg = str(err.get("message", ""))[:200]
+            reason = f"OpenRouter answered HTTP {resp.status_code} {err.get('code', '')}: {msg}"
+            if resp.status_code == 404 and "data policy" in msg.lower():
+                raise PolicyRefused(reason.replace("  ", " "))
+            raise ExplainError(reason.replace("  ", " "))
         try:
             data = resp.json()
             content = data["choices"][0]["message"]["content"]

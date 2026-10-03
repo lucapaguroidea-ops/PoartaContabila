@@ -54,7 +54,7 @@ systems:
         noul asks a person from `human`. Below them the field takes its cautious value.
 
   system_two:
-    families: [deepseek, glm]
+    families: [deepseek, glm, kimi]   # kimi: an alternate only (A7)
     key_env: OPENROUTER_SYS2_API_KEY
     does: "explain a question to a person; draft text a person approves"
     cannot: [post, decide_gate, answer_hitl, write_saga, run_on_edge]
@@ -297,6 +297,9 @@ roles:
     status: wired   # WP-50: explains the question; no node reads it
     model: z-ai/glm-5.3   # owner, 2026-10-03 (WP-51: DeepSeek trains on prompts)
     provider: {only: [z-ai], allow_fallbacks: false, data_collection: deny}
+    alternates:   # owner, 2026-10-03 (00_LAW §8 A7; WP-53): only while z-ai fails the data policy
+      - {model: z-ai/glm-5.3, provider: {only: [together], allow_fallbacks: false, data_collection: deny}}
+      - {model: moonshotai/kimi-k2.6, provider: {only: [moonshotai], allow_fallbacks: false, data_collection: deny}}
     card:
       task: >-
         Explain the v3_approve question: what the document is, which articol de cale it is
@@ -339,6 +342,9 @@ roles:
     status: wired   # WP-50: explains the question; no node reads it
     model: z-ai/glm-5.3   # owner, 2026-10-03 (WP-51: DeepSeek trains on prompts)
     provider: {only: [z-ai], allow_fallbacks: false, data_collection: deny}
+    alternates:   # owner, 2026-10-03 (00_LAW §8 A7; WP-53): only while z-ai fails the data policy
+      - {model: z-ai/glm-5.3, provider: {only: [together], allow_fallbacks: false, data_collection: deny}}
+      - {model: moonshotai/kimi-k2.6, provider: {only: [moonshotai], allow_fallbacks: false, data_collection: deny}}
     card:
       task: >-
         Explain this reconcile question: which document, which months of the books are
@@ -395,6 +401,9 @@ roles:
     status: wired   # WP-50: explains the question; no node reads it
     model: z-ai/glm-5.3   # owner, 2026-10-03 (WP-51: DeepSeek trains on prompts)
     provider: {only: [z-ai], allow_fallbacks: false, data_collection: deny}
+    alternates:   # owner, 2026-10-03 (00_LAW §8 A7; WP-53): only while z-ai fails the data policy
+      - {model: z-ai/glm-5.3, provider: {only: [together], allow_fallbacks: false, data_collection: deny}}
+      - {model: moonshotai/kimi-k2.6, provider: {only: [moonshotai], allow_fallbacks: false, data_collection: deny}}
     card:
       task: >-
         Explain the month-close question: which controls failed and why, which documents are
@@ -411,6 +420,9 @@ roles:
     status: shadow
     model: z-ai/glm-5.3   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [z-ai], allow_fallbacks: false, data_collection: deny}
+    alternates:   # owner, 2026-10-03 (00_LAW §8 A7; WP-53): only while z-ai fails the data policy
+      - {model: z-ai/glm-5.3, provider: {only: [together], allow_fallbacks: false, data_collection: deny}}
+      - {model: moonshotai/kimi-k2.6, provider: {only: [moonshotai], allow_fallbacks: false, data_collection: deny}}
     card:
       task: >-
         For the book documents the month-close found with no source here (`documents`), draft

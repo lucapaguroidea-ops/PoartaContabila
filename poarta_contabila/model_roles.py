@@ -46,8 +46,15 @@ KEY_ENV = {
 _AI_STUDIO_MODEL = re.compile(r"^gemini-[a-z0-9][a-z0-9.\-]*$")
 FAMILIES = {
     "system_one": {"jev"},
-    "system_two": {"deepseek", "glm"},
+    "system_two": {"deepseek", "glm", "kimi"},  # kimi: an alternate only (00_LAW §8 A7)
     "document_reading": {"gemini"},
+}
+# an alternate's family, by its OpenRouter model prefix (A7)
+ALTERNATE_FAMILIES = {
+    "typesafe": "jev",
+    "deepseek": "deepseek",
+    "z-ai": "glm",
+    "moonshotai": "kimi",
 }
 log = logging.getLogger(__name__)
 _ALIAS = re.compile(r"(^openrouter/auto$|latest|:free$|^auto$)", re.IGNORECASE)
@@ -124,6 +131,21 @@ class ProviderPin(Closed):
     data_collection: Literal["deny"] = "deny"
 
 
+class Alternate(Closed):
+    """00_LAW §8 A7: an owner-approved pin a role moves to while its main pin's provider fails
+    the data policy (``provider_policy.pick``). Exact model, named providers, deny."""
+
+    model: str
+    provider: ProviderPin
+
+    @field_validator("model")
+    @classmethod
+    def _exact(cls, value: str) -> str:
+        if not value.strip() or _ALIAS.search(value):
+            raise ValueError(f"{value!r} is not an exact model id (no alias, auto or :free)")
+        return value
+
+
 class RateLimit(Closed):
     """A model's quota on its route, per minute (Google counts per project, not per key)."""
 
@@ -171,6 +193,9 @@ class ModelRole(Closed):
     """Per model id: the free-tier quota the sender keeps under (A3, A4)."""
     route: Route = "openrouter"
     provider: ProviderPin = Field(default_factory=ProviderPin)
+    alternates: list[Alternate] = Field(default_factory=list)
+    """00_LAW §8 A7: approved pins, in order, used only while the main pin fails the data
+    policy (OpenRouter roles; WP-53)."""
     data: Literal["synthetic_only"] = "synthetic_only"
     eu_route: EuRoute | None = None
     note: str | None = None
@@ -369,6 +394,23 @@ def load_roles(doc: dict[str, Any]) -> dict[str, ModelRole]:
                     )
             if role.model != role.tiers.everyday[0]:
                 raise ValueError(f"role {role.role_id!r}: model is the first everyday model")
+        if role.alternates:
+            if role.route != "openrouter" or role.model is None:
+                raise ValueError(f"role {role.role_id!r}: alternates are for OpenRouter roles")
+            pins = [(role.model, tuple(role.provider.only))] + [
+                (a.model, tuple(a.provider.only)) for a in role.alternates
+            ]
+            if len(set(pins)) != len(pins):
+                raise ValueError(f"role {role.role_id!r}: a pin is listed twice")
+            if not all(a.provider.only for a in role.alternates):
+                raise ValueError(f"role {role.role_id!r}: an alternate names its provider")
+            for a in role.alternates:
+                fam = a.model.split("/")[0]
+                if ALTERNATE_FAMILIES.get(fam) not in FAMILIES[role.system]:
+                    raise ValueError(
+                        f"role {role.role_id!r}: alternate {a.model!r}"
+                        f" is not a {role.system} family"
+                    )
         if role.rate_limits and role.route != "google_ai_studio":
             raise ValueError(f"role {role.role_id!r}: rate limits are Google AI Studio's")
         if role.route == "google_ai_studio" and role.model is not None:
@@ -548,6 +590,7 @@ class ModelGateway:
     synthetic: Any = lambda cui: False  # Callable[[str | None], bool]
     http: Any = None  # httpx.Client for the System Two sender (tests)
     key: Any = None  # Callable[[str], str | None]; None = os.environ.get
+    router: Any = None  # provider_policy.Router: the pin the data policy allows (WP-53)
 
     def observe(self, role_id: str, payload: dict[str, Any], tenant_cui: str | None) -> None:
         try:
@@ -636,12 +679,12 @@ class ModelGateway:
         """Send a wired System Two role once per question (synthetic tenant, live)."""
         import os
 
-        from poarta_contabila.explain import ExplainError, send
+        from poarta_contabila.explain import ExplainError, PolicyRefused, send
 
         def add(status: Literal["recorded", "sent", "failed"], reason: str, output=None) -> None:
             self.calls.add(
                 record(
-                    role,
+                    used,
                     payload,
                     mode=self.mode,
                     tenant_cui=tenant_cui,
@@ -656,14 +699,34 @@ class ModelGateway:
         )
         if self.calls.sent(role.role_id, probe.input_hash) is not None:
             return  # explained already: a resume does not pay twice
+        used = role
         secret = (self.key or os.environ.get)(role.key_env)
         if not secret:
             if not self.calls.seen(role.role_id, probe.input_hash):
                 add("recorded", f"{role.key_env} is not set: recorded, not sent")
             return
-        try:
-            out = send(role, payload, secret, http=self.http)
-        except ExplainError as exc:
-            add("failed", str(exc))
+        p = self.router.pick(role) if self.router is not None else None
+        for attempt in (1, 2):
+            if p is not None and p.model is None:
+                add("failed", p.reason)
+                return
+            used = role.model_copy(update={"model": p.model}) if p is not None else role
+            note = f" [{p.reason}]" if p is not None and p.reason else ""
+            try:
+                out = send(used, payload, secret, http=self.http, provider=p and p.provider)
+            except PolicyRefused as exc:
+                add("failed", str(exc) + note)
+                again = (
+                    self.router.pick(role)
+                    if attempt == 1 and self.router is not None and self.router.refused(str(exc))
+                    else p
+                )
+                if again == p:
+                    return
+                p = again
+                continue
+            except ExplainError as exc:
+                add("failed", str(exc) + note)
+                return
+            add("sent", f"explained by {out['served_by']} (OpenRouter){note}", out)
             return
-        add("sent", f"explained by {out['served_by']} (OpenRouter)", out)

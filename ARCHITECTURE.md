@@ -280,6 +280,7 @@ OPENROUTER_BASE_URL=           # https://openrouter.ai/api/v1
 OPENROUTER_SYS2_API_KEY=       # the one OpenRouter key: Jev and System Two roles (WP-49)
 GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC=  # document reading: Gemini direct, synthetic tenants only (WP-36)
 MODEL_CALLS=off                # off | dry (record only) | live (synthetic: reading, Jev, explanations send)
+POLICY_REFRESH_SECONDS=86400   # OpenRouter provider data policies, re-read (WP-53; 0 = off)
 MAX_UPLOAD_MB=32               # request-body cap; over it → 413 (WP-34)
 DOCUMENT_AI_PROCESSOR=          # projects/{p}/locations/{eu}/processors/{id} (WP-21)
 DOCUMENT_AI_CREDENTIALS_JSON=   # service-account key; else Application Default Credentials

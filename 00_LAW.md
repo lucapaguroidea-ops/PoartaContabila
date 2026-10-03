@@ -207,3 +207,14 @@ Decided by the owner on 2026-10-02, so that reading never stalls until a procedu
 4. **Bounds.** No model outside the catalog is chosen at run time; no paid key; every reserve read is checked like any other (holder CUI, IBAN, tie-out) and a wrong read is refused. Synthetic tenants only; client-data rules untouched.
 
 Not an amendment of: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` is unchanged.
+
+### A7 · 2026-10-03 — approved alternates when a provider's data policy fails
+
+Decided by the owner on 2026-10-03, so that a provider changing its data policy never halts the work and nothing outside the catalog is ever used.
+
+1. **The rule stays.** Every OpenRouter call sends `data_collection: deny` and `allow_fallbacks: false`. A provider *passes* when OpenRouter lists it as neither training on prompts nor retaining them; the list is read daily and right after a call is refused for its data policy (`domain.provider_policies`).
+2. **Approved alternates.** An OpenRouter role may list `alternates`: exact model ids, each with its named providers and the same `deny` pin, written by the owner. A role moves to the first alternate that passes, by itself, only while its main pin fails, and back when the main pin passes. An alternate may name a provider other than the model's maker, and a System Two alternate may be of the `kimi` family. Each call records the pin it went by and why.
+3. **No pin passes.** The role fails closed as before (Jev: cautious values and a person; System Two: the question without an explanation) and `/model-roles` says so. `POST /model-roles/{role_id}/choice {choice: wait | pause | allow_synthetic, until}` is recorded with who chose it: `pause` records only; `allow_synthetic` sends the main pin with `data_collection: allow` for synthetic tenants until the date, then expires by itself.
+4. **Bounds.** No model outside the catalog at run time; `deny` is never relaxed without that recorded, dated choice; client data never reaches an OpenRouter sender (synthetic only until the EU route). Jev has no alternate (only TypeSafe serves it). Document reading keeps its tiers (A4–A6).
+
+Not an amendment of: sink product, FDB write policy, graph topology, interrupt kinds, watched accounts. `schema_version` is unchanged.
