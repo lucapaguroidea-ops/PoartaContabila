@@ -27,9 +27,14 @@ RETRY_ASK = (
     "the Output rule: a non-empty explanation, and only single values from the input as facts."
 )
 FIELDS = ("explanation", "facts_cited", "missing")
+MIN_WORDS = 4  # an explanation of fewer words ("...", "N/A") explains nothing (WP-60)
+# WP-54: GLM refuses reasoning off; think little and keep it out of the answer. Other families
+# get no reasoning field: Kimi answered empty with it (WP-60).
+REASONING = {"z-ai/": {"effort": "low", "exclude": True}}
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$")
 _SENTENCE_END = re.compile(r"[.!?](?:\s|$)")
+_WORD = re.compile(r"[^\W\d_]{2,}")
 
 
 class ExplainError(Exception):
@@ -83,6 +88,8 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
     text = out["explanation"]
     if not isinstance(text, str) or not text.strip():
         raise ExplainError("explanation is empty")
+    if len(_WORD.findall(text)) < MIN_WORDS:
+        raise ExplainError(f"explanation is a placeholder, not words: {text.strip()[:40]!r}")
     if len(_SENTENCE_END.findall(text.strip())) > MAX_SENTENCES:
         raise ExplainError(f"explanation is longer than {MAX_SENTENCES} sentences")
     missing = out["missing"]
@@ -107,7 +114,7 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
 def request_body(role: Any, payload: dict[str, Any], provider: Any = None) -> dict[str, Any]:
     from poarta_contabila.model_roles import brief
 
-    return {
+    body = {
         "model": role.model,
         "messages": [
             {"role": "system", "content": brief(role)},
@@ -117,9 +124,11 @@ def request_body(role: Any, payload: dict[str, Any], provider: Any = None) -> di
         "response_format": {"type": "json_object"},
         "temperature": 0,
         "max_tokens": MAX_TOKENS,
-        # WP-54: GLM 5.3 refuses reasoning off (HTTP 400); think little, keep it out of the answer
-        "reasoning": {"effort": "low", "exclude": True},
     }
+    for prefix, reasoning in REASONING.items():
+        if role.model.startswith(prefix):
+            body["reasoning"] = reasoning
+    return body
 
 
 def _sum(rows: list[dict[str, Any]], name: str) -> Any:
@@ -147,9 +156,13 @@ def _post(client: Any, body: dict[str, Any], secret: str) -> tuple[dict[str, Any
         raise ExplainError(reason.replace("  ", " "))
     try:
         data = resp.json()
-        return data, data["choices"][0]["message"]["content"]
+        message = data["choices"][0]["message"]
     except (ValueError, KeyError, IndexError, TypeError):
         raise ExplainError("OpenRouter answered without a message") from None
+    content = message.get("content")
+    if not (content or "").strip() and (message.get("reasoning") or "").strip():
+        raise ExplainError("the answer is empty: the model wrote only reasoning")
+    return data, content
 
 
 def send(

@@ -297,3 +297,30 @@ def test_compare_needs_a_system_two_role(cat, monkeypatch):
     o = _ops(cat, OpenRouter(), monkeypatch)
     resp = o.http.post("/model-roles/jev_v3_judge/compare", headers=o.op)
     assert resp.status_code == 422
+
+
+@pytest.mark.parametrize("text", ["...", "N/A", "Vezi mai sus."])
+def test_a_placeholder_explanation_is_refused(text):
+    with pytest.raises(ExplainError, match="placeholder"):
+        check_explanation(QUESTION, json.dumps({**GOOD, "explanation": text}))
+
+
+def test_only_glm_is_sent_the_reasoning_settings(cat):
+    from poarta_contabila.explain import request_body
+
+    role = cat.model_roles["sys2_explain_close"]
+    kimi = role.model_copy(update={"model": "moonshotai/kimi-k2.6"})
+    assert "reasoning" in request_body(role, {"kind": "v2_close"})
+    assert "reasoning" not in request_body(kimi, {"kind": "v2_close"})
+
+
+def test_an_answer_written_only_as_reasoning_says_so(cat):
+    from poarta_contabila.explain import send
+
+    def api(request):
+        message = {"role": "assistant", "content": "", "reasoning": "Luna are diferențe..."}
+        return httpx.Response(200, json={"choices": [{"message": message}]})
+
+    role = cat.model_roles["sys2_explain_close"]
+    with pytest.raises(ExplainError, match="only reasoning"):
+        send(role, {"kind": "v2_close"}, KEY, http=httpx.Client(transport=httpx.MockTransport(api)))

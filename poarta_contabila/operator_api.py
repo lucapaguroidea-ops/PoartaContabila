@@ -418,7 +418,7 @@ def operator_router(
     def model_role_compare(
         role_id: str,
         inputs: int = Query(default=2, ge=1, le=5),
-        runs: int = Query(default=3, ge=1, le=5),
+        runs: int = Query(default=1, ge=1, le=3),  # ~40 s a call: keep under the edge timeout
         rt: Runtime = Depends(operator),
     ) -> dict[str, Any]:
         """WP-59: the main pin against each approved alternate on the role's latest synthetic

@@ -71,6 +71,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-57 | done | WP-54 | Free-tier token cap: diagnosed `is_free_tier` per-request budget; resolved by adding credits (`is_free_tier` → `false`); `max_tokens` stays 6000 |
 | WP-58 | done | WP-57 | System Two brief: never an empty explanation, never an empty field cited; an answer off the card is asked once more with its reason |
 | WP-59 | done | WP-58 | `POST /model-roles/{role_id}/compare`: main pin vs each approved alternate on the latest synthetic questions, first answer only; nothing recorded |
+| WP-60 | done | WP-59 | A placeholder explanation is refused; reasoning settings sent to GLM only; a reasoning-only answer is named; compare defaults to one run |
 
 ## WP details
 
@@ -942,6 +943,16 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
   and to every approved alternate with its own provider pin (`data_collection: deny`), no retry.
   Answers: per candidate, first-try passes of `check_explanation`, cost per pass, each result.
 - Returned, never recorded; it changes no pin. Choosing a new main pin stays a catalog change.
+
+### WP-60 After the first comparison
+- Comparison of 2026-10-03 (close questions, 6 tries each, first answer): GLM on Z.AI 5/6,
+  GLM on Together 2/6 (both passes were `"..."`), Kimi on Moonshot AI 0/6 (every answer empty).
+- `check_explanation` refuses an explanation of fewer than 4 words (`...`, `N/A`).
+- `reasoning: {effort: low, exclude: true}` is sent to `z-ai/` models only (`REASONING`); other
+  families get no reasoning field. An answer with empty content and only reasoning is failed
+  as `the model wrote only reasoning`, so the cause shows.
+- `compare` defaults to `runs=1` (at most 3): a call takes ~40 s and 18 calls ran past the edge
+  timeout.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
