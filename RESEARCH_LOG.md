@@ -154,6 +154,26 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
 - Instruct: the owner (or a session permitted to write the outbound call) builds
   `jev.http_transport` from this item; `JEV_BASE_URL` / `JEV_API_KEY` (+ `JEV_MODEL`) are set on
   Railway by the owner.
+- 2026-10-03: **through OpenRouter instead** (owner's choice of route), read from
+  OpenRouter's own pages: `openrouter.ai/docs/guides/community/jev`,
+  `…/community/jev-tutorial`, and the API reference "Submit a decisions (questions and
+  answers) request" (`/docs/api/api-reference/alphadecisions/…`). Quotes:
+  - Endpoint `POST https://openrouter.ai/api/alpha/decisions`, `Authorization: Bearer
+    $OPENROUTER_API_KEY`; request `{"model": "typesafe/jev-1.13", "state": {…}, "questions":
+    {name: {"type": "noul"|"choice"|"score", "instructions", "criteria"}}}`; optional
+    `provider` (ProviderPreferences: `order`, `only`, `allow_fallbacks`, `data_collection`,
+    `zdr`, …), `session_id`, `user`, `trace`.
+  - Response: answers in a top-level `"answers"` object, "not in message choices":
+    `{"type": "noul", "noul": 0.96}`; `{"type": "choice", "choice": "payments", "confidence":
+    0.67, "probabilities": {…}}`; score with `score`, `confidence`, `probabilities`,
+    `legend`; plus `id`, `model` (dated, e.g. `typesafe/jev-1.13-20260917`), `provider`,
+    `usage {input_tokens, output_tokens, cost}`.
+  - Errors 400, 401, 402, 403, 404, 413, 429, 500, 502, 503, 524, 529 as `{error: {code,
+    message, metadata?}}`. Context "32,000 tokens. That's the `state` you send plus the
+    questions." Pricing: input tokens only ("Output tokens are free").
+  - Provider slug from `GET /api/v1/models/typesafe/jev-1.13/endpoints`: `tag: "typesafe"`
+    (DeepSeek `deepseek`, Z.AI `z-ai`).
+  - Built from this: WP-20 (`jev.role_transport`).
 
 ## R3 · Google Document AI (statement PDFs, backend `document_ai`) — WP-21
 

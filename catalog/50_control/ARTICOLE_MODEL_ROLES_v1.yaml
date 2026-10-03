@@ -105,7 +105,8 @@ roles:
     pack: null
     output: "source_doc_id from the closed ArticoleSourceDoc list + confidence"
     status: shadow
-    model: null
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
         source_doc_id:
@@ -122,7 +123,8 @@ roles:
     pack: null
     output: "inbound | outbound | n/a"
     status: shadow
-    model: null
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
         our_role:
@@ -213,7 +215,8 @@ roles:
     pack: v3_classify
     output: "doc_class, needs_ocr, needs_human, confidence"
     status: shadow
-    model: null
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
         doc_class:
@@ -240,7 +243,8 @@ roles:
     pack: null
     output: "a ranking of the articole that already matched (v1: a person still picks)"
     status: shadow
-    model: null
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
         articol_id:
@@ -256,7 +260,8 @@ roles:
     pack: v3_judge
     output: "V3Judge {accounts_ok, risk, needs_human}"
     status: wired
-    model: null
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
         accounts_ok:
@@ -290,7 +295,8 @@ roles:
     hitl_kinds: [v3_approve]
     output: "plain-language explanation shown with the question"
     status: shadow
-    model: null
+    model: deepseek/deepseek-v4.1-flash   # owner, 2026-10-03 (OpenRouter)
+    provider: {only: [deepseek], allow_fallbacks: false, data_collection: deny}
     card:
       task: >-
         Explain the v3_approve question: what the document is, which articol de cale it is
@@ -306,7 +312,8 @@ roles:
     pack: recon_review
     output: "confirm | contest | abstain (a contest only asks a person)"
     status: wired
-    model: null
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       independence: "Worded apart from jev_v3_judge (JevAnnex: different prompt)."
       questions:
@@ -330,7 +337,8 @@ roles:
     hitl_kinds: [recon_ambiguous, need_rj_export, recon_review_contest]
     output: "plain-language explanation shown with the question"
     status: shadow
-    model: null
+    model: deepseek/deepseek-v4.1-flash   # owner, 2026-10-03 (OpenRouter)
+    provider: {only: [deepseek], allow_fallbacks: false, data_collection: deny}
     card:
       task: >-
         Explain this reconcile question: which document, which months of the books are
@@ -345,7 +353,8 @@ roles:
     pack: v2_declaration_gate
     output: "V2Gate suggestion; cannot clear material"
     status: wired
-    model: null
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
         books_support_declaration:
@@ -384,7 +393,8 @@ roles:
     hitl_kinds: [v2_close, control_disposition]
     output: "plain-language explanation shown with the question"
     status: shadow
-    model: null
+    model: deepseek/deepseek-v4.1-flash   # owner, 2026-10-03 (OpenRouter)
+    provider: {only: [deepseek], allow_fallbacks: false, data_collection: deny}
     card:
       task: >-
         Explain the month-close question: which controls failed and why, which documents are
@@ -399,7 +409,8 @@ roles:
     hitl_kinds: [explained_rule]
     output: "a draft explained rule; a person approves it through POST /rules"
     status: shadow
-    model: null
+    model: z-ai/glm-5.3   # owner, 2026-10-03 (OpenRouter)
+    provider: {only: [z-ai], allow_fallbacks: false, data_collection: deny}
     card:
       task: >-
         For the book documents the month-close found with no source here (`documents`), draft

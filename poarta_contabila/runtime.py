@@ -145,6 +145,8 @@ class Runtime:
     codits: Any = None  # InMemoryCoditStore | PostgresCoditStore
     filings: Any = None  # InMemoryFilingStore | PostgresFilingStore
     jev: Any = None  # jev.Jev; None = not wired (fail closed)
+    jev_cache: Any = None  # InMemoryJevCache | PostgresJevCache (answers paid for once)
+    jev_http: Any = None  # httpx.Client for the Jev sender (tests); None = a fresh one per call
     statement_reader: Any = None  # (pdf, *, tenant_cui) -> Extraction; DocumentAiReader
     gemini_reader: Any = None  # GeminiStatementReader: synthetic tenants only (WP-36)
     extracts: Any = None  # InMemoryExtractStore | PostgresExtractStore
@@ -168,8 +170,9 @@ class Runtime:
                     mode=self.model_mode,
                     calls=self.model_calls,
                     synthetic=self._synthetic,
+                    http=self.jev_http,
                 ),
-                cache=InMemoryJevCache(),
+                cache=self.jev_cache if self.jev_cache is not None else InMemoryJevCache(),
                 pin=role_pin(self.catalog.model_roles),
             )
         self.gateway = ModelGateway(
@@ -1302,6 +1305,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         codits=PostgresCoditStore(dsn),
         filings=PostgresFilingStore(dsn),
         jev=None if model_mode in ("dry", "live") else jev_from_env(PostgresJevCache(dsn)),
+        jev_cache=PostgresJevCache(dsn),
         model_calls=PostgresModelCallStore(dsn),
         model_mode=model_mode,
         statement_reader=document_ai_from_env(),

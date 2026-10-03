@@ -10,10 +10,13 @@
   Layer 2 (:func:`make_v2`) gives no suggestion. Jev never opens a gate by itself.
 - **Layer 2 cannot clear ``material``**: ``close.py`` drops such suggestions.
 
-The wire (endpoint, auth, request and response shape) is not built: it must be taken from
-the official docs and quoted in ``RESEARCH_LOG.md``, and those pages were unreachable from
-the build session. Until then :func:`http_transport` refuses every call
-(:class:`JevNotDocumented`), which fails closed.
+The wire (WP-20, RESEARCH_LOG.md R2): OpenRouter's Decisions endpoint (``POST
+/api/alpha/decisions``, bearer ``OPENROUTER_JEV_API_KEY``) with the role's pinned model and
+provider, ``state`` = the pack input and ``questions`` = the role card's questions. Each
+answer (``noul`` probability; ``choice`` + ``confidence``) is mapped onto the pack's closed
+model by the card's thresholds; below them a field takes its cautious value (``CAUTIOUS``).
+Only for a synthetic tenant (``route_check``), only in ``MODEL_CALLS=live``, only for the
+wired packs. The direct TypeSafe route (:func:`http_transport`) is not built and refuses.
 """
 
 from __future__ import annotations
@@ -199,6 +202,69 @@ def http_transport(base_url: str, api_key: str) -> Transport:
     return call
 
 
+DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
+CAUTIOUS: dict[tuple[str, str], str] = {
+    ("v3_judge", "risk"): "high",
+    ("v2_declaration_gate", "gap_materiality"): "material",
+    ("v2_declaration_gate", "action"): "hold",
+    ("recon_review", "verdict"): "abstain",  # what no answer means: the det verdict stands
+}
+"""(pack, field) → the value a ``choice`` takes below the card's confidence threshold."""
+_CAUTIOUS_NOUL = {"needs_human": True}  # every other noul is false unless clearly yes
+
+
+def decision_questions(role: Any) -> dict[str, Any]:
+    """The role card's questions as the Decisions API takes them; :class:`JevError` for a
+    question whose criteria are not written in the card (``criteria_from``)."""
+    out = {}
+    for name, q in (role.card.get("questions") or {}).items():
+        if q.get("criteria_from"):
+            raise JevError(f"{role.role_id}: {name} takes its criteria from {q['criteria_from']}")
+        out[name] = {k: q[k] for k in ("type", "instructions", "criteria") if k in q}
+    return out
+
+
+def map_answers(role: Any, pack: str, answers: Any) -> dict[str, Any]:
+    """The Decisions answers as the pack's fields, by the card's thresholds (fail closed)."""
+    if not isinstance(answers, dict):
+        raise JevError(f"{role.role_id}: the answer has no answers object")
+    card = role.card
+    thresholds = card.get("thresholds") or {}
+    questions = card.get("questions") or {}
+    out: dict[str, Any] = {}
+    fell_back = []
+    for field_name, source in (card.get("fields") or {}).items():
+        qname, _, attr = str(source).partition(".")
+        q, a = questions.get(qname) or {}, answers.get(qname)
+        if not isinstance(a, dict) or a.get("type") != q.get("type") or attr:
+            raise JevError(f"{role.role_id}: no {q.get('type')} answer for {qname}")
+        try:
+            if q["type"] == "noul":
+                p = float(a["noul"])
+                if not 0 <= p <= 1:
+                    raise ValueError(p)
+                if _CAUTIOUS_NOUL.get(field_name):  # asks a person from a small chance
+                    out[field_name] = p >= float(thresholds["human"])
+                else:
+                    out[field_name] = p >= float(thresholds["noul_yes"])
+            elif q["type"] == "choice":
+                choice, confidence = a["choice"], float(a["confidence"])
+                if choice not in (q.get("criteria") or {}) or not 0 <= confidence <= 1:
+                    raise ValueError(choice)
+                if confidence >= float(thresholds["choice"]):
+                    out[field_name] = choice
+                else:
+                    out[field_name] = CAUTIOUS[(pack, field_name)]
+                    fell_back.append(field_name)
+            else:
+                raise JevError(f"{role.role_id}: {q['type']} answers are not mapped")
+        except (KeyError, TypeError, ValueError) as exc:
+            raise JevError(f"{role.role_id}: {qname}: answer off the card ({exc!r})") from None
+    if pack == "v3_judge" and fell_back:
+        out["needs_human"] = True  # an unsure risk is a person's to judge
+    return out
+
+
 def payload_cui(payload: dict[str, Any]) -> str | None:
     """The tenant a pack input belongs to (for the synthetic-only rule)."""
     if isinstance(payload.get("tenant_cui"), str):
@@ -227,17 +293,22 @@ def role_transport(
     mode: str,
     calls: Any,
     synthetic: Callable[[str | None], bool],
+    http: Any = None,
+    key: Callable[[str], str | None] = os.environ.get,
 ) -> Transport:
-    """The transport behind the model-role catalog (``model_roles``). Nothing is sent.
+    """The transport behind the model-role catalog (``model_roles``).
 
     ``off``: refuses. ``dry``: the role and the tenant are checked (``route_check``) and the
     call is recorded in *calls* (``domain.model_calls``) with exactly what the role would be
     sent; then :class:`JevError`, so the node fails closed as if Jev gave no answer.
+    ``live`` (WP-20): a wired role of a synthetic tenant is sent to OpenRouter's Decisions
+    endpoint when its key is set, and recorded ``sent`` (or ``failed``); without the key it
+    records as in ``dry``. *http*: an ``httpx.Client`` (tests); *key*: the env lookup.
     """
     from poarta_contabila.model_roles import RouteRefused, record, role_for_pack, route_check
 
     def call(pack: str, payload: dict[str, Any], timeout_s: float) -> Any:
-        if mode not in ("dry", "live"):  # live: no Jev sender is built, so it records too
+        if mode not in ("dry", "live"):
             raise JevError(f"{pack}: model calls are {mode!r}")
         try:
             role = role_for_pack(roles, pack)
@@ -260,18 +331,85 @@ def role_transport(
                 )
             )
             raise JevError(str(exc)) from None
+        secret = key(role.key_env) if mode == "live" and role.status == "wired" else None
+        if not secret:
+            reason = (
+                f"{role.key_env} is not set: recorded, not sent"
+                if mode == "live" and role.status == "wired"
+                else "dry run: recorded, not sent"
+            )
+            calls.add(
+                record(
+                    role,
+                    payload,
+                    mode=mode,
+                    tenant_cui=cui,
+                    status="recorded",
+                    reason=reason,
+                    eu=eu,
+                )
+            )
+            raise JevError(f"{role.role_id}: {reason}")
+        return _send(role, pack, payload, cui, secret, timeout_s)
+
+    def _send(role, pack, payload, cui, secret, timeout_s) -> dict[str, Any]:
+        import httpx
+
+        def failed(reason: str) -> JevError:
+            calls.add(
+                record(role, payload, mode=mode, tenant_cui=cui, status="failed", reason=reason)
+            )
+            return JevError(f"{role.role_id}: {reason}")
+
+        body = {
+            "model": role.model,
+            "state": payload,
+            "questions": decision_questions(role),
+            "provider": role.provider.model_dump(),
+        }
+        client = http or httpx.Client(timeout=timeout_s)
+        try:
+            resp = client.post(
+                DECISIONS_URL,
+                json=body,
+                headers={"Authorization": f"Bearer {secret}"},
+                timeout=timeout_s,
+            )
+        except httpx.HTTPError as exc:
+            raise failed(f"OpenRouter unreachable: {type(exc).__name__}") from None
+        finally:
+            if http is None:  # one we opened: closed after its one call
+                client.close()
+        try:
+            data = resp.json()
+        except ValueError:
+            data = {}
+        if resp.status_code != 200:
+            err = (data or {}).get("error") or {}
+            msg = str(err.get("message") or "")[:200]
+            raise failed(
+                f"OpenRouter answered HTTP {resp.status_code} {err.get('code', '')}: {msg}"
+            )
+        try:
+            mapped = map_answers(role, pack, (data or {}).get("answers"))
+        except JevError as exc:
+            raise failed(str(exc).split(": ", 1)[-1]) from None
         calls.add(
             record(
                 role,
                 payload,
                 mode=mode,
                 tenant_cui=cui,
-                status="recorded",
-                reason="dry run: recorded, not sent",
-                eu=eu,
+                status="sent",
+                reason=f"decided by {data.get('model')} via {data.get('provider')} (OpenRouter)",
+                output={
+                    "answers": data.get("answers"),
+                    "fields": mapped,
+                    "usage": data.get("usage"),
+                },
             )
         )
-        raise JevError(f"{role.role_id}: dry run, recorded and not sent")
+        return mapped
 
     return call
 

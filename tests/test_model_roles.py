@@ -44,10 +44,23 @@ def test_every_model_call_site_has_one_role(cat):
         "v2_declaration_gate",
         "recon_review",
     }
-    # chosen by the owner, not guessed: only document reading has one (2026-10-02)
+    # chosen by the owner, not guessed (document reading 2026-10-02, OpenRouter 2026-10-03)
+    jev = "typesafe/jev-1.13"
     assert {r.role_id: r.model for r in roles.values() if r.model} == {
         "ocr_extract": "gemini-3.5-flash-lite",  # tiers.everyday[0] (00_LAW §8 A4)
         "ocr_decont_split": "gemini-3.5-flash-lite",
+        **{rid: jev for rid, r in roles.items() if r.system == "system_one"},
+        "sys2_explain_approve": "deepseek/deepseek-v4.1-flash",
+        "sys2_explain_recon": "deepseek/deepseek-v4.1-flash",
+        "sys2_explain_close": "deepseek/deepseek-v4.1-flash",
+        "sys2_draft_rule": "z-ai/glm-5.3",
+    }
+    assert len([r for r in roles.values() if r.model == jev]) == 7
+    pins = {r.model: r.provider.only for r in roles.values() if r.route == "openrouter"}
+    assert pins == {
+        jev: ["typesafe"],
+        "deepseek/deepseek-v4.1-flash": ["deepseek"],
+        "z-ai/glm-5.3": ["z-ai"],
     }
     assert all(r.provider.allow_fallbacks is False for r in roles.values())
     assert {r.system for r in roles.values()} == {"system_one", "system_two", "document_reading"}
@@ -118,7 +131,7 @@ def test_route_check_fails_closed(cat):
     with pytest.raises(RouteRefused, match="'off'"):
         route_check(role.model_copy(update={"model": MODEL}), tenant_synthetic=True, mode="off")
     with pytest.raises(RouteRefused, match="no model chosen"):
-        route_check(role, tenant_synthetic=True, mode="dry")
+        route_check(role.model_copy(update={"model": None}), tenant_synthetic=True, mode="dry")
     with pytest.raises(RouteRefused, match="EU route"):
         route_check(role.model_copy(update={"model": MODEL}), tenant_synthetic=False, mode="dry")
     route_check(role.model_copy(update={"model": MODEL}), tenant_synthetic=True, mode="dry")
@@ -128,7 +141,7 @@ def test_route_check_fails_closed(cat):
 
 
 def _ops(cat, *, mode="dry", data_class="synthetic", model=MODEL):
-    rt = _runtime(_pinned(cat, model) if model else cat, model_mode=mode)
+    rt = _runtime(_pinned(cat, model), model_mode=mode)  # model None: no role has one
     o = Ops(rt)
     body = {"cui": CUI, "name": "FIRMA TEST SRL", "saga_firm_folder": FOLDER}
     if data_class:
@@ -150,7 +163,11 @@ def test_dry_run_records_what_jev_would_get_and_a_person_is_asked(cat):
     assert "dry run" in out["question"]["judge"]["judge"]
     (call,) = _calls(o, "jev_v3_judge")
     assert call["status"] == "recorded" and call["model"] == MODEL and call["mode"] == "dry"
-    assert call["provider"] == {"only": [], "allow_fallbacks": False, "data_collection": "deny"}
+    assert call["provider"] == {  # the catalog's pin (owner, 2026-10-03)
+        "only": ["typesafe"],
+        "allow_fallbacks": False,
+        "data_collection": "deny",
+    }
     assert call["tenant_cui"] == CUI and call["pack"] == "v3_judge"
     assert call["input"]["document"]["number"] == "AB 0099"  # exactly what Jev would see
     assert "job_id" not in call["input"]["document"]
