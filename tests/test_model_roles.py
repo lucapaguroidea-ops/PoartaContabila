@@ -55,16 +55,16 @@ def test_every_model_call_site_has_one_role(cat):
         "ocr_extract": "gemini-3.5-flash-lite",  # tiers.everyday[0] (00_LAW §8 A4)
         "ocr_decont_split": "gemini-3.5-flash-lite",
         **{rid: jev for rid, r in roles.items() if r.system == "system_one"},
-        "sys2_explain_approve": "deepseek/deepseek-v4.1-flash",
-        "sys2_explain_recon": "deepseek/deepseek-v4.1-flash",
-        "sys2_explain_close": "deepseek/deepseek-v4.1-flash",
+        # WP-51: DeepSeek trains on prompts (OpenRouter data policy); Z.AI does not
+        "sys2_explain_approve": "z-ai/glm-5.3",
+        "sys2_explain_recon": "z-ai/glm-5.3",
+        "sys2_explain_close": "z-ai/glm-5.3",
         "sys2_draft_rule": "z-ai/glm-5.3",
     }
     assert len([r for r in roles.values() if r.model == jev]) == 7
     pins = {r.model: r.provider.only for r in roles.values() if r.route == "openrouter"}
     assert pins == {
         jev: ["typesafe"],
-        "deepseek/deepseek-v4.1-flash": ["deepseek"],
         "z-ai/glm-5.3": ["z-ai"],
     }
     assert all(r.provider.allow_fallbacks is False for r in roles.values())

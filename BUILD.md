@@ -62,6 +62,7 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 | WP-48 | done | WP-43 | Reserve order from the 2026-10-03 evaluation: 3.5 Flash, 3 Flash (preview), 3.6 Flash last |
 | WP-49 | done | WP-20 | One OpenRouter key for Jev and System Two: `OPENROUTER_SYS2_API_KEY` |
 | WP-50 | done | WP-32, WP-49 | System Two sender: a person's question comes with a checked explanation (DeepSeek through OpenRouter) |
+| WP-51 | done | WP-50 | The explain roles move to GLM (`z-ai/glm-5.3`): DeepSeek's provider trains on prompts |
 
 ## WP details
 
@@ -846,6 +847,15 @@ Law values in tests are synthetic. Invented CUIs must pass the checksum if you v
 - The job, reconcile and close views carry `explanation` (`role_id`, `explanation`,
   `facts_cited`, `missing`, `served_by`) next to `question`. No node reads it; it cannot
   approve, hold, file or post anything.
+
+### WP-51 Explanations on GLM
+- Smoke run of 2026-10-03 after WP-50: every `sys2_explain_close` call failed, OpenRouter HTTP 404
+  "No endpoints found matching your data policy (Paid model training)". OpenRouter's provider
+  list (2026-10-03): DeepSeek `training: true, retainsPrompts: true`; Z.AI and TypeSafe
+  `training: false, retainsPrompts: false`.
+- Owner, 2026-10-03: take GLM if Z.AI is not flagged. `sys2_explain_approve`,
+  `sys2_explain_recon` and `sys2_explain_close` are `z-ai/glm-5.3`, provider `{only: [z-ai]}`;
+  data collection stays denied for every role. No role uses DeepSeek now.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
