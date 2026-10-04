@@ -1,7 +1,7 @@
 name: incasare_clean
 note: 'TVA la încasare: close_tva_incasare, POST with post_how_4428; C0 implies 4428 at the invoice and
-  its share moved as it is paid (WP-73 G6); M1_8 finds the VAT still open on the month''s documents equal
-  to the balanță''s 4428 (WP-75). Nothing material.'
+  its share moved as it is paid; M1_8 finds the VAT still open on the month''s documents equal
+  to the balanță''s 4428. Nothing material.'
 firm: incasare
 period: 2026-05
 seed: 1

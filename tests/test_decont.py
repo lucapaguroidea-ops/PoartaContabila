@@ -1,4 +1,4 @@
-"""A2: an expense report (decont) is a container — split into child packs, never emitted."""
+"""LAW L16: an expense report (decont) is a container — split into child packs, never emitted."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def _part(n: int, source_doc_id: str, kinds: list[str], **over) -> dict:
 
 
 PARTS = [
-    _part(1, "decont_part_evidence", ["jpeg"], bon=True),  # receipts: evidence (WP-73 G2)
+    _part(1, "decont_part_evidence", ["jpeg"], bon=True),  # receipts: evidence
     _part(2, "decont_part_evidence", ["pdf"], bon=False),
     _part(3, "ro_efactura_ubl", ["ubl_spv", "pdf"], cui=PARTNER),
     _part(4, "ro_efactura_pdf", ["pdf"]),
@@ -81,7 +81,7 @@ def test_graph_asks_for_the_parts_before_anything_is_emitted(cat):
     q = run.question()
     assert q["kind"] == "decont_split"
     assert "decont_part_evidence" in q["children"] and "ro_efactura_ubl" in q["children"]
-    assert "bon_fiscal" not in q["children"]  # WP-73 G2: no bon Job from an expense report
+    assert "bon_fiscal" not in q["children"]  # no bon Job from an expense report
     assert run.store.jobs == {}
 
 
@@ -119,7 +119,7 @@ def test_a_part_seen_again_is_not_a_second_job(cat):
     [
         ([_part(1, "extras", ["pdf"])], "not one of"),
         ([_part(1, "ro_efactura_pdf", ["pdf", "ubl_spv"])], "XML exists"),
-        ([_part(1, "bon_fiscal", ["jpeg"], bon=True)], "not one of"),  # WP-73 G2
+        ([_part(1, "bon_fiscal", ["jpeg"], bon=True)], "not one of"),  # receipts are evidence parts
         ([_part(1, "decont_part_evidence", ["jpeg"], bon=True)] * 2, "own hash"),
         (
             [{**_part(1, "decont_part_evidence", ["jpeg"], bon=True), "part_hash": "d" * 64}],

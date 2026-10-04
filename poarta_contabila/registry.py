@@ -50,7 +50,7 @@ class Tenant(Closed):
     book_of_record: Product = "saga"
     data_class: Literal["synthetic", "client"] = "client"
     """``synthetic`` = invented test data; only such a tenant may reach a model route that is
-    not the EU host (00_LAW §3.5). Unset means client data: fail closed."""
+    not the EU host (LAW L28). Unset means client data: fail closed."""
     bank_accounts: dict[str, str] = Field(default_factory=dict)
     """IBAN → the SAGA treasury account its lines post to (``5121.01``), for the bank mouths."""
 
@@ -257,7 +257,7 @@ def witnesses_provider(registry, blobs: BlobStore):
                 else None
             )
             journal = None
-            if rj is not None and rj.product == "saga":  # bank documents live there (G8)
+            if rj is not None and rj.product == "saga":  # bank documents live there
                 lines = _with_file(blobs.get(rj.bucket_key), rj.bucket_key, read_saga_rj)
                 journal = ExportEye(product="saga", lines=lines, cui=cui, periods=rj.periods)
             eye = ReportPackEye(

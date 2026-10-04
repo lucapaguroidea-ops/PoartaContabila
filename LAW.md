@@ -1,8 +1,7 @@
 # Law
 
-Status: **in force, approved by the owner on 2026-10-04.** It replaces `00_LAW.md`, which stays
-in the repo, marked superseded, only until the citations in code are rewritten to these ids
-(`docs/PLAN.md` A5 step 4); then it is deleted.
+Status: **in force, approved by the owner on 2026-10-04.** It replaced `00_LAW.md` and its
+amendments A1–A8 (git history, branch `pre-tidy`).
 
 Package: `poarta_contabila`. Product face: Poarta Primară.
 
@@ -10,7 +9,7 @@ Package: `poarta_contabila`. Product face: Poarta Primară.
 retired. `[owner, date]` marks a rule that came from a dated owner decision. `[test]` marks a
 rule the build must enforce: a failing test fails the build, and the citation test checks that
 every `[test]` rule has a test naming it. The history of how the rules were reached is in git
-(branch `pre-tidy`, `00_LAW.md`).
+(branch `pre-tidy`).
 
 ## 1. The unit
 
@@ -216,45 +215,3 @@ Mouth = SAGA C Import + Validare. Eye = report pack / RJ-CM / later the read-onl
 Compensation = Anulează / Devalidare / Stornare. Flux files keep their name; say cale. Naked
 "articol", "catalog", "graph", "flow" or "file at ANAF" are not used in new prose. Romanian
 domain words stay Romanian; code identifiers stay English.
-
----
-
-## Appendix — old citations → new ids
-
-Used once by the citation rewrite (`docs/PLAN.md` A5 step 4), then deleted.
-
-| `00_LAW.md` | `LAW.md` |
-|---|---|
-| §0 | L1 |
-| §1 | L2, L3 |
-| §2 | L5, L6, L7 |
-| §3.1 | L7 |
-| §3.2 | L10 |
-| §3.3 | L9 |
-| §3.4 | L21 |
-| §3.5 | L28, L29, L30, L33 |
-| §3.6 | L22 |
-| §3.7 | L5 |
-| §3.8 | L13 |
-| §3.9 | L12 |
-| §3.10 | L23 |
-| §3.11 | L24 |
-| §3.12 | L15 |
-| §3.13 | L25 |
-| §3.14 | L4 |
-| §3.15 | L40 |
-| §3.16 | L36 |
-| §4 | L27, §10 |
-| §5 | §10 |
-| §6.1 | L6 |
-| §6.2 | L11 |
-| §6.3 | L39 |
-| §6.4 | L5, L6, L8 |
-| §6.5 | L38 |
-| §6.6 | `SURFACE.md` §1 (bonuri parked; no longer law) |
-| §7 | L37, L46, L47 |
-| §8 A1 | L44, L45 (A1 §4 superseded by L26) |
-| §8 A2 | L8, L14, L16, L17, L18 |
-| §8 A3, A4, A5, A6 | L31, `ARCHITECTURE.md` §12.1 |
-| §8 A7 | L30, L32, `ARCHITECTURE.md` §12.1 |
-| §8 A8 | L26, L35 |

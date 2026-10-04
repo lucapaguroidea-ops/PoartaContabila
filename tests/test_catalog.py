@@ -1,4 +1,4 @@
-"""WP-01: Lane B catalog loads, merges additive files, and fails closed."""
+"""Lane B catalog loads, merges additive files, and fails closed."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def test_pack_loads(cat):
 
 
 def test_additive_files_merge(cat):
-    assert "decision_menu" in cat.hitl  # from 60_harvest/ARTICOLE_HITL_ADD_v1.yaml
+    assert "decision_menu" in cat.hitl  # from 60_practice/ARTICOLE_HITL_ADD_v1.yaml
     assert "v3_approve" in cat.hitl  # from 50_control/ARTICOLE_HITL_v1.yaml
     assert "extras_statement_pdf" in cat.source_docs  # SOURCE_DOC_ADD
     assert "C0_synthetic_parity" in cat.controls
@@ -95,7 +95,7 @@ def test_write_module_and_cale_agree_both_ways(cat):
 
 def test_duplicate_id_across_files_is_an_error(pack_copy):
     _edit(
-        pack_copy / "60_harvest/ARTICOLE_HITL_ADD_v1.yaml",
+        pack_copy / "60_practice/ARTICOLE_HITL_ADD_v1.yaml",
         lambda d: d["kinds"].append({**d["kinds"][0], "kind": "v3_approve"}),
     )
     with pytest.raises(CatalogError, match="duplicate"):
@@ -103,7 +103,7 @@ def test_duplicate_id_across_files_is_an_error(pack_copy):
 
 
 def test_two_base_files_for_one_catalog_is_an_error(pack_copy):
-    _edit(pack_copy / "60_harvest/ARTICOLE_HITL_ADD_v1.yaml", lambda d: d.pop("mode"))
+    _edit(pack_copy / "60_practice/ARTICOLE_HITL_ADD_v1.yaml", lambda d: d.pop("mode"))
     with pytest.raises(CatalogError, match="additive"):
         load_catalog(pack_copy)
 
@@ -141,7 +141,7 @@ def test_unparseable_yaml_is_an_error(pack_copy):
         load_catalog(pack_copy)
 
 
-# ----- A2 -----
+# ----- LAW L8, L14, L16, L17 -----
 
 
 def test_a2_sources_exist_and_never_post(cat):
@@ -169,7 +169,7 @@ def test_split_child_must_exist(pack_copy):
             if row["source_doc_id"] == "decont_cheltuieli":
                 row["split"]["children"].append("invented_child")
 
-    _edit(pack_copy / "60_harvest/ARTICOLE_SOURCE_DOC_ADD_v1.yaml", bad)
+    _edit(pack_copy / "60_practice/ARTICOLE_SOURCE_DOC_ADD_v1.yaml", bad)
     with pytest.raises(CatalogError, match="invented_child"):
         load_catalog(pack_copy)
 

@@ -1,4 +1,4 @@
-"""WP-33: the answer log — every answer a person submits, what became of it, and who sent it."""
+"""the answer log — every answer a person submits, what became of it, and who sent it."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def test_a_job_answer_is_logged_with_its_outcome_and_its_author(cat):
 def test_an_answer_with_nothing_waiting_changes_nothing_and_is_logged_as_such(cat):
     o = _ops(cat)
     resp = o.http.post(f"/recon/{CUI}/2026-07/resume", json={"export_id": "x"}, headers=o.op)
-    assert resp.status_code == 200 and resp.json()["question"] is None  # was a 500 before WP-33
+    assert resp.status_code == 200 and resp.json()["question"] is None  # once a 500
     (row,) = _log(o, thread=f"recon:{CUI}:2026-07")
     assert row["outcome"] == "no_question" and row["kind"] is None and row["operator"] is None
     assert o.http.get(f"/recon/{CUI}/2026-07", headers=o.op).json()["settled"] == []

@@ -1,4 +1,4 @@
-"""WP-10: monthly_close — lock, Layer 1, Layer 2 suggests only, a person decides V2."""
+"""monthly_close — lock, Layer 1, Layer 2 suggests only, a person decides V2."""
 
 from __future__ import annotations
 
@@ -332,7 +332,7 @@ def test_v4_seed_carries_a_micro_firm_and_its_default_exig_follows_tva(cat):
 
 
 def test_a_close_stopped_between_nodes_goes_on_when_started_again(cat):
-    """WP-65: the process died after period_diff; the saved run has a next node and no
+    """the process died after period_diff; the saved run has a next node and no
     question. Starting the close again continues it instead of showing nothing forever."""
     from tests.test_runtime import Ops, _runtime
 

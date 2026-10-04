@@ -1,4 +1,4 @@
-"""A firm-month of synthetic data (WP-70): what is uploaded, and the books SAGA would hold.
+"""A firm-month of synthetic data: what is uploaded, and the books SAGA would hold.
 
 :func:`month` draws a standard month for a firm — purchases and sales on SPV, a bank
 statement that pays and collects some of them (and a fee), plus what the firm's profile
@@ -297,7 +297,7 @@ def payroll_of(m: Month) -> Payroll | None:
     return pay if isinstance(pay, Payroll) else None
 
 
-# ----- realistic months (WP-73): drawn, not designed -----
+# ----- realistic months: drawn, not designed -----
 
 
 def realistic(firm: Firm, periods: list[str], *, seed: int = 0) -> Month:

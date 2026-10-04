@@ -1,4 +1,4 @@
-// The review page (WP-66, 00_LAW §8 A8). Every value from the server is written as text
+// The review page (LAW L26). Every value from the server is written as text
 // (textContent), never as markup: a document's fields come from outside this firm.
 "use strict";
 
@@ -270,7 +270,7 @@
     return box;
   }
 
-  // ----- decont_split: the parts of an expense report (WP-67) -----
+  // ----- decont_split: the parts of an expense report -----
 
   const PART_LABELS = {
     bon_fiscal: "bon fiscal",

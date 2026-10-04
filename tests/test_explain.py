@@ -1,4 +1,4 @@
-"""WP-50: System Two explains a person's question through OpenRouter — never decides."""
+"""System Two explains a person's question through OpenRouter — never decides."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""WP-38: the owner's token names, and the build agent's token — synthetic tenants only."""
+"""the owner's token names, and the build agent's token — synthetic tenants only."""
 
 from __future__ import annotations
 

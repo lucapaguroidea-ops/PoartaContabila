@@ -1,4 +1,4 @@
-"""WP-22: which invoice a bank line settles — a proposal for the person, never a decision."""
+"""which invoice a bank line settles — a proposal for the person, never a decision."""
 
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ def test_another_amount_is_no_candidate():
     assert p.candidates == [] and p.edit is None and "no open invoice" in p.reason
 
 
-# ----- WP-30: partial payments, part-paid invoices, one payment for several invoices -----
+# ----- partial payments, part-paid invoices, one payment for several invoices -----
 
 
 def test_a_partial_payment_is_proposed_when_the_text_names_the_invoice():

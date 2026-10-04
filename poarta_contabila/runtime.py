@@ -119,7 +119,7 @@ class IngestRefused(ValueError):
 
 
 class ReadingDeferred(Exception):
-    """No model can read this statement now (00_LAW §8 A5): it waits, nothing is refused."""
+    """No model can read this statement now (LAW L31): it waits, nothing is refused."""
 
     def __init__(self, reason: str, retry_after: float):
         super().__init__(reason)
@@ -162,16 +162,16 @@ class Runtime:
     jev_cache: Any = None  # InMemoryJevCache | PostgresJevCache (answers paid for once)
     jev_http: Any = None  # httpx.Client for OpenRouter: Jev and System Two (tests); None = per call
     statement_reader: Any = None  # (pdf, *, tenant_cui) -> Extraction; DocumentAiReader
-    gemini_reader: Any = None  # GeminiStatementReader: synthetic tenants only (WP-36)
+    gemini_reader: Any = None  # GeminiStatementReader: synthetic tenants only
     extracts: Any = None  # InMemoryExtractStore | PostgresExtractStore
     model_calls: Any = None  # InMemoryModelCallStore | PostgresModelCallStore
-    model_mode: str = "off"  # MODEL_CALLS: off | dry (record only) | live (WP-36)
-    answers: Any = None  # InMemoryAnswerLog | PostgresAnswerLog (WP-33)
-    reading_waits: Any = None  # InMemoryReadingWaitStore | PostgresReadingWaitStore (WP-42)
-    reading_choices: Any = None  # InMemoryReadingChoiceStore | Postgres… (WP-43)
-    provider_policies: Any = None  # InMemoryPolicyStore | PostgresPolicyStore (WP-53)
-    role_choices: Any = None  # InMemoryRoleChoiceStore | PostgresRoleChoiceStore (WP-53)
-    batches: Any = None  # InMemoryBatchIndex | PostgresBatchIndex (WP-67)
+    model_mode: str = "off"  # MODEL_CALLS: off | dry (record only) | live
+    answers: Any = None  # InMemoryAnswerLog | PostgresAnswerLog
+    reading_waits: Any = None  # InMemoryReadingWaitStore | PostgresReadingWaitStore
+    reading_choices: Any = None  # InMemoryReadingChoiceStore | Postgres…
+    provider_policies: Any = None  # InMemoryPolicyStore | PostgresPolicyStore
+    role_choices: Any = None  # InMemoryRoleChoiceStore | PostgresRoleChoiceStore
+    batches: Any = None  # InMemoryBatchIndex | PostgresBatchIndex
 
     def __post_init__(self) -> None:
         if self.model_calls is None:
@@ -338,13 +338,13 @@ class Runtime:
         return out
 
     def key_usage(self) -> dict[str, Any]:
-        """WP-56: OpenRouter's own figures for each key the catalog uses (``key_usage``)."""
+        """OpenRouter's own figures for each key the catalog uses (``key_usage``)."""
         from poarta_contabila.key_usage import key_usage
 
         return key_usage(self.catalog.model_roles, http=self.jev_http)
 
     def _pin_view(self, role: Any) -> dict[str, Any] | None:
-        """WP-53: the pin the data policy allows now, and why (OpenRouter roles)."""
+        """the pin the data policy allows now, and why (OpenRouter roles)."""
         if role.route != "openrouter" or role.model is None:
             return None
         p = self.router.pick(role)
@@ -361,7 +361,7 @@ class Runtime:
     def role_choose(
         self, role_id: str, choice: str, until: str | None, operator: str | None
     ) -> dict[str, Any]:
-        """WP-53 (00_LAW §8 A7): the operator's choice for a role no approved pin passes,
+        """LAW L32: the operator's choice for a role no approved pin passes,
         kept with who chose it (``domain.model_role_choices``; the latest holds)."""
         role = self.catalog.model_roles.get(role_id)
         if role is None or role.route != "openrouter":
@@ -386,10 +386,10 @@ class Runtime:
         candidate: int | None = None,
         skip: int = 0,
     ) -> dict[str, Any]:
-        """WP-59: the questions a System Two role last explained for synthetic tenants, each
+        """the questions a System Two role last explained for synthetic tenants, each
         sent *runs* times to the main pin and to every approved alternate, first answer only
         (no retry). Returned, not recorded: a comparison decides nothing and feeds no node.
-        *candidate*: 0 the main pin, N the Nth alternate (one at a time, WP-61); *skip*: start
+        *candidate*: 0 the main pin, N the Nth alternate (one at a time); *skip*: start
         after that many of the latest questions."""
         from poarta_contabila.explain import ExplainError, send
 
@@ -484,7 +484,7 @@ class Runtime:
         )
         return self.view(job_id)
 
-    # -- the review page's inbox (WP-66, 00_LAW §8 A8) --
+    # -- the review page's inbox (LAW L26) --
 
     # a job in any of these may wait on a person; acked, already_in_sink, rejected, failed never do
     _OPEN_JOBS = (
@@ -501,7 +501,7 @@ class Runtime:
 
     def inbox(self, cui: str, period: str) -> dict[str, Any]:
         """Every question waiting on an accountant for *cui*: its open jobs (any month), its
-        expense-report batches (WP-67), and the reconcile_sink and monthly_close runs of
+        expense-report batches, and the reconcile_sink and monthly_close runs of
         *period*. Each item names where its
         answer goes and the answer's shape (ArticoleHITL); a question for the SAGA agent is
         left out. A job that needs a person but asks nothing is listed with its error."""
@@ -553,12 +553,12 @@ class Runtime:
             ),
         }
 
-    # -- the answer log (WP-33) --
+    # -- the answer log --
 
     @staticmethod
     def _start(graph: Any, cfg: dict, inputs: dict[str, Any]) -> None:
         """Start a run, or go on with one already there: a run waiting on a person is left
-        as it is; a run stopped between nodes (the process died mid-run, WP-65) continues
+        as it is; a run stopped between nodes (the process died mid-run) continues
         from its last checkpoint instead of looking like a question that never comes."""
         state = graph.get_state(cfg)
         if any(t.interrupts for t in state.tasks):
@@ -599,7 +599,7 @@ class Runtime:
             )
         )
 
-    # -- reconcile_sink (WP-23) --
+    # -- reconcile_sink --
 
     def recon_waiting(self, cui: str, period: str) -> list[WaitingJob]:
         """The period's jobs whose ingest thread ended at an undecided PRE check."""
@@ -637,7 +637,7 @@ class Runtime:
         )
 
     def post_waiting(self, cui: str, period: str) -> list[WaitingJob]:
-        """The period's acked jobs: SAGA shows them validated, POST checks how (WP-27)."""
+        """The period's acked jobs: SAGA shows them validated, POST checks how."""
         out = [
             w
             for job in self.jobs.for_period(cui, period)
@@ -755,7 +755,7 @@ class Runtime:
 
     def stalled(self, cui: str, period: str) -> list[str]:
         """The month's jobs minted with no document on their thread (never started): the
-        close counts them as outbound holes (WP-73 G2)."""
+        close counts them as outbound holes."""
         return [
             job.job_id
             for job in self.jobs.for_period(cui, period)
@@ -764,7 +764,7 @@ class Runtime:
         ]
 
     def settlement(self, line: CanonicalDocument) -> SettlementProposal:
-        """The invoices an unbound bank line could settle (WP-22, WP-30), from this tenant's
+        """The invoices an unbound bank line could settle, from this tenant's
         invoice Jobs and the books' journals in the line's month and the two before it, less
         what other bound bank lines already paid on each."""
         cui = line.tenant.cui
@@ -788,7 +788,7 @@ class Runtime:
             and ej.doc.partner.cui
             and ej.job.status not in ("rejected", "failed")
         ]
-        paid: dict[tuple[str, str], Decimal] = {}  # what bound lines paid per invoice (WP-30)
+        paid: dict[tuple[str, str], Decimal] = {}  # what bound lines paid per invoice
         for d in bound:
             if d.maps.get("factura_numar"):
                 key = settle_key(d.partner.cui, d.maps["factura_numar"])
@@ -825,7 +825,7 @@ class Runtime:
         self.codits.put(doc)
         return doc
 
-    # -- bank statements (WP-13) --
+    # -- bank statements --
 
     def read_statement(
         self,
@@ -835,10 +835,10 @@ class Runtime:
         meta: StatementMeta | None = None,
         strong: bool = False,
     ) -> tuple[Extraction, str]:
-        """The extract contract for a statement PDF (WP-21): read once per
+        """The extract contract for a statement PDF: read once per
         ``(source_hash, document_ai)``, reused after; returns it with the PDF's bucket key.
 
-        Gemini (00_LAW §8 A4): a read that fails the statement checks against *meta* is read
+        Gemini (LAW L31): a read that fails the statement checks against *meta* is read
         once more by the strong tier; a read that still fails is refused and never stored."""
         cui = tenant.cui
         source_hash = hashlib.sha256(pdf).hexdigest()
@@ -905,13 +905,13 @@ class Runtime:
 
     def reader_for(self, cui: str) -> Any:
         """Who reads this tenant's statement PDFs: Gemini direct for a synthetic tenant when
-        it is wired (WP-36), else Document AI; never Gemini for a client tenant."""
+        it is wired, else Document AI; never Gemini for a client tenant."""
         if self.gemini_reader is not None and self._synthetic(cui):
             return self.gemini_reader
         return self.statement_reader
 
     def ocr_eval(self, cui: str, case: str | None, model: str | None) -> dict[str, Any]:
-        """WP-37: read the evaluation's synthetic statements with Gemini and score them.
+        """read the evaluation's synthetic statements with Gemini and score them.
 
         Synthetic tenants only; nothing is minted or stored but the model-call records.
         *model* reads with another Google AI Studio model, for comparison only.
@@ -934,7 +934,7 @@ class Runtime:
             reader = replace(
                 reader, role=reader.role.model_copy(update={"model": model, "rate_limits": limits})
             )
-        # the evaluation scores one model: never another tier (00_LAW §8 A4)
+        # the evaluation scores one model: never another tier (LAW L31)
         reader = replace(reader, role=reader.role.model_copy(update={"tiers": None}))
         chosen = [c for c in cases() if case is None or c.name == case]
         if not chosen:
@@ -954,7 +954,7 @@ class Runtime:
         strong: bool = False,
     ) -> dict[str, Any]:
         """A PDF statement → a pack and one Job per movement line; or, when no model can read
-        it now, ``{"status": "waiting", …}``: parked and read again later (WP-42)."""
+        it now, ``{"status": "waiting", …}``: parked and read again later."""
         self._sync_reserve()
         try:
             return self._ingest_statement(cui, meta, tables, pdf, strong)
@@ -985,7 +985,7 @@ class Runtime:
         ask = self._reading_question()
         return {**out, "ask": ask} if ask else out
 
-    # -- WP-43: the operator's choice when every tier is spent (00_LAW §8 A6) --
+    # -- the operator's choice when every tier is spent (LAW L31) --
 
     def _sync_reserve(self) -> None:
         """The Gemini reader reads with the reserve models while today's choice says so."""
@@ -1061,7 +1061,7 @@ class Runtime:
         return done.model_dump(mode="json", exclude={"meta"})
 
     def retry_waiting(self, cui: str | None = None, now: datetime | None = None) -> list[dict]:
-        """Read again every parked statement whose time has come (WP-42): minted when the read
+        """Read again every parked statement whose time has come: minted when the read
         confirms, parked again when no model can read yet, refused otherwise."""
         now = now or datetime.now(UTC)
         self._sync_reserve()
@@ -1086,7 +1086,7 @@ class Runtime:
         return out
 
     def reading_budget(self, cui: str, documents: int = 0) -> dict[str, Any]:
-        """WP-42: what the Gemini reader may still send today, what waits, and — for a batch
+        """what the Gemini reader may still send today, what waits, and — for a batch
         of *documents* about to be uploaded — whether today's budget covers it."""
         reader = self.gemini_reader
         if reader is None:
@@ -1141,7 +1141,7 @@ class Runtime:
     ) -> dict[str, Any]:
         """A PDF statement → a pack and one Job per movement line.
 
-        *strong*: Gemini reads with its strong tier first (00_LAW §8 A4).
+        *strong*: Gemini reads with its strong tier first (LAW L31).
 
         The movement tables come with the upload or, when none are sent, from the statement
         reader (Document AI), which must also show the tenant's CUI and the header's IBAN.
@@ -1325,7 +1325,7 @@ class Runtime:
         self.registry.add_export(row)
         return row.model_dump()
 
-    # -- folder_triage: expense reports (WP-28) --
+    # -- folder_triage: expense reports --
 
     _DECONT_KINDS = {".pdf": "pdf", ".xls": "xls", ".xlsx": "xlsx", ".msg": "msg", ".eml": "eml"}
 
@@ -1363,7 +1363,7 @@ class Runtime:
     def ingest_decont(
         self, cui: str, data: bytes, filename: str, period: str, *, tenant_on_doc: bool
     ) -> dict[str, Any]:
-        """An expense report (decont de cheltuieli, A2) → folder_triage on ``batch:decont-…``.
+        """An expense report (decont de cheltuieli, LAW L16) → folder_triage on ``batch:decont-…``.
 
         The report is a container: it never becomes a Job. Once its identity and primary
         gates pass, a person names its parts (``decont_split``); each part is a child Pack
@@ -1437,7 +1437,7 @@ class Runtime:
             draft_job = JobRecord(
                 job_id="pending", tenant=tenant.ref(), period="2000-01", status="ingested"
             )
-            # WP-73 G1: a counterparty without a RO CUI, from abroad, is an invoice from abroad
+            # a counterparty without a RO CUI, from abroad, is an invoice from abroad
             other = invoice.customer if invoice.supplier.cui == cui else invoice.supplier
             abroad = other.cui is None and (other.country or "RO").upper() != "RO"
             source = SourceRef(
@@ -1579,7 +1579,7 @@ def runtime_from_env(catalog: Catalog, dsn: str | None) -> tuple[Runtime | None,
         role_choices=PostgresRoleChoiceStore(dsn),
         batches=PostgresBatchIndex(dsn),
     )
-    # WP-36: Gemini reads synthetic tenants' statements directly (MODEL_CALLS=live + key)
+    # Gemini reads synthetic tenants' statements directly (MODEL_CALLS=live + key)
     runtime.gemini_reader = gemini_reader_from_env(
         catalog.model_roles, runtime.model_calls, runtime._synthetic, runtime.model_mode
     )

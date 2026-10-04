@@ -1,6 +1,6 @@
--- Poarta Primară domain store (00_LAW A1). Not a ledger: no chart of accounts,
--- journal or trial balance lives here (invariant 1). Idempotency keys from
--- IDEMPOTENCY.md are unique constraints. Idempotent: safe to run on every boot.
+-- Poarta Primară domain store (LAW L45). Not a ledger: no chart of accounts,
+-- journal or trial balance lives here (LAW L7). Idempotency keys from
+-- ARCHITECTURE.md §16 are unique constraints. Idempotent: safe to run on every boot.
 
 CREATE SCHEMA IF NOT EXISTS domain;
 
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS domain.extracts (
     meta         jsonb NOT NULL,
     PRIMARY KEY (source_hash, backend)
 );
--- WP-21: the bucket prefix holding {prefix}/normalized/ (EXTRACT.md) for that source.
+-- the bucket prefix holding {prefix}/normalized/ (ARCHITECTURE.md §15) for that source.
 ALTER TABLE domain.extracts ADD COLUMN IF NOT EXISTS prefix text;
 
 CREATE TABLE IF NOT EXISTS domain.packages (
@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS domain.explained_rules (
     PRIMARY KEY (cui, rule_id, version)
 );
 
--- WP-06 Windows agent. A backup label is {cui}:{folder}:{utc}; a restore is refused
+-- The Windows agent (ARCHITECTURE.md §13). A backup label is {cui}:{folder}:{utc}; a restore is refused
 -- when the label's tenant differs. Snapshots are what SAGA showed the agent (the eye).
 CREATE TABLE IF NOT EXISTS domain.agent_backups (
     label       text PRIMARY KEY,
@@ -153,7 +153,7 @@ CREATE TABLE IF NOT EXISTS domain.tenants (
     updated_at  timestamptz NOT NULL DEFAULT now()
 );
 
--- Model roles (00_LAW §3.5): what each role was (or would be, MODEL_CALLS=dry) sent.
+-- Model roles (LAW L28): what each role was (or would be, MODEL_CALLS=dry) sent.
 CREATE TABLE IF NOT EXISTS domain.model_calls (
     call_id     text PRIMARY KEY,
     role_id     text NOT NULL,
@@ -162,7 +162,7 @@ CREATE TABLE IF NOT EXISTS domain.model_calls (
 );
 CREATE INDEX IF NOT EXISTS model_calls_role_at ON domain.model_calls (role_id, at);
 
--- WP-33: every answer a person submits; insert-only (no code path updates or deletes a row)
+-- every answer a person submits; insert-only (no code path updates or deletes a row)
 CREATE TABLE IF NOT EXISTS domain.answers (
     seq         bigserial PRIMARY KEY,
     answer_id   text NOT NULL UNIQUE,
@@ -183,7 +183,7 @@ CREATE TABLE IF NOT EXISTS domain.sink_exports (
     body        jsonb NOT NULL
 );
 
--- WP-42: synthetic statements waiting for model quota (00_LAW §8 A5); read again from
+-- synthetic statements waiting for model quota (LAW L31); read again from
 -- not_before on. One row per (tenant, PDF).
 CREATE TABLE IF NOT EXISTS domain.reading_waits (
     wait_id     text PRIMARY KEY,            -- {cui}:{sha256 of the PDF}
@@ -193,12 +193,12 @@ CREATE TABLE IF NOT EXISTS domain.reading_waits (
     body        jsonb NOT NULL
 );
 CREATE INDEX IF NOT EXISTS reading_waits_due ON domain.reading_waits (status, not_before);
--- WP-42 → WP-43: a parked statement may be set aside by a person.
+-- A parked statement (ARCHITECTURE.md §12.1) may be set aside by a person.
 ALTER TABLE domain.reading_waits DROP CONSTRAINT IF EXISTS reading_waits_status_check;
 ALTER TABLE domain.reading_waits ADD CONSTRAINT reading_waits_status_check
     CHECK (status IN ('waiting', 'read', 'refused', 'skipped'));
 
--- WP-43: what an operator chose when every model tier was spent (00_LAW §8 A6); insert-only.
+-- what an operator chose when every model tier was spent (LAW L31); insert-only.
 CREATE TABLE IF NOT EXISTS domain.reading_choices (
     seq        bigserial PRIMARY KEY,
     choice_id  text NOT NULL UNIQUE,
@@ -207,13 +207,13 @@ CREATE TABLE IF NOT EXISTS domain.reading_choices (
 );
 CREATE INDEX IF NOT EXISTS reading_choices_day ON domain.reading_choices (day, seq);
 
--- WP-53 (00_LAW §8 A7): OpenRouter provider data policies, read daily; one row per provider
+-- LAW L32: OpenRouter provider data policies, read daily; one row per provider
 CREATE TABLE IF NOT EXISTS domain.provider_policies (
     slug  text PRIMARY KEY,
     body  jsonb NOT NULL
 );
 
--- WP-53: the operator's choice for a role no approved pin passes (latest holds)
+-- the operator's choice for a role no approved pin passes (latest holds)
 CREATE TABLE IF NOT EXISTS domain.model_role_choices (
     seq      bigserial PRIMARY KEY,
     role_id  text NOT NULL,
@@ -221,7 +221,7 @@ CREATE TABLE IF NOT EXISTS domain.model_role_choices (
 );
 CREATE INDEX IF NOT EXISTS model_role_choices_role ON domain.model_role_choices (role_id, seq);
 
--- WP-67: the folder_triage batches of each firm, so the review page can list their questions
+-- the folder_triage batches of each firm, so the review page can list their questions
 CREATE TABLE IF NOT EXISTS domain.triage_batches (
     batch_id  text PRIMARY KEY,
     cui       text NOT NULL,

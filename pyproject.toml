@@ -39,7 +39,7 @@ testpaths = ["tests", "fixtures"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["annex", "fixtures"]  # pack files kept as delivered
+extend-exclude = ["fixtures"]  # fixtures kept as delivered
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

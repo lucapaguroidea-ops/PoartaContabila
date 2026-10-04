@@ -1,4 +1,4 @@
-"""Invoice numbers for matching (A2, ``[de confirmat]``).
+"""Invoice numbers for matching (LAW L18, ``[de confirmat]``).
 
 SAGA's "Nr. doc" holds either the bare number or series and number; NextUp keeps what
 was typed. Three levels, strongest first:

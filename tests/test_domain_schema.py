@@ -1,4 +1,4 @@
-"""WP-00: the domain schema applies, enforces idempotency keys, and holds no books."""
+"""the domain schema applies, enforces idempotency keys, and holds no books."""
 
 from __future__ import annotations
 

@@ -1,8 +1,8 @@
 name: realistic_neplatitor
 note: >-
-  WP-73, data → catalog: two months of the neplatitor firm drawn from the seed, without choosing any
+  data → catalog: two months of the neplatitor firm drawn from the seed, without choosing any
   document's path, run blind (no expectations). What it lands on that the catalog does not
-  foresee is listed in docs/CATALOG_GAPS.md.
+  foresee becomes a SURFACE.md row.
 firm: neplatitor
 period: "2026-07"
 months: ["2026-06", "2026-07"]

@@ -1,11 +1,11 @@
-"""Which invoice does a bank line settle? A proposal for the person, never a decision (WP-22).
+"""Which invoice does a bank line settle? A proposal for the person, never a decision.
 
 A statement line names no partner (``extract/statement.py``: nothing is guessed from text),
-so the bank mouths (WP-19) wait for a person to bind the partner and the invoice. This
+so the bank mouths wait for a person to bind the partner and the invoice. This
 module lists the invoices the line could settle, so the ``v3_approve`` question can carry
 them; the person still answers, and only their answer reaches the package.
 
-Deterministic, no model (00_LAW invariant 4). Candidates, from the invoice Jobs this system
+Deterministic, no model (LAW L21). Candidates, from the invoice Jobs this system
 holds and the invoices the uploaded books show:
 
 - the right side: a receipt (``incasare``) settles a sale (``iesire``), a payment
@@ -14,7 +14,7 @@ holds and the invoices the uploaded books show:
 - still open: its gross less what other bound bank lines already paid on it (``paid``, by
   partner + number); an invoice those lines settled in full is no candidate;
 - ``full``: the open amount equals the line, to the cent;
-- ``partial`` (WP-30): the open amount is larger and the bank's description names the invoice
+- ``partial``: the open amount is larger and the bank's description names the invoice
   or its partner (an amount alone never proposes a partial payment); ``open_after`` is what
   stays open.
 
@@ -23,7 +23,7 @@ the partner's name, then a full cover over a partial one. ``edit`` is a ready ``
 edit only when one candidate leads alone; otherwise the person picks from the list or posts
 it in SAGA.
 
-``groups`` (WP-30): with no full candidate, two to four open invoices of one partner whose
+``groups``: with no full candidate, two to four open invoices of one partner whose
 open amounts add up to the line. A bank mouth writes one invoice per line, so a group is never
 an edit: a person posts it in SAGA (or picks one invoice for a partial payment).
 """
@@ -69,7 +69,7 @@ class Candidate(Closed):
 
 
 class CandidateGroup(Closed):
-    """One payment for several invoices of one partner (WP-30)."""
+    """One payment for several invoices of one partner."""
 
     partner_cui: Cui
     partner_name: str | None

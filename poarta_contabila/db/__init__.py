@@ -1,4 +1,4 @@
-"""Postgres domain store (00_LAW A1)."""
+"""Postgres domain store (LAW L45)."""
 
 from __future__ import annotations
 

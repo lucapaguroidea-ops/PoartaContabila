@@ -1,4 +1,4 @@
-"""The books a firm's documents leave in SAGA (WP-70), and the exports that witness them.
+"""The books a firm's documents leave in SAGA, and the exports that witness them.
 
 :class:`Book` posts each document the way SAGA posts it — not the way this system expects,
 so a gap between the two shows up when the month is run:
@@ -692,7 +692,7 @@ class Book:
         wb.save(buf)
         return buf.getvalue()
 
-    # ----- NextUp renderers (A2: a read-only eye) -----
+    # ----- NextUp renderers (LAW L8: a read-only eye) -----
 
     def _nextup_account(self, account: str, partner: Party | None) -> str:
         root = account.split(".")[0]

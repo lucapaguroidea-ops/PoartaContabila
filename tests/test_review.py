@@ -1,4 +1,4 @@
-"""WP-66 (00_LAW §8 A8): the review page and its inbox — a thin page over the resume routes."""
+"""LAW L26: the review page and its inbox — a thin page over the resume routes."""
 
 from __future__ import annotations
 

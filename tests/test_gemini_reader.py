@@ -1,4 +1,4 @@
-"""WP-36: Gemini reads synthetic statements directly through Google AI Studio — never a client's."""
+"""Gemini reads synthetic statements directly through Google AI Studio — never a client's."""
 
 from __future__ import annotations
 
@@ -351,7 +351,7 @@ def test_a_refusal_is_not_asked_again(cat):
     assert len(google.requests) == 1 and sleeps == []
 
 
-# ----- tiers and limits (00_LAW §8 A4) -----
+# ----- tiers and limits (LAW L31) -----
 
 
 def test_the_catalog_reads_lite_first_and_flash_to_escalate(cat):
@@ -406,7 +406,7 @@ def _pages(n: int) -> bytes:
     ("pdf", "kw", "order"),
     [
         (_pages(1), {}, [LITE, LITE2, STRONG, STRONG2]),
-        (_pages(2), {}, [LITE, LITE2, STRONG, STRONG2]),  # pages do not decide (A5)
+        (_pages(2), {}, [LITE, LITE2, STRONG, STRONG2]),  # pages do not decide (LAW L31)
         (_pages(1), {"strong": True}, [STRONG, STRONG2, LITE, LITE2]),  # asked for
         (_pages(1), {"escalate": True}, [STRONG, STRONG2]),  # a second run
     ],
@@ -528,7 +528,7 @@ def test_the_day_resets_at_pacific_midnight():
     assert limiter.take("m", limit, 1) == 0
 
 
-# ----- the second run (00_LAW §8 A4) -----
+# ----- the second run (LAW L31) -----
 
 
 class ByModel(Google):

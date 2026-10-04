@@ -1,4 +1,4 @@
-"""Witness exports (A2): SAGA C and NextUp journal / trial-balance files → lines and balances.
+"""Witness exports (LAW L8): SAGA C and NextUp journal / trial-balance files → lines and balances.
 
 The book of record is read, never written. Rules that keep the reading honest:
 
@@ -466,7 +466,7 @@ def synthetic(account: str) -> str:
 
 
 class ExportEye:
-    """SagaEye implementation over parsed exports (v1 witness, A2)."""
+    """SagaEye implementation over parsed exports (v1 witness, LAW L8)."""
 
     def __init__(
         self,

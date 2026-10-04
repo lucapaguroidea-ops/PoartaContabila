@@ -1,4 +1,4 @@
-"""Job store: emit is idempotent on ``(tenant_cui, source_hash)`` (IDEMPOTENCY.md).
+"""Job store: emit is idempotent on ``(tenant_cui, source_hash)`` (ARCHITECTURE.md §16).
 
 A second emit of the same source returns the existing Job; it never mints a
 second one. Only a decision whose gates all passed may be stored.

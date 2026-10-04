@@ -1,4 +1,4 @@
-"""ingest_source_doc (WP-04): a Job walks its articol de cale up to `packaged`.
+"""ingest_source_doc: a Job walks its articol de cale up to `packaged`.
 
     bind → reconcile_pre → judge → approve (v3_approve) → package → wait_validare → intent_check
 
@@ -6,7 +6,7 @@
   ``define_articol`` (the answer must be a real articol on this graph).
 - **reconcile_pre**: already in the books → ``already_in_sink`` and stop; ambiguous →
   ``needs_human`` and stop (the reason is on the job). The check is
-  :func:`poarta_contabila.recon.pre.make_pre_check` (WP-05), injected.
+  :func:`poarta_contabila.recon.pre.make_pre_check`, injected.
 - **judge** (``v3_judge``): Jev's verdict, checkpointed on the thread before ``approve``.
   ``approve`` re-runs from its first line on resume; were Jev asked there, a call that failed
   (a person asked) and then answered on the replay would skip the question and drop the
@@ -16,12 +16,12 @@
   touches SAGA before this answer (no side effect sits before ``interrupt()``).
 - **package**: render through the articol's invoice WriteModule and write the XML once per
   ``export_key``; a replay of the node writes nothing.
-- **wait_validare** (WP-06): waits for SAGA. The Windows agent imports the package
+- **wait_validare**: waits for SAGA. The Windows agent imports the package
   (status ``wait_validare``), a person validates in SAGA, and the agent's snapshot
   resumes the thread with the ``saga_doc_key`` of a document a stored snapshot shows
   validated; an answer without one is asked again. ``validated: false`` (import
   cancelled) → ``reopened``.
-- **intent_check** (WP-07): what SAGA posted must be what was packaged — side,
+- **intent_check**: what SAGA posted must be what was packaged — side,
   gross, and net / VAT / partner CUI where the eye shows them. Same → ``acked``;
   any difference → ``needs_human`` with the differences (Devalidare is a person's).
 
@@ -99,7 +99,7 @@ class IngestDeps:
     """(tenant cui, IBAN) → the SAGA treasury account it maps to (``5121.01``), or None."""
     settlement: Callable[[CanonicalDocument], SettlementProposal | None] = lambda doc: None
     book_of_record: Callable[[str], str] = lambda cui: "saga"
-    """(tenant cui) → its book of record; only ``saga`` has a mouth (00_LAW §8 A2 §3)."""
+    """(tenant cui) → its book of record; only ``saga`` has a mouth (LAW L8)."""
     observe: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: None
     """(role_id, input, tenant cui): a shadow model role at its place (records only)."""
     observe_question: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: (
@@ -354,8 +354,8 @@ def build_ingest_graph(deps: IngestDeps, *, checkpointer: Any):
         job = deps.jobs.get(state["job_id"])
         doc = CanonicalDocument.model_validate(state["canonical"])
         book = deps.book_of_record(job.tenant.cui)
-        if book != "saga":  # A2 §3: nothing is written to NextUp; gating only, no PreFile
-            error = f"book of record is {book}: no PreFile (00_LAW §8 A2 §3); post it there"
+        if book != "saga":  # LAW L8: nothing is written to NextUp; gating only, no PreFile
+            error = f"book of record is {book}: no PreFile (LAW L8); post it there"
             deps.jobs.update(job.job_id, status="needs_human", error=error)
             return {"status": "needs_human", "error": error}
         declared = cat.articol(state["articol_id"]).get("write_modules") or []

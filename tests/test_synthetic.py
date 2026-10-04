@@ -1,4 +1,4 @@
-"""WP-70: synthetic firms, documents and books — invented, seeded, read by the real readers."""
+"""synthetic firms, documents and books — invented, seeded, read by the real readers."""
 
 from __future__ import annotations
 
@@ -313,7 +313,7 @@ def test_the_account_level_defects(tmp_path):
 
 
 def test_realistic_months_are_drawn_sized_and_repeatable():
-    """WP-73: two months of 30–60 documents each, the same bytes for the same seed."""
+    """two months of 30–60 documents each, the same bytes for the same seed."""
     from poarta_contabila.synthetic.months import realistic
 
     for key in ("abroad", "neplatitor", "bonuri"):

@@ -1,4 +1,4 @@
-"""WP-71: the scenario runner — every scenario in fixtures/scenarios/ runs locally and passes."""
+"""the scenario runner — every scenario in fixtures/scenarios/ runs locally and passes."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def test_every_scenario_passes(results, name):
 
 
 def test_every_reachable_catalog_row_has_a_passing_scenario(results):
-    """WP-72, catalog → data: a row is reachable or listed out of reach with its reason."""
+    """catalog → data: a row is reachable or listed out of reach with its reason."""
     cmap = build_map(load_catalog(), [r.outcome() for r in results.values()])
     assert cmap.problems == []
     assert [f"{r.table} {r.key}" for r in cmap.to_scenario()] == []
@@ -87,14 +87,14 @@ def test_a_passing_run_feeds_the_coverage_map():
 
 
 def test_nothing_unforeseen_once_the_accepted_rows_are_in(results):
-    """WP-73: after G1–G4 and G6 entered, the realistic months land on nothing the catalog
-    does not foresee (no refused upload, no unbound Job, no blocker outside a control)."""
+    """after the owner's rows of 2026-10-03 entered, the realistic months land on nothing the
+    catalog does not foresee (no refused upload, no unbound Job, no blocker outside a control)."""
     cmap = build_map(load_catalog(), [r.outcome() for r in results.values()])
     assert [(f.kind, f.scenario, f.subject) for f in cmap.findings] == []
 
 
 def test_an_invoice_from_abroad_as_xml_is_a_foreign_invoice_job():
-    """WP-73 G1: a UBL whose counterparty has no RO CUI is foreign_invoice_xml."""
+    """a UBL whose counterparty has no RO CUI is foreign_invoice_xml."""
     from poarta_contabila.scenarios import local_clients
     from poarta_contabila.synthetic import FIRMS
     from poarta_contabila.synthetic.docs import Gen
@@ -130,8 +130,8 @@ def test_the_cli_runs_named_scenarios(capsys):
 
 
 def test_an_invoice_from_abroad_is_not_labelled_as_from_spv():
-    """WP-74 (live): System Two read "received via SPV" off an XML from abroad; the stored
-    source kind said ``ubl_spv``. It is ``xml``; an SPV zip stays ``ubl_spv``."""
+    """Live sample of 2026-10-03: System Two read "received via SPV" off an XML from abroad; the
+    stored source kind said ``ubl_spv``. It is ``xml``; an SPV zip stays ``ubl_spv``."""
     from langgraph.checkpoint.memory import MemorySaver
 
     from poarta_contabila.agent import InMemoryAgentStore

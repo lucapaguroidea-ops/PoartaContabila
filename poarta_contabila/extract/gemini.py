@@ -1,6 +1,6 @@
-"""WP-36: Gemini reads a statement PDF, directly through Google AI Studio — synthetic tenants only.
+"""Gemini reads a statement PDF, directly through Google AI Studio — synthetic tenants only.
 
-The owner's decision of 2026-10-02 (``00_LAW.md`` §3 invariant 5): document reading on
+The owner's decision of 2026-10-02 (``LAW.md`` L28): document reading on
 synthetic data goes straight to Google AI Studio with the key in
 ``GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC``; every other role stays on OpenRouter; client data only
 ever takes the EU route. The AI Studio free tier may use what it is sent to improve Google's
@@ -56,7 +56,7 @@ KEY_ENV = "GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC"
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 # Google answers 503 UNAVAILABLE (and 500/504) when the model is busy. On the free tier a 503
 # seems to count against the daily quota, so a busy model is asked once more, then the next
-# model in the order is (00_LAW §8 A4). 429 is a quota: the next model at once.
+# model in the order is (LAW L31). 429 is a quota: the next model at once.
 TRANSIENT = frozenset({500, 503, 504})
 ATTEMPTS = 2
 BACKOFF = (10.0,)
@@ -117,7 +117,7 @@ class Busy(GeminiError):
 
 class OutOfQuota(GeminiError):
     """No model in the order can read now (all at their limit, or all busy): nothing is wrong
-    with the document, so it waits (00_LAW §8 A5). *retry_after*: seconds until the first
+    with the document, so it waits (LAW L31). *retry_after*: seconds until the first
     model may read again."""
 
     def __init__(self, message: str, retry_after: float):
@@ -147,7 +147,7 @@ def estimate_tokens(pdf: bytes) -> int:
 @dataclass
 class RateLimiter:
     """Requests and tokens per model over the last minute, and requests per Pacific day,
-    shared by every reader in the process (00_LAW §8 A3, A4). Only counts what this process
+    shared by every reader in the process (LAW L31). Only counts what this process
     sent: Google stays the judge (429)."""
 
     clock: Callable[[], float] = time.monotonic
@@ -295,7 +295,7 @@ def _holder_is(header: dict[str, str], cui: str) -> bool:
 
 @dataclass
 class GeminiStatementReader:
-    """Reads one synthetic tenant's statement PDF into the extract contract (WP-36)."""
+    """Reads one synthetic tenant's statement PDF into the extract contract."""
 
     role: ModelRole
     key: str
@@ -307,7 +307,7 @@ class GeminiStatementReader:
     sleep: Callable[[float], None] = time.sleep
     limiter: RateLimiter = field(default_factory=lambda: LIMITER)
     reserve_until: datetime | None = None
-    """00_LAW §8 A6: until when an operator opened the reserve models (Pacific midnight)."""
+    """LAW L31: until when an operator opened the reserve models (Pacific midnight)."""
 
     def reserve_active(self) -> bool:
         tiers = self.role.tiers
@@ -414,7 +414,7 @@ class GeminiStatementReader:
         return extraction, header, model
 
     def order(self, pdf: bytes, *, strong: bool = False, escalate: bool = False) -> list[str]:
-        """The models to try, in order (00_LAW §8 A4, A5): always everyday first (the Lite
+        """The models to try, in order (LAW L31): always everyday first (the Lite
         models read hard statements too); the strong tier first only when asked; only the
         strong tier for a second run on a read that did not tie out (*escalate*)."""
         tiers = self.role.tiers
@@ -477,7 +477,7 @@ class GeminiStatementReader:
     def _read_within_limits(
         self, pdf: bytes, models: list[str]
     ) -> tuple[dict[str, str], list[dict[str, Any]], str, str]:
-        """The first of *models* with quota that answers (00_LAW §8 A4)."""
+        """The first of *models* with quota that answers (LAW L31)."""
         tokens = estimate_tokens(pdf)
         left, errors, retry = list(models), [], []
         while left:

@@ -1,4 +1,4 @@
-"""Model roles (00_LAW §3 invariant 5; catalog ``ArticoleModelRoles``): who may call which model.
+"""Model roles (LAW L28; catalog ``ArticoleModelRoles``): who may call which model.
 
 A model acts only inside a node, through a role row that pins one exact model. Before any
 call, :func:`route_check` refuses (fail closed):
@@ -10,7 +10,8 @@ call, :func:`route_check` refuses (fail closed):
 
 ``MODEL_CALLS=dry`` records exactly what a role would be sent (role, model, provider pin,
 input) in ``domain.model_calls`` and sends nothing; the caller then fails closed as if no
-answer came (a person is asked). The live sender is not built here (BUILD WP-20 / WP-24).
+answer came (a person is asked). The senders live in ``jev.py``, ``explain.py`` and
+``extract/gemini.py``.
 """
 
 from __future__ import annotations
@@ -32,24 +33,24 @@ System = Literal["system_one", "system_two", "document_reading"]
 CallMode = Literal["off", "dry", "live"]
 """``off``: nothing. ``dry``: every role records what it would be sent, nothing is sent.
 ``live``: a role with a built sender sends, synthetic tenants only: document reading
-(Google AI Studio, WP-36), the wired Jev packs (OpenRouter Decisions, WP-20) and the wired
-System Two explanations (OpenRouter chat, WP-50); every other role records as in ``dry``."""
+(Google AI Studio), the wired Jev packs (OpenRouter Decisions) and the wired
+System Two explanations (OpenRouter chat); every other role records as in ``dry``."""
 CALL_MODES = ("off", "dry", "live")
 Route = Literal["openrouter", "google_ai_studio"]
 KEY_ENV = {
-    "system_one": "OPENROUTER_SYS1_API_KEY",  # Jev: its own key and credit limit (WP-55)
+    "system_one": "OPENROUTER_SYS1_API_KEY",  # Jev: its own key and credit limit
     "system_two": "OPENROUTER_SYS2_API_KEY",
-    "document_reading": "GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC",  # direct to AI Studio (WP-36)
+    "document_reading": "GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC",  # direct to AI Studio
 }
-# WP-36: Google AI Studio takes the bare Gemini id (``gemini-…``), never OpenRouter's
+# Google AI Studio takes the bare Gemini id (``gemini-…``), never OpenRouter's
 # ``google/…`` form, and only for synthetic tenants (route_check).
 _AI_STUDIO_MODEL = re.compile(r"^gemini-[a-z0-9][a-z0-9.\-]*$")
 FAMILIES = {
     "system_one": {"jev"},
-    "system_two": {"deepseek", "glm", "kimi"},  # kimi: an alternate only (00_LAW §8 A7)
+    "system_two": {"deepseek", "glm", "kimi"},  # kimi: an alternate only (LAW L32)
     "document_reading": {"gemini"},
 }
-# an alternate's family, by its OpenRouter model prefix (A7)
+# an alternate's family, by its OpenRouter model prefix (LAW L32)
 ALTERNATE_FAMILIES = {
     "typesafe": "jev",
     "deepseek": "deepseek",
@@ -60,7 +61,7 @@ log = logging.getLogger(__name__)
 _ALIAS = re.compile(r"(^openrouter/auto$|latest|:free$|^auto$)", re.IGNORECASE)
 
 
-# WP-35: the EU route's regions, by provider — an explicit list, never a prefix. Google's
+# the EU route's regions, by provider — an explicit list, never a prefix. Google's
 # europe-west2 (London) and europe-west6 (Zurich) are outside the EU; "global" has no residency.
 EU_LOCATIONS: dict[str, frozenset[str]] = {
     "vertex": frozenset(
@@ -84,9 +85,9 @@ _ENV_NAME = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 
 class EuRoute(Closed):
-    """The only route a client tenant's data may take (00_LAW §3 invariant 5; WP-35).
+    """The only route a client tenant's data may take (LAW L28).
 
-    Who serves which family is the owner's decision (``docs/EU_VERTEX_SETUP.md``); this only
+    Who serves which family is the owner's decision (``docs/owner/EU_VERTEX_SETUP.md``); this only
     makes whatever is written checkable: an EU region of that provider, one exact model, and
     the variables that hold the credential (values never in the catalog).
     """
@@ -132,7 +133,7 @@ class ProviderPin(Closed):
 
 
 class Alternate(Closed):
-    """00_LAW §8 A7: an owner-approved pin a role moves to while its main pin's provider fails
+    """LAW L32: an owner-approved pin a role moves to while its main pin's provider fails
     the data policy (``provider_policy.pick``). Exact model, named providers, deny."""
 
     model: str
@@ -157,14 +158,14 @@ class RateLimit(Closed):
 
 
 class Tiers(Closed):
-    """00_LAW §8 A4: the order Google AI Studio document reading uses its models in.
+    """LAW L31: the order Google AI Studio document reading uses its models in.
     ``everyday``: the most requests a day, read first. ``strong``: more capable, fewer a day;
     for hard documents, an asked re-read, or a second run on a read that does not tie out."""
 
     everyday: list[str] = Field(min_length=1)
     strong: list[str] = Field(min_length=1)
     reserve: list[str] = Field(default_factory=list)
-    """00_LAW §8 A6: read with only on a day an operator chose them, after the other tiers."""
+    """LAW L31: read with only on a day an operator chose them, after the other tiers."""
 
     @property
     def all(self) -> list[str]:
@@ -187,15 +188,15 @@ class ModelRole(Closed):
     site yet."""
     model: str | None = None
     tiers: Tiers | None = None
-    """00_LAW §8 A4: Google AI Studio document reading only; ``model`` is its first everyday
+    """LAW L31: Google AI Studio document reading only; ``model`` is its first everyday
     model. Never on another route."""
     rate_limits: dict[str, RateLimit] = Field(default_factory=dict)
-    """Per model id: the free-tier quota the sender keeps under (A3, A4)."""
+    """Per model id: the free-tier quota the sender keeps under (LAW L31)."""
     route: Route = "openrouter"
     provider: ProviderPin = Field(default_factory=ProviderPin)
     alternates: list[Alternate] = Field(default_factory=list)
-    """00_LAW §8 A7: approved pins, in order, used only while the main pin fails the data
-    policy (OpenRouter roles; WP-53)."""
+    """LAW L32: approved pins, in order, used only while the main pin fails the data
+    policy (OpenRouter roles)."""
     data: Literal["synthetic_only"] = "synthetic_only"
     eu_route: EuRoute | None = None
     note: str | None = None
@@ -225,7 +226,7 @@ class ModelRole(Closed):
         return self.card.get("questions") if self.system == "system_one" else None
 
 
-# ----- role cards (WP-25) -----
+# ----- role cards -----
 
 _QUESTION_TYPES = {"noul", "choice", "score"}
 _SYS2_FIELDS = ["explanation", "facts_cited", "missing"]
@@ -333,7 +334,7 @@ def _reading_brief(role: ModelRole) -> str:
 
 
 def ai_studio_model_ok(model: str) -> bool:
-    """A bare Google AI Studio id (``gemini-…``), no alias (WP-36)."""
+    """A bare Google AI Studio id (``gemini-…``), no alias."""
     return bool(_AI_STUDIO_MODEL.match(model)) and not _ALIAS.search(model)
 
 
@@ -381,7 +382,7 @@ def load_roles(doc: dict[str, Any]) -> dict[str, ModelRole]:
             if role.route != "google_ai_studio":
                 raise ValueError(
                     f"role {role.role_id!r}: model tiers are only for Google AI Studio"
-                    " document reading (00_LAW §8 A4)"
+                    " document reading (LAW L31)"
                 )
             models = role.tiers.all
             if len(set(models)) != len(models):
@@ -516,7 +517,7 @@ class InMemoryModelCallStore:
         return list(reversed(rows))[:limit]
 
     def sent(self, role_id: str, input_hash: str) -> ModelCall | None:
-        """The latest ``sent`` call of *role_id* for this input (WP-50)."""
+        """The latest ``sent`` call of *role_id* for this input."""
         rows = [
             c
             for c in self.rows
@@ -560,7 +561,7 @@ class PostgresModelCallStore:
         return [ModelCall.model_validate(r[0], strict=False) for r in rows]
 
     def sent(self, role_id: str, input_hash: str) -> ModelCall | None:
-        """The latest ``sent`` call of *role_id* for this input (WP-50)."""
+        """The latest ``sent`` call of *role_id* for this input."""
         with self._psycopg.connect(self._dsn) as conn:
             row = conn.execute(
                 "SELECT body FROM domain.model_calls WHERE role_id = %s"
@@ -571,7 +572,7 @@ class PostgresModelCallStore:
         return ModelCall.model_validate(row[0], strict=False) if row else None
 
 
-# ----- shadow roles: observed at their place in the flow (WP-26) -----
+# ----- shadow roles: observed at their place in the flow -----
 
 
 @dataclass
@@ -580,7 +581,7 @@ class ModelGateway:
 
     Never blocks the flow: any failure here is logged and the node goes on. A shadow role's
     answer would decide nothing. A node that runs again on resume records the same input once
-    (``seen``). A wired System Two role (WP-50) is sent in ``live`` (``explain.send``) and its
+    (``seen``). A wired System Two role is sent in ``live`` (``explain.send``) and its
     explanation shown next to the question (:meth:`explanation`); it never feeds a node.
     """
 
@@ -590,7 +591,7 @@ class ModelGateway:
     synthetic: Any = lambda cui: False  # Callable[[str | None], bool]
     http: Any = None  # httpx.Client for the System Two sender (tests)
     key: Any = None  # Callable[[str], str | None]; None = os.environ.get
-    router: Any = None  # provider_policy.Router: the pin the data policy allows (WP-53)
+    router: Any = None  # provider_policy.Router: the pin the data policy allows
 
     def observe(self, role_id: str, payload: dict[str, Any], tenant_cui: str | None) -> None:
         try:

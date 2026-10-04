@@ -1,6 +1,6 @@
 name: incasare_partial_payment
 note: 'TVA la încasare, a customer pays half a sale: only half its VAT becomes exigible (4428 → 4427);
-  the other half stays open on 4428, and M1_8 agrees with the balanță (WP-75).'
+  the other half stays open on 4428, and M1_8 agrees with the balanță.'
 firm: incasare
 period: 2026-05
 seed: 1

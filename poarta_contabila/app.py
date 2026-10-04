@@ -29,7 +29,7 @@ def _database_url_from_env() -> str | None:
     return os.environ.get("DATABASE_URL") or None
 
 
-MAX_UPLOAD_MB = 32  # default request-body cap (WP-34); base64 adds a third, so ~24 MB files
+MAX_UPLOAD_MB = 32  # default request-body cap; base64 adds a third, so ~24 MB files
 TOKEN_MIN_CHARS = 32
 
 
@@ -42,7 +42,7 @@ def _max_upload_bytes() -> int:
 
 
 class BodyLimit:
-    """Refuse a request body over *max_bytes* with 413 before any route runs (WP-34).
+    """Refuse a request body over *max_bytes* with 413 before any route runs.
 
     A declared Content-Length over the cap is refused at once. Otherwise the body is read in
     full first (routes read it whole anyway) and refused as soon as it passes the cap, so no
@@ -92,7 +92,7 @@ class BodyLimit:
         await body(scope, receive, send)
 
 
-# WP-38: the owner's variable names (2026-10-02); the old names are read only when the new
+# the owner's variable names (2026-10-02); the old names are read only when the new
 # one is unset, so a service still on the old names keeps working.
 OPERATOR_ENV = ("GRAPHUSERTOKEN_OPERATOR", "OPERATOR_TOKEN")
 AGENT_ENV = ("GRAPHUSERTOKEN_AGENT_SHARED", "AGENT_SHARED_TOKEN")
@@ -123,7 +123,7 @@ log = logging.getLogger(__name__)
 
 
 async def _retry_parked_reads(runtime: Callable[[], Any]) -> None:
-    """WP-42: every ``READING_RETRY_SECONDS`` (default 60; 0 = off), read again the parked
+    """every ``READING_RETRY_SECONDS`` (default 60; 0 = off), read again the parked
     statements whose time has come, so a statement waiting for model quota never stalls."""
     every = float(os.environ.get("READING_RETRY_SECONDS", "60") or 0)
     if every <= 0:
@@ -140,7 +140,7 @@ async def _retry_parked_reads(runtime: Callable[[], Any]) -> None:
 
 
 async def _refresh_provider_policies(runtime: Callable[[], Any]) -> None:
-    """WP-53: read OpenRouter's provider data policies at start and every
+    """read OpenRouter's provider data policies at start and every
     ``POLICY_REFRESH_SECONDS`` (default a day; 0 = off), so a role moves to an approved
     alternate the day its provider's policy changes."""
     from poarta_contabila.provider_policy import REFRESH_SECONDS
@@ -174,7 +174,7 @@ def create_app(
     *agent* overrides the runtime's agent service (tests). Tokens default to
     ``$GRAPHUSERTOKEN_AGENT_SHARED``, ``$GRAPHUSERTOKEN_OPERATOR`` (each falling back to its
     old name) and ``$GRAPHUSERTOKEN_CLAUDE_SYSBUILDER`` (the build agent: synthetic tenants
-    only, WP-38).
+    only).
     """
     token = env_token(AGENT_ENV) if agent_token is ... else agent_token
     op_token = env_token(OPERATOR_ENV) if operator_token is ... else operator_token
@@ -224,7 +224,7 @@ def create_app(
             except Exception as exc:  # report, do not crash the probe
                 checks["database"] = f"error: {type(exc).__name__}"
         ok = all(v == "ok" for k, v in checks.items() if k != "runtime")
-        # reported, not gating: a weak token is the owner's to rotate (WP-34)
+        # reported, not gating: a weak token is the owner's to rotate
         checks["operator_token"] = token_check(op_token, token, builder)
         checks["agent_token"] = token_check(token, op_token, builder)
         checks["sysbuilder_token"] = token_check(builder, op_token, token)

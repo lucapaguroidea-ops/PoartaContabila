@@ -1,4 +1,4 @@
-"""WP-28: expense reports over HTTP — triage splits the container; a person names the parts."""
+"""expense reports over HTTP — triage splits the container; a person names the parts."""
 
 from __future__ import annotations
 

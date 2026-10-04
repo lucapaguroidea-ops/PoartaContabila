@@ -1,17 +1,17 @@
-"""monthly_close (WP-10): a CloseRun per firm-month, never a Job.
+"""monthly_close: a CloseRun per firm-month, never a Job.
 
     lock_expected_set → period_diff → layer2 → v2_gate (v2_close) → v4_codit → end
 
 - **lock_expected_set**: the month's expected jobs are hashed and locked once per
   ``(cui, period)``. A later run whose set differs is a lock mismatch: material.
-- **period_diff**: Layer 1 (WP-08/09) against the tenant's eye and rules.
+- **period_diff**: Layer 1 against the tenant's eye and rules.
 - **layer2**: Layer 2 (Jev, ``v2_declaration_gate``) may only suggest, as JSON that
   validates against :class:`V2Gate`; anything else, an error or a timeout is no suggestion.
   Jev cannot clear ``material``: on a material month its ``file`` and any reading that the
   books are fine are dropped. The suggestion is stored on the thread before ``v2_gate``
   asks, so a resume shows and records the same one without asking Jev again.
 - **v2_gate**: a person answers ``v2_close``; ``file`` is refused while Layer 1 is material
-  (00_LAW 13).
+  (LAW L25).
 - A month with documents still waiting on a ``reconcile_sink`` PRE answer is material
   (blocker at lock): it is answered on ``recon:{cui}:{period}``, never closed around.
 - **v4_codit**: only after ``file``. ``skip`` writes nothing; ``accept`` may patch the filed
@@ -49,7 +49,7 @@ THREAD_PREFIX = "close:"
 CloseStatus = Literal["opened", "locked", "sink_pulled", "v2_ready", "hold", "filed", "v4_done"]
 
 
-MAX_DRAFT = 20  # book documents shown to the rule drafter at once (WP-32)
+MAX_DRAFT = 20  # book documents shown to the rule drafter at once
 
 
 class V2CloseResume(Closed):
@@ -128,10 +128,10 @@ class CloseDeps:
     store: Any  # InMemoryCloseStore | PostgresCloseStore
     expected: Callable[[str, str], list[ExpectedJob]]
     eye: Callable[[str, str], SagaEye]
-    rules: Any = None  # rule store (WP-09)
+    rules: Any = None  # rule store
     period_store: Any = None
     jev_v2: Callable[[PeriodDiff], Any] = lambda diff: None  # Layer 2 (jev.make_v2)
-    codit: Callable[[str, str], Any] = lambda cui, period: None  # CO.DiT (WP-11)
+    codit: Callable[[str, str], Any] = lambda cui, period: None  # CO.DiT
     codit_put: Callable[[Any], None] | None = None  # V4 writes CO.DiT through this
     observe_question: Callable[[str, dict, str | None], None] = lambda role_or_kind, payload, cui: (
         None
@@ -140,9 +140,9 @@ class CloseDeps:
     recon_open: Callable[[str, str], list[str]] = lambda cui, period: []
     stalled: Callable[[str, str], list[str]] = lambda cui, period: []
     prior: Callable[[str, str], list[ExpectedJob]] = lambda cui, period: []
-    """(cui, period) → the expected jobs of the months before (TVA la încasare, WP-73 G6)."""
-    """(cui, period) → jobs minted with no document on their thread (WP-73 G2)."""
-    """(cui, period) → jobs still waiting on a reconcile_sink PRE answer (WP-23)."""
+    """(cui, period) → the expected jobs of the months before (TVA la încasare)."""
+    """(cui, period) → jobs minted with no document on their thread."""
+    """(cui, period) → jobs still waiting on a reconcile_sink PRE answer."""
 
 
 class CloseState(TypedDict, total=False):
@@ -289,7 +289,7 @@ def build_close_graph(deps: CloseDeps, *, checkpointer: Any):
         }
         deps.observe_question("v2_close", question, cui)
         unexplained = [b.sink for b in diff.inbound if b.kind == "unexplained"]
-        if unexplained:  # shadow (WP-32): what the rule drafter would be given
+        if unexplained:  # shadow: what the rule drafter would be given
             rules = deps.rules.active(cui) if deps.rules is not None else []
             deps.observe_question(
                 "explained_rule",

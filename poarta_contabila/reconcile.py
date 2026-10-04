@@ -1,4 +1,4 @@
-"""reconcile_sink (WP-23): the month's PRE questions, one ``recon:{cui}:{period}`` thread.
+"""reconcile_sink: the month's PRE questions, one ``recon:{cui}:{period}`` thread.
 
     load_window → (nothing waits: end) | ask → apply → load_window …
 
@@ -111,7 +111,7 @@ class ReconDeps:
 
 @dataclass
 class PostDeps:
-    """POST stage (WP-27): how SAGA posted the period's acked documents."""
+    """POST stage: how SAGA posted the period's acked documents."""
 
     waiting: Callable[[str, str], list[WaitingJob]]
     """(cui, period) → the period's acked jobs."""

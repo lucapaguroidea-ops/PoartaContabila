@@ -1,11 +1,11 @@
 # PoartaContabila — session loader
 
-This repo is the Poarta Primară pack (source of truth) plus the `poarta_contabila` package.
-
-1. Read `INDEX.md`, `LAW.md` and `AGENTS.md` before any code.
-2. Take the next WP from `BUILD.md`; one WP per commit; mark it `done` in the same commit, and
-   move its details to `docs/BUILD_DONE.md` (BUILD.md keeps open work only).
-3. No client data in this repo: invented CUIs must pass the check digit (`poarta_contabila.types.cui_is_valid`).
+1. Read `README.md` (what, why, where it stands), `LAW.md` (the rules) and `AGENTS.md` (how to
+   work) before any code.
+2. Take the next WP from `BUILD.md`; one WP per commit; mark it `done` in the same commit and
+   remove its details from `BUILD.md`.
+3. No client data in this repo: invented CUIs must pass the check digit
+   (`poarta_contabila.types.cui_is_valid`).
 
 ```bash
 uv sync                                   # install

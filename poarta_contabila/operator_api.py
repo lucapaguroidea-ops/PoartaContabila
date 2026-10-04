@@ -4,7 +4,7 @@ Bearer ``GRAPHUSERTOKEN_OPERATOR`` (old name ``OPERATOR_TOKEN``). It must differ
 agent token: the agent imports, a person answers questions. Unset, equal to the agent token,
 or no runtime → 503.
 
-WP-38: ``GRAPHUSERTOKEN_CLAUDE_SYSBUILDER`` is the build agent's token (Claude, acting for the
+LAW L35: ``GRAPHUSERTOKEN_CLAUDE_SYSBUILDER`` is the build agent's token (Claude, acting for the
 owner): the same routes, **synthetic tenants only**. Every request must resolve to a tenant
 marked ``data_class: synthetic`` (by the path's ``cui``, the ``cui`` query, the job's or the
 batch's tenant), else 403; a tenant is never registered or turned into client data with it;
@@ -45,14 +45,14 @@ class DecontUpload(BaseModel):
 
 
 class StatementUpload(BaseModel):
-    """The bank's PDF, its header, and the movement tables if already read (EXTRACT.md);
+    """The bank's PDF, its header, and the movement tables if already read (ARCHITECTURE.md §15);
     without tables the statement reader (Document AI) reads them."""
 
     meta: StatementMeta
     tables: list[dict[str, Any]] | None = None
     pdf_b64: str
     strong: bool = False
-    """Gemini reads with its strong tier first (00_LAW §8 A4); synthetic tenants only."""
+    """Gemini reads with its strong tier first (LAW L31); synthetic tenants only."""
 
 
 class RuleRequest(RuleBody):
@@ -89,7 +89,7 @@ def _builder(request: Request) -> bool:
 
 
 def _synthetic_only(rt: Runtime, request: Request) -> None:
-    """The build agent's scope (WP-38): this request's tenant must be synthetic."""
+    """The build agent's scope: this request's tenant must be synthetic."""
     params, query = request.path_params, request.query_params
     if "cui" in params:
         cui = params["cui"]
@@ -110,7 +110,7 @@ def _synthetic_only(rt: Runtime, request: Request) -> None:
     elif request.url.path in _TENANTLESS:
         return
     elif request.url.path.startswith("/model-roles/") and request.url.path.endswith("/compare"):
-        return  # WP-59: synthetic tenants' questions only
+        return  # synthetic tenants' questions only
     else:
         raise HTTPException(403, "the build agent's token does not open this route")
     if not rt._synthetic(cui):
@@ -146,8 +146,8 @@ def operator_router(
         rt: Runtime = Depends(operator),
         x_operator_name: str | None = Header(default=None),
     ) -> str | None:
-        """The person answering (WP-33): one shared token names nobody, so they say. The
-        build agent's answers are always its own (WP-38)."""
+        """The person answering: one shared token names nobody, so they say. The
+        build agent's answers are always its own."""
         if _builder(request):
             return SYSBUILDER
         if x_operator_name is None:
@@ -202,7 +202,9 @@ def operator_router(
     def period_diff(
         cui: str,
         period: str,
-        tva: str | None = Query(default=None, description="CO.DiT axis tva until WP-11"),
+        tva: str | None = Query(
+            default=None, description="CO.DiT axis tva, when no CO.DiT is stored"
+        ),
         exig: str | None = Query(default=None),
         rt: Runtime = Depends(operator),
     ) -> dict[str, Any]:
@@ -249,7 +251,7 @@ def operator_router(
         documents: int = Query(default=0, ge=0, description="statements about to be uploaded"),
         rt: Runtime = Depends(operator),
     ) -> dict[str, Any]:
-        """WP-42: Gemini reads left today per model, what waits, and a warning before a batch
+        """Gemini reads left today per model, what waits, and a warning before a batch
         the budget does not cover."""
         try:
             return rt.reading_budget(cui, documents)
@@ -258,7 +260,7 @@ def operator_router(
 
     @router.get("/reading/{cui}/waiting")
     def reading_waiting(cui: str, rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
-        """WP-42: this tenant's parked statements (waiting, read, refused)."""
+        """this tenant's parked statements (waiting, read, refused)."""
         return [w.model_dump(mode="json", exclude={"meta"}) for w in rt.reading_waits.list(cui)]
 
     @router.post("/reading/{cui}/choice")
@@ -268,7 +270,7 @@ def operator_router(
         rt: Runtime = Depends(operator),
         operator_name: str | None = Depends(who),
     ) -> dict[str, Any]:
-        """WP-43 (00_LAW §8 A6): every tier spent — ``wait`` for the reset, or ``reserve``:
+        """LAW L31: every tier spent — ``wait`` for the reset, or ``reserve``:
         read with the catalog's reserve models until Pacific midnight. Recorded."""
         try:
             return rt.reading_choose(cui, body.choice, operator_name)
@@ -283,7 +285,7 @@ def operator_router(
         rt: Runtime = Depends(operator),
         operator_name: str | None = Depends(who),
     ) -> dict[str, Any]:
-        """WP-43: set a parked statement aside (then upload it with its tables)."""
+        """set a parked statement aside (then upload it with its tables)."""
         try:
             return rt.skip_waiting(cui, wait_id, body.reason, operator_name)
         except IngestRefused as exc:
@@ -291,7 +293,7 @@ def operator_router(
 
     @router.post("/reading/{cui}/retry")
     def reading_retry(cui: str, rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
-        """WP-42: read again now every parked statement of this tenant whose time has come."""
+        """read again now every parked statement of this tenant whose time has come."""
         return rt.retry_waiting(cui)
 
     @router.post("/filings/{cui}/{period}")
@@ -328,7 +330,7 @@ def operator_router(
     def post_decont(
         cui: str, body: DecontUpload, rt: Runtime = Depends(operator)
     ) -> dict[str, Any]:
-        """An expense report: a container split into parts by a person (folder_triage, A2)."""
+        """An expense report: a container split into parts by a person (folder_triage, LAW L16)."""
         try:
             data = base64.b64decode(body.file_b64, validate=True)
         except (binascii.Error, ValueError) as exc:
@@ -367,8 +369,8 @@ def operator_router(
         limit: int = Query(default=50, ge=1, le=500),
         rt: Runtime = Depends(operator),
     ) -> list[dict[str, Any]]:
-        """Every answer a person submitted, newest first (WP-33): what, when, who, outcome."""
-        if _builder(request):  # WP-38: synthetic tenants' rows only
+        """Every answer a person submitted, newest first: what, when, who, outcome."""
+        if _builder(request):  # synthetic tenants' rows only
             rows = rt.answers.recent(cui=cui, thread_id=thread, limit=500)
             rows = [r for r in rows if r.tenant_cui and rt._synthetic(r.tenant_cui)][:limit]
         else:
@@ -382,7 +384,7 @@ def operator_router(
         model: str | None = Query(default=None, description="another AI Studio model"),
         rt: Runtime = Depends(operator),
     ) -> dict[str, Any]:
-        """WP-37: Gemini reads the synthetic evaluation statements; each is scored."""
+        """Gemini reads the synthetic evaluation statements; each is scored."""
         try:
             return rt.ocr_eval(cui, case, model)
         except IngestRefused as exc:
@@ -390,12 +392,12 @@ def operator_router(
 
     @router.get("/model-roles")
     def model_roles(rt: Runtime = Depends(operator)) -> list[dict[str, Any]]:
-        """Every model role (00_LAW §3.5): where it acts, its model, whether it may be called."""
+        """Every model role (LAW L28): where it acts, its model, whether it may be called."""
         return rt.model_roles_view()
 
     @router.get("/model-keys")
     def model_keys(rt: Runtime = Depends(operator)) -> dict[str, Any]:
-        """WP-56: what each OpenRouter key has spent and has left, read from OpenRouter now
+        """what each OpenRouter key has spent and has left, read from OpenRouter now
         (and the account's credits when a management key is set). Never a key value."""
         return rt.key_usage()
 
@@ -407,7 +409,7 @@ def operator_router(
         rt: Runtime = Depends(operator),
         operator_name: str | None = Depends(who),
     ) -> dict[str, Any]:
-        """WP-53 (00_LAW §8 A7): no approved pin passes the data policy — ``wait``, ``pause``
+        """LAW L32: no approved pin passes the data policy — ``wait``, ``pause``
         the role, or ``allow_synthetic`` until a date (synthetic tenants only). Operators only."""
         if _builder(request):
             raise HTTPException(403, "the build agent does not choose model routes")
@@ -425,7 +427,7 @@ def operator_router(
         skip: int = Query(default=0, ge=0, le=20),
         rt: Runtime = Depends(operator),
     ) -> dict[str, Any]:
-        """WP-59: the main pin against each approved alternate on the role's latest synthetic
+        """the main pin against each approved alternate on the role's latest synthetic
         questions, first answer only. Nothing is recorded or changed. A call can take a minute
         and the edge closes at 300 s: compare one candidate on one question per request."""
         try:
@@ -441,7 +443,7 @@ def operator_router(
         rt: Runtime = Depends(operator),
     ) -> list[dict[str, Any]]:
         """What each role was sent, or would be (MODEL_CALLS=dry), newest first."""
-        if _builder(request):  # WP-38: synthetic tenants' rows only
+        if _builder(request):  # synthetic tenants' rows only
             rows = rt.model_calls.recent(role, 500)
             rows = [c for c in rows if c.tenant_cui and rt._synthetic(c.tenant_cui)][:limit]
         else:
@@ -450,7 +452,7 @@ def operator_router(
 
     @router.post("/recon/{cui}/{period}")
     def start_recon(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
-        """One reconcile_sink pass over the month's undecided PRE checks (WP-23)."""
+        """One reconcile_sink pass over the month's undecided PRE checks."""
         try:
             return rt.start_recon(cui, period)
         except IngestRefused as exc:
@@ -474,7 +476,9 @@ def operator_router(
     def start_close(
         cui: str,
         period: str,
-        tva: str | None = Query(default=None, description="CO.DiT axis tva until WP-11"),
+        tva: str | None = Query(
+            default=None, description="CO.DiT axis tva, when no CO.DiT is stored"
+        ),
         exig: str | None = Query(default=None),
         rt: Runtime = Depends(operator),
     ) -> dict[str, Any]:
@@ -515,7 +519,7 @@ def operator_router(
 
     @router.get("/inbox/{cui}/{period}")
     def inbox(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
-        """WP-66 (00_LAW §8 A8): every question waiting on an accountant for this firm (its
+        """LAW L26: every question waiting on an accountant for this firm (its
         open jobs, and the month's reconcile and close), with explanation and answer shape."""
         if not _PERIOD.fullmatch(period):
             raise HTTPException(422, "period is YYYY-MM")

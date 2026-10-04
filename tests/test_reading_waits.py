@@ -1,4 +1,4 @@
-"""WP-42: a statement no model can read now waits and is read later (00_LAW §8 A5)."""
+"""a statement no model can read now waits and is read later (LAW L31)."""
 
 from __future__ import annotations
 
@@ -199,7 +199,7 @@ def test_the_background_retry_reads_what_is_due_and_can_be_turned_off(monkeypatc
     assert Rt.rounds >= 2
 
 
-# ----- WP-43: the operator's choice when every tier is spent (00_LAW §8 A6) -----
+# ----- the operator's choice when every tier is spent (LAW L31) -----
 
 RES, RES2 = "gemini-reserve-a", "gemini-reserve-b"
 

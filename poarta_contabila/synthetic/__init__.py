@@ -1,4 +1,4 @@
-"""Synthetic firms, documents and books (WP-70): seeded, invented, the same bytes every run.
+"""Synthetic firms, documents and books: seeded, invented, the same bytes every run.
 
 - :mod:`.firms` — five invented firms whose CO.DiT differs where the paths differ (TVA
   plătitor; TVA la încasare; neplătitor micro buying EU services; one trading abroad; one

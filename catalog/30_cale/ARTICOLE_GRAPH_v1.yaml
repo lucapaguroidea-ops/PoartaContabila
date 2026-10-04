@@ -83,7 +83,7 @@ graphs:
       - recon_pre_standard
       - recon_pre_bon
       - recon_pre_extras
-      - recon_pre_storno   # WP-73 G4
+      - recon_pre_storno   # owner, 2026-10-03
       - recon_post_standard
       - recon_post_bon
       - recon_post_tva_incasare

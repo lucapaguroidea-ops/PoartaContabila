@@ -1,4 +1,4 @@
-"""WP-00: the fake SagaEye satisfies the protocol and returns empty witness data."""
+"""the fake SagaEye satisfies the protocol and returns empty witness data."""
 
 from __future__ import annotations
 

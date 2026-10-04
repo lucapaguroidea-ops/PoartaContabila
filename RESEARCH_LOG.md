@@ -1,11 +1,11 @@
 # Research log
 
-Rule (`annex/GROK_BOT_BRIEF_RO_ACCOUNTING_LOOP.md` §5): never guess an external format or API.
+Rule (`LAW.md` L19): never guess an external format or API.
 Each item names the question, the official URL, a short quote, the date it was read, and what
 the code takes from it. A page that cannot be read gives nothing to build: the code keeps a
 typed stub that refuses (fail closed) and the item says what the owner must do.
 
-## R1 · SAGA C "Import date": invoices, receipts, payments, nomenclatures — WP-03, WP-19
+## R1 · SAGA C "Import date": invoices, receipts, payments, nomenclatures — WP-03
 
 - Question: file names, root and child tags, value formats of SAGA C's XML import for invoices
   (`iesire_factura_xml` / `intrare_factura_xml`), receipts and payments (`incasare_xml` /
@@ -91,10 +91,10 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
   payment that names no partner and no invoice, negative quantities in an imported invoice
   (storno), the length and characters allowed in `FacturaID`. The sample file above settles
   the formats for invoices.
-- Code takes: WP-03 and WP-19 write only tags listed above (`sinks/saga_xml.py`: invoices;
+- Code takes: the mouths write only tags listed above (`sinks/saga_xml.py`: invoices;
   receipts and payments without `ContClient` / `ContFurnizor` / `Moneda`).
 
-## R2 · Jev (TypeSafe AI System One) API — WP-20
+## R2 · Jev (TypeSafe AI System One) API — `jev.py`
 
 - Question: endpoint, authentication, request body (how a pack's questions are sent), response
   shape (how Choice / Score / Noul answers come back), timeouts, error codes, model pinning.
@@ -141,7 +141,7 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
   (`client.system_one(state=…, questions={…: Choice|Score|Noul(…)})`) but gives
   `TYPESAFE_BASE_URL="https://api.typesafe.ai/v1"`, which with the SDK's `/v1/systemone` path
   would double `/v1`; its benchmarks and prices are not the vendor's.
-- What WP-20 takes from this (not built yet, see BUILD WP-20): `POST {JEV_BASE_URL}/v1/systemone`
+- What `jev.py` takes from this: `POST {JEV_BASE_URL}/v1/systemone`
   with the bearer key; each pack's fields asked as primitives — `v3_judge`: `accounts_ok` and
   `needs_human` as `noul`, `risk` as `choice` {low, medium, high}; `v2_declaration_gate`:
   `books_support_declaration` as `noul`, `gap_materiality` {none, immaterial, material} and
@@ -173,9 +173,9 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
     questions." Pricing: input tokens only ("Output tokens are free").
   - Provider slug from `GET /api/v1/models/typesafe/jev-1.13/endpoints`: `tag: "typesafe"`
     (DeepSeek `deepseek`, Z.AI `z-ai`).
-  - Built from this: WP-20 (`jev.role_transport`).
+  - Built from this: `jev.role_transport`.
 
-## R3 · Google Document AI (statement PDFs, backend `document_ai`) — WP-21
+## R3 · Google Document AI (statement PDFs, backend `document_ai`) — `extract/document_ai.py`
 
 - Question: how to send a PDF to a processor and where the tables come back.
 - The human docs (`cloud.google.com` → `docs.cloud.google.com`) were denied by the build
@@ -216,7 +216,7 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
 - Not read (owner's choice, recorded open in BUILD): which processor type returns
   `pages[].tables` for these statements; the processor's location (EU recommended).
 
-## R4 · OpenRouter: chat, provider data policies, key spend, the free tier — WP-50 – WP-63
+## R4 · OpenRouter: chat, provider data policies, key spend, the free tier — `explain.py`, `provider_policy.py`
 
 - Question: how System Two is sent through OpenRouter, how a provider's data policy is known
   and enforced, how each key's spend is read, and what the pinned models do in practice.
@@ -227,7 +227,7 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
 - Chat: `POST https://openrouter.ai/api/v1/chat/completions` with `provider: {only: [...],
   allow_fallbacks: false, data_collection: "deny"}`. A pin whose provider trains on prompts is
   refused, observed: HTTP 404 "No endpoints found matching your data policy (Paid model
-  training)". The code reads 404 + "data policy" as `PolicyRefused` (A7).
+  training)". The code reads 404 + "data policy" as `PolicyRefused` (L32).
 - Provider data policies, observed: `GET https://openrouter.ai/api/frontend/v1/all-providers`
   carries `dataPolicy: {training, retainsPrompts}` per provider (a front-end endpoint, not in
   the API reference). A provider passes when both are false; 52 of 92 passed on 2026-10-03.
@@ -244,11 +244,11 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
   mandatory for this endpoint and cannot be disabled"), so the code sends `reasoning: {effort:
   "low", exclude: true}` with `max_tokens` 6000. Its JSON answer sometimes comes wrapped as
   `{"answer": {...}}` or `{"answer": "<the JSON as a string>"}`, and it may cite an empty list
-  as a fact; English answers had fewer slips than Romanian ones (WP-62, WP-63).
+  as a fact; English answers had fewer slips than Romanian ones.
 - `moonshotai/kimi-k2.6` on Moonshot AI, observed (6 tries): with no `reasoning` field it wrote
-  only reasoning and an empty answer 5 times, ~139 s and ~$0.02 a call (WP-61).
+  only reasoning and an empty answer 5 times, ~139 s and ~$0.02 a call.
 - Railway's edge closes a request at 300 s (observed HTTP 499 from the edge): a long model
-  comparison must be split into single calls (WP-61).
+  comparison must be split into single calls.
 - EU in-region routing (docs): `https://eu.openrouter.ai/api/v1` on the Business and Enterprise
   plans only, "decrypted within the designated region and routed only to provider endpoints in
   that region". Observed with `GET /api/v1/models?region=eu`: 70 models, `z-ai/glm-5.3` (on
@@ -297,8 +297,8 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
   Its `connect()` takes no client-library argument: the library is set with
   `driver_config.fb_client_library.value` before connecting (read in the 2.0.3 wheel).
 - Code takes: nothing yet. Tags stay R1's until a copy-firm import proves more (AGENTS).
-  Claude Code or Claude in Chrome never touches a client's firm (00_LAW §3.5); mouths stay
-  deterministic (§1). SAGA C is tested first (`docs/COPY_FIRM_TEST.md` §1–§10); SAGA WEB as a
+  Claude Code or Claude in Chrome never touches a client's firm (L33, L35); mouths stay
+  deterministic (§1). SAGA C is tested first (`docs/owner/COPY_FIRM_TEST.md` §1–§10); SAGA WEB as a
   mouth would be a sink-product change (a dated amendment), only once a client is on it. Open
   for Saga: does one key reach every firm of the account, does a new key end the old one, can
   a key belong to a non-Admin user, does the web finish screen keep sync "Nr.+data".

@@ -1,4 +1,4 @@
-"""WP-42: statements waiting for model quota (00_LAW §8 A5).
+"""statements waiting for model quota (LAW L31).
 
 When no Gemini model can read a synthetic statement now (every model in the order at its
 limit, or busy), nothing is wrong with the document: it is parked here with its PDF in the
@@ -32,11 +32,11 @@ class ReadingWait(Closed):
     attempts: int = 0
     created_at: str
     result: dict[str, Any] | None = None  # once read: the ingest result
-    skipped_by: str | None = None  # WP-43: who set it aside, and why (in reason)
+    skipped_by: str | None = None  # who set it aside, and why (in reason)
 
 
 class ReadingChoice(Closed):
-    """00_LAW §8 A6: what an operator chose when every tier was spent, for one Pacific day."""
+    """LAW L31: what an operator chose when every tier was spent, for one Pacific day."""
 
     choice_id: str  # {pacific date}:{seq}
     day: str  # the Pacific date it holds for

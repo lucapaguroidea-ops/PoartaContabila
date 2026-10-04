@@ -1,4 +1,4 @@
-"""Google Document AI reads statement PDFs (WP-21; EXTRACT.md backend ``document_ai``).
+"""Google Document AI reads statement PDFs (ARCHITECTURE.md §15 backend ``document_ai``).
 
 Built only from Google's official REST description of the Cloud Document AI API v1 (the
 Discovery document, revision 20260915; quoted in RESEARCH_LOG.md R3):

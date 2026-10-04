@@ -1,6 +1,6 @@
 """Shared scalar types and the closed base model.
 
-Money and fiscal dates travel as strings (00_LAW invariant 11). Decimals are
+Money and fiscal dates travel as strings (LAW L24). Decimals are
 built only inside compute nodes, from these strings.
 """
 

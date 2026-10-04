@@ -1,6 +1,6 @@
 name: neplatitor_month
 note: 'A neplătitor (micro) buying EU services: d301 and d390 fall due; purchase VAT in the cost is what
-  C0 implies (G6). The XML invoice from abroad is a job (G1) on foreign_rc_neplatitor, which goes to a
+  C0 implies. The XML invoice from abroad is a job on foreign_rc_neplatitor, which goes to a
   person (WP-D3) and is not packaged (C1). Known gap: its EUR amounts against the books'' RON stay off
   parity and unmatched (FX parked, WP-18).'
 firm: neplatitor

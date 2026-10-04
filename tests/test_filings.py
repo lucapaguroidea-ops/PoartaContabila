@@ -1,4 +1,4 @@
-"""WP-12: filings — due from CO.DiT, closed only by a stored receipt, never by the calendar."""
+"""filings — due from CO.DiT, closed only by a stored receipt, never by the calendar."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""WP-27: POST recon — how SAGA posted an acked document, and the person's answer to a mismatch."""
+"""POST recon — how SAGA posted an acked document, and the person's answer to a mismatch."""
 
 from __future__ import annotations
 
@@ -158,7 +158,7 @@ def test_an_acknowledged_posting_is_settled(cat):
     assert view["post_open"] == []
 
 
-# ----- WP-31: amounts per account -----
+# ----- amounts per account -----
 
 
 def test_the_amounts_on_the_expected_accounts_are_checked(cat):
@@ -192,7 +192,7 @@ def test_accounts_the_profile_does_not_list_are_not_compared(cat):
 
 
 def test_a_bank_lines_posting_is_found_in_the_bank_journal_under_its_reference():
-    """WP-71: SAGA holds an imported bank line under the bank's reference, in ``Banca``."""
+    """SAGA holds an imported bank line under the bank's reference, in ``Banca``."""
     from poarta_contabila.recon.post import posting_lines
     from poarta_contabila.sinks.exports import SinkLine
     from poarta_contabila.types import (

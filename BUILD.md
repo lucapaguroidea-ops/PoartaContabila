@@ -1,98 +1,287 @@
-# BUILD — work packages
+# BUILD — open work
 
-One WP per change. Status: `todo` | `in-progress` | `done` | `n-a` | `parked`.  
-Depends must be done. `decision` WPs need a human before code.
+The plan and the open work packages. Done work is in git history, not here. One WP per commit;
+mark it `done` in the same commit and remove its details (the commit message keeps the what
+and why). Status: `todo` | `in-progress` | `parked` | `decision` (a person decides before any
+code). Law values in tests are synthetic; invented CUIs pass the check digit (L36).
 
-Law values in tests are synthetic. Invented CUIs must pass the checksum if you validate checksums.
+## Where we are going
 
-## Sequence
+The destination is **Part D**: reviewing the four graphs, their paths, nodes, edges, catalog
+and articole against how one accountant actually keeps many clients, once SAGA C is integrated
+and the system has run on real client months, to find the balance point between the least
+friction and enough control. Part B (the SAGA C loops, synthetic data) and Part C (a pilot on
+client data) exist to get there with observation, not assumption. The repo tidy (Part A,
+WP-76) made the repo say what is true now. Approved by the owner on 2026-10-04 (decisions Q1–Q13 below).
+
+| Part | Hands on |
+|---|---|
+| A — tidy | a repo a first-time agent understands; `SURFACE.md` |
+| B — SAGA C loops (synthetic) | every surface row **saga** or **out**; readers and generator true to SAGA; the evidence ledger, already running |
+| C — pilot (client data) | months of real operation on several client types, measured by the same ledger |
+| D — graph loops | for each graph, the chosen design at its balance point of friction and control, compared against its adjustments and alternatives |
+
+## Status
 
 | id | status | depends | title |
 |---|---|---|---|
-| WP-00 | done | — | Scaffold `poarta_contabila` types + Postgres domain schema + fake SagaEye |
-| WP-01 | done | WP-00 | Load Lane B YAML; fail closed on unknown articol / HITL kind |
-| WP-02 | done | WP-01 | folder_triage + SourceDoc emit gates + Job unique `(cui, source_hash)` |
-| WP-03 | in-progress | WP-02 | `iesire_factura_xml` + `intrare_factura_xml` fixtures; human import on copy firm |
-| WP-04 | done | WP-03 | ingest graph through `packaged` + `v3_approve` interrupt (no SAGA before interrupt) |
-| WP-05 | done | WP-04 | PRE recon: RJ or SPV register already has the doc → `already_in_sink`, no package |
-| WP-06 | done | WP-03 | Windows agent pull / backup label / Import / `wait_validare` human |
-| WP-06R | done | WP-06 | Runtime: Postgres checkpointer, S3 bucket, tenants + witness uploads, operator API |
-| WP-07 | done | WP-06 | intent_check against SagaEye v1 (report pack / RJ-CM) |
-| WP-08 | done | WP-07 | ArticoleControls Layer 1 + PeriodDiff; `hard_failures` blocks package and file |
-| WP-09 | done | WP-08 | `POST /rules` + HITL `explained_rule` + `control_disposition` |
-| WP-10 | done | WP-09 | monthly_close + V2 pack; material cannot be cleared by Jev |
-| WP-11 | done | WP-01 | CO.DiT seed from Pins + T* F* + additive axes; no silent `tva_platitor` |
-| WP-12 | done | WP-10 | Filing items + `filing_receipt`; V2 `file` ≠ ANAF submit |
-| WP-13 | done | WP-05 | `extras_statement_pdf` extract path (document_ai); no MT940-first |
-| WP-14 | parked | — | ArticolBon / `bon_via_nota` |
-| WP-15 | parked | — | FDB SQL SagaEye |
-| WP-16 | parked | — | Agent Validare |
-| WP-17 | parked | — | Engagement backlog / `chat:` face (the review page is WP-66, not this face: A8 §6) |
-| WP-18 | parked | — | Take-on / year-end / D406 producer / FX engine |
-| WP-D3 | decision | WP-11 | Non-payer RC books: 4423 vs 446x on copy-firm note |
-| WP-D4 | decision | WP-35 | The EU route per model family (client data): Vertex `eu` for Gemini; Scaleway or OpenRouter EU for GLM; no EU route for Jev |
-| WP-19 | done | WP-13 | Bank mouths `incasare_xml` / `plata_xml` from the SAGA manual (R1) |
-| WP-20 | done | WP-10 | Jev Layer 1 `v3_judge` + Layer 2 `v2_declaration_gate`; live through OpenRouter's Decisions endpoint (synthetic only) |
-| WP-21 | done | WP-13 | Statement PDFs read by Google Document AI into the extract contract |
-| WP-22 | done | WP-19 | Bank line → the invoice it settles: a proposal on `v3_approve`, a person decides |
-| WP-23 | done | WP-05 | `reconcile_sink` graph, PRE stage: `need_rj_export`, `recon_ambiguous`, review contest |
-| WP-24 | done | WP-20 | Model roles: one pinned model per role, synthetic-only guard, dry-run trace |
-| WP-25 | done | WP-24 | Role cards: what each role is told, checked, hashed into the cache key |
-| WP-26 | done | WP-25 | Shadow roles: every model role observed at its place in the flow (dry) |
-| WP-27 | done | WP-23 | `reconcile_sink` POST stage: how SAGA posted an acked document (`recon_how_mismatch`) |
-| WP-28 | done | WP-06R | Expense reports over HTTP: `folder_triage` splits the container, a person names the parts |
-| WP-29 | done | WP-28 | Synthetic smoke run: one invented firm through every graph over HTTP, model calls by place |
-| WP-30 | done | WP-22 | Settlement proposals for partial payments, part-paid invoices and one payment for several |
-| WP-31 | done | WP-27 | POST stage compares the amounts on the partner and VAT accounts with the document |
-| WP-32 | done | WP-26 | `sys2_draft_rule` in shadow at `monthly_close.v2_gate`: every model role has a call site |
-| WP-33 | done | WP-06R | Answer log: every answer a person submits, its outcome and its author, append-only |
-| WP-34 | done | WP-06R | Request bodies capped (413, `MAX_UPLOAD_MB`); `/ready` reports weak or shared tokens |
-| WP-35 | done | WP-24 | `eu_route` is a checked structure: provider, EU region, exact model, credential variables |
-| WP-36 | done | WP-21, WP-24 | Gemini reads synthetic statement PDFs directly through Google AI Studio (live sender) |
-| WP-37 | done | WP-36 | Reading evaluation: six known synthetic statements, scored per model |
-| WP-38 | done | WP-34 | Token names `GRAPHUSERTOKEN_*`; the build agent's token, synthetic tenants only |
-| WP-39 | done | WP-36 | Gemini reader asks again when Google is busy (500/503/504), three tries at most |
-| WP-40 | done | WP-39 | Free-tier rate limits in the catalog; one backup model while the main one is at its limit |
-| WP-41 | done | WP-40 | Model tiers (Lite everyday, Flash strong), daily limits, second run on a read that does not tie |
-| WP-42 | done | WP-41 | Lite first always; a statement no model can read waits and is read later; reading budget |
-| WP-43 | done | WP-42 | The operator's choice when every tier is spent: wait, reserve models until midnight, or set aside |
-| WP-44 | done | WP-37 | The reading evaluation says why a read does not tie, and how many rows the model returned |
-| WP-45 | done | WP-44 | A balance or total row is not a line, whatever column its label is in; the brief keeps balances out of tables |
-| WP-46 | done | WP-08, WP-13 | C0 counts a statement line's counterpart: from its binding, or one matching posting in the books |
-| WP-47 | done | WP-29, WP-46 | The smoke run closes a clean August (books hold exactly its documents); September reopens on a lock mismatch |
-| WP-48 | done | WP-43 | Reserve order from the 2026-10-03 evaluation: 3.5 Flash, 3 Flash (preview), 3.6 Flash last |
-| WP-49 | done | WP-20 | One OpenRouter key for Jev and System Two: `OPENROUTER_SYS2_API_KEY` |
-| WP-50 | done | WP-32, WP-49 | System Two sender: a person's question comes with a checked explanation (DeepSeek through OpenRouter) |
-| WP-51 | done | WP-50 | The explain roles move to GLM (`z-ai/glm-5.3`): DeepSeek's provider trains on prompts |
-| WP-52 | done | WP-51 | GLM answers: reasoning off, a larger budget, JSON read from inside prose, a bad answer quoted |
-| WP-53 | done | WP-51 | Provider data policies read daily; approved alternates by themselves; the operator's choice when none passes (00_LAW §8 A7) |
-| WP-54 | done | WP-52 | GLM 5.3 needs reasoning: low effort, left out of the answer, 6000 tokens |
-| WP-55 | done | WP-49 | Jev back on its own key: `OPENROUTER_SYS1_API_KEY` (System Two keeps `OPENROUTER_SYS2_API_KEY`) |
-| WP-56 | done | WP-55 | `GET /model-keys`: each OpenRouter key's spend and what is left, read from OpenRouter; the account's with a management key |
-| WP-57 | done | WP-54 | Free-tier token cap: diagnosed `is_free_tier` per-request budget; resolved by adding credits (`is_free_tier` → `false`); `max_tokens` stays 6000 |
-| WP-58 | done | WP-57 | System Two brief: never an empty explanation, never an empty field cited; an answer off the card is asked once more with its reason |
-| WP-59 | done | WP-58 | `POST /model-roles/{role_id}/compare`: main pin vs each approved alternate on the latest synthetic questions, first answer only; nothing recorded |
-| WP-60 | done | WP-59 | A placeholder explanation is refused; reasoning settings sent to GLM only; a reasoning-only answer is named; compare defaults to one run |
-| WP-61 | done | WP-60 | `compare` one candidate on one question per request (`candidate`, `skip`): the edge closes at 300 s |
-| WP-62 | done | WP-61 | An answer wrapped once around the card's fields is unwrapped; a cited fact with an empty value is dropped, not refused |
-| WP-63 | done | WP-62 | System Two answers in English, Romanian domain words kept; each question carries `as_of`; the model's own memory of Romanian rules never wins over the input |
-| WP-64 | done | WP-63 | Smoke leaves a September invoice (`AB 0102`) at `v3_approve` and reports its System Two explanation |
-| WP-65 | done | WP-64 | A close or reconcile run stopped between nodes (process died) continues when started again |
-| WP-66 | done | WP-65 | Review page (00_LAW §8 A8): `GET /inbox/{cui}/{period}` and `/review`, a thin page that sends each answer unchanged to its resume route |
-| WP-67 | done | WP-66 | Expense-report splits (`decont_split`) on the review page: a batch index per firm; parts named by a hash the browser computes |
-| WP-68 | done | WP-67 | Tidy: done WPs' details moved to `docs/BUILD_DONE.md`; INDEX, ARCHITECTURE §11 and the loader brought up to date |
-| WP-69 | done | WP-68 | Coverage map: every reachable catalog row × the scenarios and tests that drive it, both ways |
-| WP-70 | done | WP-69 | Synthetic firms and books: seeded documents per source doc, and SAGA exports that agree (clean and with named defects) |
-| WP-71 | done | WP-70 | Scenario runner: YAML scenarios with expected paths, run over HTTP with a simulated SAGA agent |
-| WP-72 | done | WP-71 | Catalog → data: a scenario for every reachable articol de cale, HITL kind, control, recon profile and filing |
-| WP-73 | done | WP-71 | Data → catalog: realistic months run blind; every gap becomes a proposed draft row in `docs/CATALOG_GAPS.md` |
-| WP-74 | done | WP-72, WP-73 | A small live sample of the new paths on production's synthetic firms, within a spend limit |
-| WP-75 | done | WP-73 | `M1_8_4428_open` computed: 4428 still open on unpaid la-încasare documents vs bal(4428) (G7) |
+| WP-03 | in-progress | — | Invoice XML mouths proven on a copy firm (Loop 0: `docs/owner/COPY_FIRM_TEST.md`) |
+| WP-76 | in-progress | — | Repo tidy: current state only (Part A) |
+| WP-77 | todo | WP-76 | Surface states in `coverage.py`; `SURFACE.md` generated (B6 item 1) |
+| WP-78 | todo | WP-77 | Evidence ledger (B6 item 5), before Loop 1 |
+| WP-79 | todo | WP-77 | Loop kit: `loops prepare` / `loops read` (B6 item 2) |
+| WP-80 | todo | WP-03, WP-79 | Loop 1: RO e-Factura sales + purchases, bank settlement (B5) |
+| WP-14 | parked | — | Bonuri through an accounting note (`bon_via_nota`, ArticolBon); Loop 5 |
+| WP-15 | parked | — | A read-only SAGA database copy as an eye (copy-firm test §9) |
+| WP-16 | parked | — | Agent Validare (L11) |
+| WP-17 | parked | — | Engagement backlog; the `chat:` face (L27) |
+| WP-18 | parked | — | Take-on, year-end, FX engine (`SURFACE.md` §4–§5) |
+| WP-D3 | decision | — | Non-payer reverse charge books: 4423 vs 446x |
+| WP-D4 | decision | — | The EU route per model family (client data) |
+
+Later loops (2 … n), the pilot and the graph loops get WP ids when they start.
+
+## Programs
+
+### Part B — Mapping the surface through SAGA C, in loops
+
+#### B1. Goal
+
+Every articol de cale we have, plan, or will need is **proven in SAGA C**: synthetic documents
+for it went through our ingestion, out through our mouth (or a person's keying where no mouth
+exists), into a SAGA C test firm, back through SAGA's own exports, through reconcile and
+close, and the result equals what the generator meant. Then SAGA WEB repeats the proven set.
+
+#### B2. The surface map (`SURFACE.md`, generated by `coverage.py`)
+
+Each row (articol, source doc, job kind, mouth, export, control, HITL kind, filing) has one
+state:
+
+| State | Means | Proven by |
+|---|---|---|
+| **possible** | named (catalog, plan, harvest), not yet on a path we run | a line in `SURFACE.md` |
+| **synthetic** | a passing scenario drives it (what `coverage.py` calls covered today) | `scenarios.py` |
+| **saga** | it went round-trip through a SAGA C test firm and the result matched | a loop's evidence |
+| **out** | will not be built, with the reason | owner decision |
+
+The program ends when every row is **saga** or **out**. Opportunities found along the way (a
+row SAGA's data suggests and the catalog lacks) enter as **possible**, never straight into
+the catalog.
+
+#### B3. One loop
+
+A loop takes **one slice**: a handful of rows, one or two client types, two or three months.
+
+| Step | Who | What |
+|---|---|---|
+| 1. Pick | build agent, owner OKs | the slice, its rows, its exit criteria (fixed now, not later) |
+| 2. Generate | build agent | synthetic months for the slice's firms (`synthetic/`), seeded; documents + our mouth XML |
+| 3. Ingest | runtime | our pipeline runs them on synthetic tenants, as today |
+| 4. Import | owner (or the agent once Copy-firm §10 passes) | packages into the slice's SAGA C test firm; the owner validates; anything with no mouth is keyed by hand from the generator's list |
+| 5. Export | owner | the slice's SAGA exports (RJ, balanță, jurnale), as for a client |
+| 6. Read | build agent | exports become the eye: reconcile + close against them |
+| 7. Compare | build agent | three diffs: generator ↔ SAGA (did SAGA book what we meant?), SAGA export ↔ our reader (did we read it right?), our simulated `Book` ↔ SAGA (does the generator's SAGA model match SAGA?) |
+| 8. Review | owner | the gap list: each proposed row approved as `draft`, or `out`, or deferred |
+| 9. Record | runtime | the loop's evidence ledger (B6, item 5): every question you answered, how long it took, whether you changed the proposal, every control that fired and what you did with it |
+| 10. Close | build agent | rows → **saga**; reader, generator and simulated book fixed to SAGA's truth; real exports of the test firm become fixtures (invented data) |
+
+Each loop improves five things at once: the ingestion (step 3 failures), the reading (step 7
+second diff), the generator's realism (third diff), the map (step 8), and the evidence for
+Part D (step 9). Your answers in a loop are on synthetic documents, but the friction is real:
+it is your time and your clicks.
+
+#### B4. Rules that keep loops from sticking
+
+1. **Fixed slice, fixed exit.** A loop ends when its rows are **saga** or explicitly deferred,
+   not when everything it uncovered is solved.
+2. **New nuance → backlog.** Anything outside the slice found during a loop becomes one
+   **possible** line in `SURFACE.md` with one sentence; it is never worked in that loop.
+3. **Two sessions per loop.** One owner session in SAGA C (import, validate, export), one build
+   session before and after. A loop that needs a third session is split.
+4. **Small months first.** 10–30 documents per firm-month in the first pass of a slice; volume
+   only in a later loop that is about volume.
+5. **No law change inside a loop.** A needed change of law is drafted at the loop's close and
+   decided by the owner between loops.
+6. **The SAGA C build is pinned** for a run of loops; an update of SAGA C is its own loop
+   (re-run the proven set).
+
+#### B5. Loops, in order
+
+Loop 0 is the infrastructure; every later loop assumes it passed.
+
+| Loop | Slice | Client types | Mouths / keying | SAGA exports read |
+|---|---|---|---|---|
+| **0** | `docs/owner/COPY_FIRM_TEST.md` §1–§10 | test firm | the four XML mouths | RJ, balanță, jurnale (copy-firm test §7) |
+| 1 | RO e-Factura sales + purchases, settlement by bank | plătitor TVA lunar | `iesire_/intrare_factura_xml`, `incasare_/plata_xml` | RJ, balanță, jurnale |
+| 2 | bank statements: fees, transfers, unmatched lines | plătitor | `incasare_/plata_xml`; fees keyed | RJ, balanță |
+| 3 | storno (both sides) | plătitor | storno mouths (after Loop 0 §3) | jurnale |
+| 4 | TVA la încasare | încasare | invoice + settlement mouths | jurnale with neexigible columns, 4428 |
+| 5 | expense reports, bonuri with and without CUI | bonuri | DBF/nota decision (D7) or keyed | RJ, balanță |
+| 6 | abroad: foreign invoices both sides, reverse charge | abroad | `FacturaTip` "T" if Loop 0 proves it | jurnale, D390/D300 inputs |
+| 7 | non-payer reverse charge (WP-D3) | neplătitor | as Loop 6 | balanță 4423/446x |
+| 8 | payroll | plătitor | keyed (no mouth) | RJ, balanță |
+| 9 | close and filings across a quarter | all five | — | full report pack × 3 months |
+| 10 | volume and mix: realistic months, all firms | all five | all | all |
+| 11+ | the **possible** rows left in `SURFACE.md`, in slices the owner orders | | | |
+
+The client types are today's five synthetic firms (`synthetic/firms.py`), each set up once as
+a SAGA C test firm with the **same invented CUI**, so a SAGA export maps onto its synthetic
+tenant with no translation.
+
+After Loop 4 and again after Loop 6, the owner reviews the watched accounts (LAW L37) on the
+loops' evidence: 5124 and 4423/4424 may need to block for încasare and abroad firms
+(owner, 2026-10-04).
+
+#### B6. What gets built for the program (WP-77 – WP-79)
+
+1. **Surface states** in `coverage.py` and `SURFACE.md` generated from it (possible / synthetic
+   / saga / out); a loop's evidence file marks rows **saga**.
+2. **Loop kit**: `python -m poarta_contabila.loops prepare <loop>` writes, per SAGA test firm,
+   the import folders in SAGA's file names and a keying list for documents with no mouth;
+   `… read <loop> <exports>` runs reconcile + close against the uploaded exports and writes
+   the three diffs and the proposed gap list.
+3. **Readers pinned to real exports**: each loop's real SAGA exports become fixtures; the
+   readers' tests run on them.
+4. **Simulated book calibrated**: `synthetic/books.py` renderers checked against the same real
+   exports (the third diff at zero), so synthetic-only scenarios stay honest between loops.
+5. **Evidence ledger**: `python -m poarta_contabila.evidence <tenant|all> <period>` reads what
+   the runtime already stores (`domain.answers`, `domain.jobs`, `domain.control_runs`,
+   `domain.explained_rules`, the checkpointer) and reports per graph node and edge (visits),
+   per HITL kind (count, approved unchanged / changed / refused), per control (fired,
+   disposition, ever pointed at a real difference), per articol (volume, `needs_human` rate),
+   per model role (calls, overridden, cost), and per firm-month (documents, documents held for
+   a person, days from arrival to Validare). It measures the two sides Part D balances:
+   **friction** (questions asked, proposals changed, documents held) and **control** (errors a
+   gate caught, errors that got through). No minutes are recorded (Q10). Built before Loop 1;
+   anything it cannot measure from stored data is added to what the runtime stores, not
+   estimated.
+
+#### B7. SAGA WEB, after SAGA C
+
+SAGA WEB is no longer its own track. Once a client is on it (and not before):
+
+1. Amendment: SAGA WEB as a second sink product (XML → API `Import` → human finish → Validare).
+2. A **parity loop**: the fixtures of every loop already **saga** are imported through SAGA
+   WEB's API, finished in its screen, exported. Passes when the exports equal SAGA C's.
+3. Only rows proven by parity are **saga-web**; the transport WP (`RESEARCH_LOG.md` R5:
+   single-writer rotating key in Postgres, staged import → `wait_validare`) follows.
+
+---
+
+### Part C — Pilot on client data (the bridge)
+
+Part D needs **varied, real client months**: synthetic months show the paths, not the practice.
+Client data reaches a model only through the EU route (L33), so the pilot
+is gated.
+
+1. **Gate:** WP-D4 decided and the EU route serving every role the pilot uses; Part B's
+   surface **saga** for the slices the pilot's clients need; the processing agreements and
+   client consent the practice requires.
+2. **Scope:** 3–5 real clients chosen to span the client types (plătitor, încasare,
+   neplătitor, abroad, bonuri), at least three consecutive months each, in production SAGA C
+   with the agent user of Copy-firm §6. Nothing from them enters this repo (L36).
+3. **Run it as practice, not as a test:** you work these clients through the review page as you
+   would anyway. The evidence ledger runs the whole time. At each month-end, a short note from
+   you: what helped, what slowed you, what you did outside the system and why.
+4. **Hand-off to Part D:** the ledger for every pilot month, and your notes. Synthetic loops
+   (Part B, Loop 11+) continue alongside for rows the pilot's clients do not touch.
+
+---
+
+### Part D — Graph loops: the balance of friction and control
+
+**Draft, to be redrafted** with the owner's documents on what the semantic review implies.
+
+By now the four graphs (`folder_triage`, `ingest_source_doc`, `reconcile_sink`,
+`monthly_close`), their articole, HITL kinds and controls have run on real practice. The review
+does not count time saved. It asks, for each graph: **where is the balance point between the
+least friction and enough control**, and does a different design reach a better one?
+
+#### D1. Entry gate
+
+Part B ended (every row **saga** or **out**) and the pilot has at least three months on at least
+three client types in the ledger (Q12, open). Before that, a review would be opinion.
+
+#### D2. Two measures
+
+From the evidence ledger (B6, item 5), per graph, node, gate and articol:
+
+- **Friction:** questions asked of a person, proposals the person changed, documents held for
+  a person, rework after a refusal.
+- **Control:** real errors a gate stopped, real errors that got through (found later in SAGA,
+  at close or in a filing), differences a control pointed at that mattered.
+
+A gate that is always approved unchanged and never stopped anything is friction with no
+control: theatre. A gate that stopped real errors is control, whatever it costs, until a
+cheaper design gives the same control.
+
+#### D3. Three comparisons, each read semantically
+
+For one graph at a time, the review places three designs on the same two measures, and reads
+each element for what it means in the work (does this node, edge, gate or articol do what its
+intent says, for the accountant and the client?), not only for its counts:
+
+1. **The design as it is.** Its balance point, from the ledger: which elements carry control,
+   which carry only friction, which paths are never taken, which articole say one thing and
+   do another.
+2. **The design with adjustments not yet considered.** What is missing for one accountant
+   with many clients (a portfolio view, filings as a calendar, one review session across
+   clients, drafted requests for missing documents, repeated answers promoted to rules,
+   anomalies per client) and what is overstated (model calls a rule now does, controls that
+   repeat SAGA's own, catalog rows no client uses, HITL kinds that are one in practice).
+3. **Alternatives and modular replacements.** A different split of the graph, a node replaced
+   by a module, a gate moved to close as one exception list, a stage done by SAGA itself;
+   LangGraph's own practice (state schemas, idempotent side effects after `interrupt()`,
+   thread boundaries, checkpoint retention, retries, fan-out, versioning of threads in flight)
+   cited from its documentation read on the day, not memory.
+
+The law's own gates (Validare by a person, no FDB writes, models by role, client data only on
+the EU route) are fixed points in every comparison, not candidates.
+
+#### D4. One loop
+
+| Step | Who | What |
+|---|---|---|
+| 1. Pick | owner | one graph, ordered by where the ledger shows the most friction or the weakest control |
+| 2. Read | build agent | the ledger for that graph, its code, its catalog rows |
+| 3. Compare | build agent | the three designs of D3 on friction and control, with the semantic reading of each element |
+| 4. Decide | owner | the design to move toward; changes to topology, interrupt kinds or watched accounts are the owner's dated change (L46) |
+| 5. Build | build agent | one WP per change, behind a catalog flag where it can be |
+| 6. Measure | runtime | the next months' ledger: did friction fall with control held, or control rise with friction held |
+
+#### D5. Rules that keep it honest
+
+1. A change names the side it should move (friction down, or control up) and the side it must
+   hold; one that misses either is reverted.
+2. A gate that has ever stopped a real error is removed only by the owner's explicit decision.
+3. One graph per loop; findings for other graphs go to the backlog.
+4. Additions face the same test as removals.
+5. No change makes the system keep books, or lets a model decide a gate (L7, L29).
+
+#### D6. When it ends
+
+Every graph has been compared in all three ways and the owner has chosen its design. After
+that, a graph loop runs whenever the ledger shows a graph has moved off its balance point.
+
+### Decisions (owner, 2026-10-04)
+
+| # | Decision | Decided |
+|---|---|---|
+| Q1 | Tidy before the loop program | yes: tidy first, then the loop kit |
+| Q2 | `LAW.md`: amendments folded into rules with stable ids, history only in git | yes: amendments folded in, stable rule ids, history in git; the owner reviewed `LAW.md`; in force 2026-10-04 |
+| Q3 | Delete the history files (done-WP log, gap list, `annex/`, `docs/harvest/`; branch `pre-tidy` keeps them) | yes, after the harvest's unbuilt items are in `SURFACE.md` |
+| Q4 | WP numbers continue (WP-76 …) rather than restart | continue from WP-76 |
+| Q5 | `catalog/60_practice/` renamed (e.g. `60_practice/`) | rename to `60_practice/` |
+| Q6 | Client-type matrix = the five synthetic firms; others added as **possible** rows | the five synthetic firms; others as **possible** rows |
+| Q7 | Slices with no XML mouth (expenses, bonuri, payroll, fees): keyed by you from a list, or wait for `nota_nc_dbf` | keyed by the owner from a printed list; the DBF mouth decided after Loop 5 |
+| Q8 | Your time: one SAGA C session per loop, 10–30 documents per firm-month at first | one SAGA C session per loop, 10–30 documents per firm-month |
+| Q9 | Language: English prose, Romanian fiscal terms | keep |
+| Q10 | The evidence ledger: when, and what it records | built before Loop 1, counts and outcomes only, **no minutes**: Part D balances friction and control, not time saved |
+| Q11 | Pilot: which 3–5 clients, from when (waits for WP-D4) | open (waits for WP-D4) |
+| Q12 | Part D's entry gate: Part B ended + ≥3 pilot months on ≥3 client types | open; proposed: Part B ended + ≥3 pilot months on ≥3 client types |
+| Q13 | A time target for Part D | retired: Part D ends at the balance point (D6), not at a time target |
 
 ## WP details
-
-Open work packages only. The details of every `done` WP (what was built, why, what was
-checked) are in `docs/BUILD_DONE.md`: read it only to trace why something is as it is.
 
 ### WP-03 Invoice XML mouths
 - Exporter in `sinks/saga_xml.py`. Tags only from a successful copy-firm import.
@@ -101,29 +290,11 @@ checked) are in `docs/BUILD_DONE.md`: read it only to trace why something is as 
 - Corrected 2026-10-02 from R1 (the manual's "Import date"): every tag written is quoted there, in
   its order. `FacturaCotaTVA` (not in the manual) is gone; `ProcTVA` on every line (a line without
   a rate is refused); `FacturaID` = the job id after `<Detalii>`, so a receipt or payment can name
-  the invoice (WP-19). Both fixtures regenerated from the renderer.
+  the invoice. Both fixtures regenerated from the renderer.
 - Open: the owner's copy-firm import of both fixtures (sync "Nr.+data"), and SAGA's own sample XML
   (Ieșiri → Tipărire → "Formular PDF" → `TEMP\Facturi`, invented data) to settle date and decimal
   formats and the `RO` prefix. `FacturaIndexSPV` waits for a source of the SPV upload index (the
   SPV zip reader and the register do not keep one).
-
-### The synthetic-data program (WP-69 – WP-74)
-Owner, 2026-10-03: test the pipeline end to end, not just the model roles, on many angles.
-Two approaches, both used: **catalog → data** (an articol de cale on a path says where synthetic
-data must exist) and **data → catalog** (synthetic data run through the paths shows which
-articole, source documents, controls or HITL kinds are missing). Coverage today: 22 articole de
-cale (all `draft`), 6 named in a test, none named by the smoke run; 17 of 27 HITL kinds, 9 of 13
-controls and 6 of 10 write modules named in a test; synthetic documents are one UBL invoice, one
-credit note and a few SAGA exports.
-
-Rules for every WP below: invented data only (CUIs pass `cui_is_valid`; no real names, IBANs or
-amounts); new firms, never smoke's `1000009` or its months; same seed → same bytes (fixed zip
-timestamps, as in `smoke.spv_invoice`); `MODEL_CALLS=dry` unless the WP says live; no SAGA XML
-tag or export shape beyond what `fixtures/` already holds (AGENTS hard ban); WriteModules stay
-`draft` (a simulated agent is never copy-firm proof); open decisions stay open (WP-D3:
-`foreign_rc_neplatitor` is always-HITL; WP-D4); a catalog change enters only as `status: draft`
-after the owner accepts it, and graph topology, interrupt kinds or watched accounts need a
-00_LAW amendment (§7): list those, do not make them.
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
 - Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
@@ -141,7 +312,7 @@ Two: the question without an explanation; reading: the statement's tables must b
   `-3.6-flash`) is GA on the `eu` multi-region, which Google ties to EU ML processing; a
   regional endpoint alone does not guarantee it. Zero retention: turn off caching and get the
   abuse-monitoring exception (invoiced billing) or an enterprise ZDR contract
-  (`docs/EU_VERTEX_SETUP.md` §D). Code: `EU_LOCATIONS["vertex"]` lacks `eu`; no Vertex transport.
+  (`docs/owner/EU_VERTEX_SETUP.md` §D). Code: `EU_LOCATIONS["vertex"]` lacks `eu`; no Vertex transport.
 - **System Two (GLM) — two candidates:**
   - **Scaleway Generative APIs, `glm-5.2`** (one version behind the `z-ai/glm-5.3` pin; also
     `deepseek-v4-flash-0731`). Paris; zero data retention by default; no training; a French
@@ -155,7 +326,7 @@ Two: the question without an explanation; reading: the statement's tables must b
   operated from the US West Coast per third-party listings; its DPA names no location and uses
   EU SCC Module 2). Zero data retention for enterprise customers on request. It is not on
   OpenRouter's EU list. Options: (a) no Jev on client data, its decisions go to a person (how the
-  code behaves today); (b) amend invariant 5 to allow TypeSafe under SCCs plus an enterprise ZDR
+  code behaves today); (b) change L33 to allow TypeSafe under SCCs plus an enterprise ZDR
   contract and a transfer assessment; (c) an EU model in System One's place for client data,
   evaluated against Jev on synthetic data first.
 
@@ -178,7 +349,7 @@ DPA (`docs.typesafe.ai/legal`, `typesafe.ai/legal/data-processing`); Gemini EU l
 | Document reading (Gemini, direct on Google AI Studio) | — | not served |
 | `deepseek-v4-flash` (dropped: its OpenRouter provider trained on prompts) | $0.09 / $0.18 (DeepInfra) to $0.44 / $1.32 (Cloudflare) | €0.40 / €0.80, cached €0.08 |
 
-- Per System Two explanation (≈ 1,550 input / 610 output tokens, the WP-74 live sample):
+- Per System Two explanation (≈ 1,550 input / 610 output tokens, the live sample of 2026-10-03):
   OpenRouter ≈ $0.0049 at list price (≈ $0.0042 as billed for those 5 calls); Scaleway live
   ≈ $0.0069 (about 1.4×); Scaleway batch ≈ $0.0035 (about 30 % below OpenRouter).
 - OpenRouter: "no markup on inference pricing (however we do charge a fee when purchasing
@@ -234,7 +405,7 @@ host it on Railway, migrate to it, and use its EU option on client data.
   evaluation (better than `POST /model-roles/{role_id}/compare`) and a run-by-run trace view:
   an addition, not a migration.
 - Client data: a trace holds the whole document (CUIs, amounts, partners), so LangSmith would be
-  a new place client data goes — under invariant 5 a dated 00_LAW amendment, a DPA and a
+  a new place client data goes — under L33 a dated change of law, a DPA and a
   transfer assessment. Little gain for explanations (what each model was given and answered,
   under which card, and what the person decided are already recorded; its online scoring
   would be another model reading client data, and its annotation queues a second review
@@ -247,7 +418,3 @@ host it on Railway, migrate to it, and use its EU option on client data.
 
 Sources (2026-10-03): `docs.langchain.com/langsmith/self-hosted`,
 `docs.langchain.com/langsmith/regions-faq`, `www.langchain.com/pricing`.
-
-## Definition of done for v1
-
-WP-00–WP-12 green. WP-13 optional. Parked WPs untouched. No `Journal.post` in the tree. No SYSDBA in env samples. Catalogs that shipped without fixtures remain `draft`.

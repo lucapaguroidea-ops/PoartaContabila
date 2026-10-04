@@ -1,11 +1,11 @@
-"""Windows agent (WP-06, ARCHITECTURE §13): the only hand that touches SAGA, and only to import.
+"""Windows agent (ARCHITECTURE §13): the only hand that touches SAGA, and only to import.
 
     GET  /agent/pull        packages waiting, per firm folder, with the backup they need
     POST /agent/ack-backup  the agent made a firm-wide backup: label {cui}:{folder}:{utc}
     POST /agent/imported    the agent imported packages as AGENT (Import only)
     POST /agent/snapshot    what SAGA shows: documents (validated or not) and closed months
 
-Rules (00_LAW §3, §6):
+Rules (LAW):
 
 - AGENT imports only: no Validare, no Devalidare, no month closing. Nothing here can
   move a job out of ``acked``; a snapshot that no longer shows an acked document is

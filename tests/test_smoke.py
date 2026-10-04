@@ -1,4 +1,4 @@
-"""WP-29: the synthetic smoke run drives the whole flow over HTTP and shows each role's place."""
+"""the synthetic smoke run drives the whole flow over HTTP and shows each role's place."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def test_the_smoke_run_goes_through_every_graph():
     assert steps["decont_split"].outcome == "workings emit=False"
     assert steps["eu route"].outcome.startswith("set on 0 of ")
     assert steps["monthly_close 2026-09"].outcome.startswith("material=True; held (hold)")
-    # WP-47: the clean month — every document already in the books, nothing blocks
+    # the clean month — every document already in the books, nothing blocks
     assert steps["registru jurnal"].outcome == "covers ['2026-08', '2026-09']"
     assert steps["august invoice"].outcome == "job already_in_sink"
     assert steps["august statement"].outcome == "job already_in_sink; job already_in_sink"
@@ -150,7 +150,7 @@ def test_the_ocr_step_has_the_server_read_a_synthetic_statement_pdf():
     step = _steps(report)["statement PDF read"]
     assert step.ok and step.outcome.startswith("job reconcile_pre asks v3_approve")
     assert len(sent) == 1 and b"FX-102" in synthetic_statement_pdf()
-    # the statements sent with their tables (September, and August: WP-47) record what Gemini
+    # the statements sent with their tables (September, and August) record what Gemini
     # would be given; this one was sent
     statuses = [c["status"] for c in report.calls["ingest_source_doc.extract"]]
     assert sorted(statuses) == ["recorded", "recorded", "sent"]

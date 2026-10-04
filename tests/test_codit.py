@@ -1,4 +1,4 @@
-"""WP-11: CO.DiT — period tax profile; hard pairs refuse, soft pairs flag, empty is not a payer."""
+"""CO.DiT — period tax profile; hard pairs refuse, soft pairs flag, empty is not a payer."""
 
 from __future__ import annotations
 

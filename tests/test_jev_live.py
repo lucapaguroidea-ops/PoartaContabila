@@ -1,4 +1,4 @@
-"""WP-20: Jev through OpenRouter's Decisions endpoint — synthetic tenants only, fail closed."""
+"""Jev through OpenRouter's Decisions endpoint — synthetic tenants only, fail closed."""
 
 from __future__ import annotations
 

@@ -1,8 +1,8 @@
 name: abroad_month
-note: 'A payer trading abroad: d390 falls due. The XML invoices from abroad are jobs (G1) on foreign_invoice_inbound,
+note: 'A payer trading abroad: d390 falls due. The XML invoices from abroad are jobs on foreign_invoice_inbound,
   approved, then refused at the package: EUR (FX parked, WP-18), so C1 fails and their RON booking stays
-  unexplained (C2, C0). The expense report''s foreign part is evidence (G2); its RO part with no XML waits
-  in _incomplete_spv (G3: unexplained meanwhile). A service sold to an EU business, invoiced in RON with
+  unexplained (C2, C0). The expense report''s foreign part is evidence; its RO part with no XML waits
+  in _incomplete_spv (unexplained meanwhile). A service sold to an EU business, invoiced in RON with
   reverse charge, binds foreign_invoice_outbound and stops at the package: the SAGA mouth needs a partner
   CIF, and whether SAGA''s import takes a foreign VAT id is for the copy firm (owner checklist).'
 firm: abroad

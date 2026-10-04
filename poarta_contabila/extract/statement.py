@@ -1,7 +1,7 @@
-"""Bank statements (WP-13): the extract contract's tables → one validated statement.
+"""Bank statements: the extract contract's tables → one validated statement.
 
 Portfolio statements arrive as PDF (harvest C-10), so the reading is done by the extract
-backend (``document_ai``; EXTRACT.md), which hands over ``normalized/tables.json``:
+backend (``document_ai``; ARCHITECTURE.md §15), which hands over ``normalized/tables.json``:
 ``[{headers, rows}]`` as strings. This module turns those tables into movement lines,
 deterministically, and checks them before anything is emitted (fail closed):
 
@@ -158,7 +158,7 @@ def parse_statement(
             if not cells[cols["date"]].strip():
                 continue  # carried description line or a subtotal without a date
             if any(_SUMMARY.match(_plain(c)) for c in cells):
-                # a balance or total row, whatever column its label landed in (WP-45): not a
+                # a balance or total row, whatever column its label landed in: not a
                 # movement; were a real line skipped, the tie to the closing would fail
                 continue
             debit = _amount(cells[cols["debit"]], where)

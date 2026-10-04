@@ -1,4 +1,4 @@
-"""WP-21: Google Document AI reads statement PDFs into the extract contract (EXTRACT.md),
+"""Google Document AI reads statement PDFs into the extract contract (ARCHITECTURE.md §15),
 which feeds parse_statement. The HTTP client is mocked; the Document is synthetic and
 shaped as the official v1 Discovery document describes it (RESEARCH_LOG.md R3)."""
 

@@ -1,4 +1,4 @@
-"""XML first (A2): SPV zips and UBL CIUS-RO invoices → CanonicalDocument fields.
+"""XML first (LAW L14): SPV zips and UBL CIUS-RO invoices → CanonicalDocument fields.
 
 An SPV download is a zip holding the invoice XML and its signature companion
 (``semnatura_*.xml``). Members are told apart by their root element, never by file name.

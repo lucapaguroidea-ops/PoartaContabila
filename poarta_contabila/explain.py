@@ -1,4 +1,4 @@
-"""System Two sender (WP-50): a person's question explained in plain words, never decided.
+"""System Two sender: a person's question explained in plain words, never decided.
 
 A wired System Two role (``status: wired``, ``system: system_two``) of a synthetic tenant, in
 ``MODEL_CALLS=live`` with ``OPENROUTER_SYS2_API_KEY`` set, is sent to OpenRouter's chat
@@ -19,19 +19,19 @@ from typing import Any
 
 CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 TIMEOUT_S = 30.0
-MAX_TOKENS = 6000  # reasoning counts against it (WP-54)
+MAX_TOKENS = 6000  # reasoning counts against it
 EXCERPT = 160  # of an answer that is not JSON, kept in the call's reason (synthetic only)
 MAX_SENTENCES = 5
-RETRIES = 1  # an answer off the card is asked once more, with the reason (WP-58)
+RETRIES = 1  # an answer off the card is asked once more, with the reason
 RETRY_ASK = (
     "Your answer was refused: {reason}. Answer again with the JSON object only, following "
     "the Output rule: a non-empty explanation, and only single values from the input as facts."
 )
 FIELDS = ("explanation", "facts_cited", "missing")
 EMPTY = ([], {}, "", None, "[]", "{}")
-MIN_WORDS = 4  # an explanation of fewer words ("...", "N/A") explains nothing (WP-60)
-# WP-54: GLM refuses reasoning off; think little and keep it out of the answer. Other families
-# get no reasoning field: Kimi answered empty with it (WP-60).
+MIN_WORDS = 4  # an explanation of fewer words ("...", "N/A") explains nothing
+# GLM refuses reasoning off; think little and keep it out of the answer. Other families
+# get no reasoning field: Kimi answered empty with it.
 REASONING = {"z-ai/": {"effort": "low", "exclude": True}}
 
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$")
@@ -44,7 +44,7 @@ class ExplainError(Exception):
 
 
 class PolicyRefused(ExplainError):
-    """OpenRouter found no endpoint for the request's data policy (HTTP 404; WP-53)."""
+    """OpenRouter found no endpoint for the request's data policy (HTTP 404)."""
 
 
 def _keys(value: Any) -> set[str]:
@@ -84,7 +84,7 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
     except json.JSONDecodeError:
         excerpt = " ".join(content.split())[:EXCERPT]
         raise ExplainError(f"the answer is not JSON: {excerpt!r}") from None
-    if isinstance(out, dict) and len(out) == 1:  # {"answer": {...the card's fields...}} (WP-62)
+    if isinstance(out, dict) and len(out) == 1:  # {"answer": {...the card's fields...}}
         (inner,) = out.values()
         if isinstance(inner, str):  # Z.AI also sends the object as a JSON string
             try:
@@ -118,7 +118,7 @@ def check_explanation(question: dict[str, Any], content: str) -> dict[str, Any]:
         name = [p for p in name if p and not p.isdigit()]
         if not name or name[-1] not in keys:
             raise ExplainError(f"fact field {fact['field']!r} is not in the question")
-        if fact["value"] in EMPTY:  # an empty field claims nothing: dropped, not refused (WP-62)
+        if fact["value"] in EMPTY:  # an empty field claims nothing: dropped, not refused
             continue
         if str(fact["value"]) not in values:
             raise ExplainError(f"fact {fact['field']!r} = {fact['value']!r} is not in the question")
@@ -131,7 +131,7 @@ def request_body(
 ) -> dict[str, Any]:
     from poarta_contabila.model_roles import brief
 
-    # WP-63: today's date goes with the question, not into the recorded input (its hash finds
+    # today's date goes with the question, not into the recorded input (its hash finds
     # the explanation again on later days)
     asked = {**payload, "as_of": as_of or date.today().isoformat()}
     body = {

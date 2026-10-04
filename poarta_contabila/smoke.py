@@ -1,4 +1,4 @@
-"""WP-29: the synthetic smoke run — one invented firm through the whole flow over HTTP.
+"""the synthetic smoke run — one invented firm through the whole flow over HTTP.
 
 Drives the operator API the way a person would, with scripted answers, then shows what every
 model role was given at its place in the flow (``GET /model-calls``, ``MODEL_CALLS=dry``):
@@ -12,24 +12,24 @@ model role was given at its place in the flow (``GET /model-calls``, ``MODEL_CAL
 6. an expense report → ``decont_split`` → one workings part (evidence, no Job);
 7. ``reconcile_sink`` — ``need_rj_export`` is answered with the uploaded journal; any other
    question is left for a person;
-8. the clean month (WP-47): August's SPV invoice (``AB 0070``) and statement, every document
+8. the clean month: August's SPV invoice (``AB 0070``) and statement, every document
    already in the books, so each job ends ``already_in_sink``;
 9. ``monthly_close`` for September, then August → ``v2_close`` → ``hold`` (nothing is filed).
    September stays material (its packages wait for an agent; its books hold invoices never
    uploaded here); August should show no blocker. On a lock mismatch (the month's jobs
    changed since it was locked) the run answers ``reopen`` first and closes again;
-10. a September invoice (``AB 0102``) left at ``v3_approve``: its explanation (WP-64), before
+10. a September invoice (``AB 0102``) left at ``v3_approve``: its explanation, before
     the closes;
 11. ``GET /model-calls`` for this firm, grouped by graph and node.
 
-``--ocr`` (WP-36) adds one step: a second statement, a real one-page PDF generated here
+``--ocr`` adds one step: a second statement, a real one-page PDF generated here
 (invented firm, invented movement), uploaded **without** its tables, so the server's reader
 reads it. With ``MODEL_CALLS=live`` and ``GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC`` set, that is
 Gemini through Google AI Studio; ``/model-calls`` then shows ``ocr_extract`` as ``sent``.
 
 Every answer is given only when the expected question is the one waiting, so a second run
 changes nothing and reports what is already there. The firm, partner and documents are
-invented (00_LAW: no client data); the run refuses a server whose ``MODEL_CALLS`` is not
+invented (LAW: no client data); the run refuses a server whose ``MODEL_CALLS`` is not
 ``off``, ``dry`` or ``live``.
 
     uv run python -m poarta_contabila.smoke --local                    # in memory, dry
@@ -62,7 +62,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "fixtures"
 
 CUI, FOLDER, PERIOD = "1000009", "0001", "2026-09"  # invented, valid check digit
-CLEAN = "2026-08"  # WP-47: the month whose books hold exactly what is uploaded here
+CLEAN = "2026-08"  # the month whose books hold exactly what is uploaded here
 PARTNER = "20000005"  # invented, valid check digit
 IBAN = "RO49AAAA1B31007593840000"  # the textbook example IBAN
 TENANT = {
@@ -94,7 +94,7 @@ STATEMENT = {
     ],
     "pdf_b64": base64.b64encode(b"%PDF-1.4 synthetic statement (smoke)").decode(),
 }
-CLEAN_STATEMENT = {  # WP-47: both lines are already in saga_rj_smoke.xls; closing = Sept's opening
+CLEAN_STATEMENT = {  # both lines are already in saga_rj_smoke.xls; closing = Sept's opening
     "meta": {
         "iban": IBAN,
         "holder_cui": f"RO{CUI}",
@@ -124,7 +124,7 @@ REPORT = b"%PDF-1.4 synthetic expense report (smoke)"
 WORKINGS = b"synthetic workings (smoke)"
 SAFE_MODES = ("off", "dry", "live")
 # who runs the smoke / evaluation against a server: a person with the operator token, or the
-# build agent with its synthetic-only token (WP-38); the old name last
+# build agent with its synthetic-only token; the old name last
 CALLER_ENV = ("GRAPHUSERTOKEN_OPERATOR", "GRAPHUSERTOKEN_CLAUDE_SYSBUILDER", "OPERATOR_TOKEN")
 
 
@@ -134,7 +134,7 @@ def caller_token() -> str | None:
         value = (os.environ.get(name) or "").strip()
         if value:
             return value
-    return None  # live: only synthetic document reading sends (WP-36)
+    return None  # live: only synthetic document reading sends
 
 
 OCR_LINES = [
@@ -199,7 +199,7 @@ def spv_invoice(
     spv_id: str = "4100000001",
 ) -> bytes:
     """The fixture invoice as an SPV zip (XML + signature), numbered ``AB 0099`` (or as
-    given: the clean month's ``AB 0070`` of 12.08, WP-47)."""
+    given: the clean month's ``AB 0070`` of 12.08)."""
     xml = (FIXTURES / "ubl/invoice_inbound.xml").read_bytes()
     xml = xml.replace(b"<cbc:ID>AB 0058</cbc:ID>", f"<cbc:ID>{number}</cbc:ID>".encode())
     xml = xml.replace(b"<cbc:IssueDate>2026-09-10<", f"<cbc:IssueDate>{issued}<".encode())
@@ -232,7 +232,7 @@ def _outcome(view: dict[str, Any]) -> str:
         return str(view)[:120]
     if "detail" in view:
         return f"refused: {view['detail']}"
-    if view.get("status") == "waiting":  # WP-42: parked, read again from not_before
+    if view.get("status") == "waiting":  # parked, read again from not_before
         return f"waiting for model quota until {view.get('not_before')}: {view.get('reason')}"[:300]
     job = view.get("job") or {}
     parts = [f"job {job['status']}" if job.get("status") else None]
@@ -323,7 +323,7 @@ def _close(c: Client, report: Report, period: str) -> None:
 
 
 def _approval_explanation(c: Client, report: Report) -> None:
-    """WP-64: a September invoice (``AB 0102``) is left at its ``v3_approve``, never answered,
+    """a September invoice (``AB 0102``) is left at its ``v3_approve``, never answered,
     so every run shows the approval question's System Two explanation (sent once, then found
     again). September is already held as material; this adds one waiting job to it."""
     invoice = spv_invoice("AB 0102", issued="2026-09-25", due="2026-10-25", spv_id="4100000003")
@@ -371,9 +371,9 @@ def run(
     )
     keys.append(f"{sum(1 for p in pins if p.get('on') == 'main')} on their main pin")
     report.steps.append(Step("model roles", 200, f"mode {report.mode}; " + ", ".join(keys)))
-    for line in moved:  # WP-53: an alternate, an operator choice, or no passing model
+    for line in moved:  # an alternate, an operator choice, or no passing model
         report.steps.append(Step("model pin", 200, line[:300]))
-    resp = c.get("/model-keys")  # WP-56: OpenRouter's own spend per key (never a key value)
+    resp = c.get("/model-keys")  # OpenRouter's own spend per key (never a key value)
     if resp.status_code < 400:
         for line in describe(resp.json()):
             report.steps.append(Step("openrouter key", 200, line[:300]))
@@ -493,7 +493,7 @@ def run(
         )
     )
 
-    # the clean month (WP-47): every document is already in the books, so no question waits
+    # the clean month: every document is already in the books, so no question waits
     invoice = spv_invoice("AB 0070", issued="2026-08-12", due="2026-09-11", spv_id="4100000002")
     resp = _octet(c, "/ingest", invoice, {"cui": CUI, "filename": "spv-august.zip"})
     report.steps.append(

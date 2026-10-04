@@ -1,4 +1,4 @@
-"""WP-53 (00_LAW §8 A7): provider data policies, approved alternates, the operator's choice."""
+"""LAW L32: provider data policies, approved alternates, the operator's choice."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""PreFile output: XML/DBF packages written once per ``export_key`` (IDEMPOTENCY.md).
+"""PreFile output: XML/DBF packages written once per ``export_key`` (ARCHITECTURE.md §16).
 
 The blob (bytes) goes to a BlobStore under the bucket key; the row in the package
 store is the proof it was written. A replay checks the row first and writes nothing.

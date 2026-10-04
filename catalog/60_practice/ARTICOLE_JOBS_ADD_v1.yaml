@@ -1,5 +1,5 @@
 # ARTICOLE_JOBS_ADD_v1.yaml
-# Additive job kinds (WP-13). Do not delete rows in ARTICOLE_JOBS_v1.yaml.
+# Additive job kinds. Do not delete rows in ARTICOLE_JOBS_v1.yaml.
 # ARTICOLE_EXTRAS_GRAIN_v1: the job unit of a PDF statement is the movement line,
 # keyed [statement_id, seq]; the statement itself is a pack, never a Job.
 

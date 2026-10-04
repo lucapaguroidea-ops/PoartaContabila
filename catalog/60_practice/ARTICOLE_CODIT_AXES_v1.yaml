@@ -21,7 +21,7 @@ new_axes:
   book_of_record:
     values: [saga_c, nextup]
     default: saga_c
-    note: "One book per firm-period. nextup = eye only, no PreFile (A2)."
+    note: "One book per firm-period. nextup = eye only, no PreFile (LAW L8)."
   fx_currencies:
     values: [none, EUR, USD, mixed]
     default: none

@@ -1,14 +1,14 @@
 # ARTICOLE_MODEL_ROLES_v1.yaml
-# Lane B. Every place a model acts, as one role row (00_LAW §3 invariant 5).
+# Lane B. Every place a model acts, as one role row (LAW L28).
 # A role names exactly one model. `model: null` = not chosen yet: the role refuses and a
 # person is asked. No alias ("latest"), no "openrouter/auto", no fallback model list.
-# One exception (00_LAW §8 A3, A4): a Google AI Studio document-reading role names its
+# One exception (LAW L31): a Google AI Studio document-reading role names its
 # `tiers` (everyday models first: the most requests a day; strong models for hard documents
 # and second runs) and each model's free-tier `rate_limits` (rpm, tpm, rpd).
-# Model ids and provider pins are the owner's (docs/OWNER_CHECKLIST.md); a change is a
+# Model ids and provider pins are the owner's (docs/owner/OWNER_CHECKLIST.md); a change is a
 # reviewed catalog change. Synthetic tenants only until `eu_route` is set (Scaleway).
 #
-# Role cards (WP-25): what each role is told. A system's `card` is the base; a role's `card`
+# Role cards: what each role is told. A system's `card` is the base; a role's `card`
 # adds to it (its keys win). The merged card is hashed: the hash is recorded on every call and
 # is part of the answer cache key, so a changed card never reuses an old answer.
 # - system_one (Jev): `questions` (the System One question set), `fields` (closed-model field
@@ -25,7 +25,7 @@ valid_from: "2026-10-02"
 enums:
   system: [system_one, system_two, document_reading]
   status: [wired, shadow, not_wired]   # shadow: observed in the flow, decides nothing
-  route: [openrouter, google_ai_studio]   # google_ai_studio: document reading, synthetic only (WP-36)
+  route: [openrouter, google_ai_studio]   # google_ai_studio: document reading, synthetic only
   key_env: [OPENROUTER_SYS1_API_KEY, OPENROUTER_SYS2_API_KEY, GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC]
   question_type: [noul, choice, score]
 
@@ -34,7 +34,7 @@ defaults:
   provider: {only: [], allow_fallbacks: false, data_collection: deny}
   data: synthetic_only
   eu_route: null          # the only route a client tenant may use; null = client data refused
-  # eu_route shape (WP-35), set per role once the owner decides (docs/EU_VERTEX_SETUP.md):
+  # eu_route shape, set per role once the owner decides (docs/owner/EU_VERTEX_SETUP.md):
   #   {provider: vertex | scaleway, location: <EU region of that provider>, model: <exact id>,
   #    key_env: <variable with the credential>, project_env: <variable with the GCP project>}
   # Regions are an explicit EU list (model_roles.EU_LOCATIONS): never "global", never
@@ -44,7 +44,7 @@ defaults:
 systems:
   system_one:
     family: jev
-    key_env: OPENROUTER_SYS1_API_KEY   # owner, 2026-10-03: Jev's own key and credit limit (WP-55)
+    key_env: OPENROUTER_SYS1_API_KEY   # owner, 2026-10-03: Jev's own key and credit limit
     does: "classify and route JSON / normalized data into closed answers"
     cannot: [explain_to_person, write_saga, set_codit_axes, choose_mouth, open_gate_alone]
     card:
@@ -54,7 +54,7 @@ systems:
         noul asks a person from `human`. Below them the field takes its cautious value.
 
   system_two:
-    families: [deepseek, glm, kimi]   # kimi: an alternate only (A7)
+    families: [deepseek, glm, kimi]   # kimi: an alternate only (LAW L32)
     key_env: OPENROUTER_SYS2_API_KEY
     does: "explain a question to a person; draft text a person approves"
     cannot: [post, decide_gate, answer_hitl, write_saga, run_on_edge]
@@ -71,7 +71,7 @@ systems:
         - "Rules apply as of the input's `as_of` date. Your knowledge of Romanian rules may be out of date: where it differs from the input, the input is right. Never state a rule from memory."
       # English (owner, 2026-10-03): fewer tokens and fewer slips than generated Romanian.
       language: >-
-        English, plain and short. Romanian domain words stay Romanian (00_LAW: the terms below,
+        English, plain and short. Romanian domain words stay Romanian (LAW: the terms below,
         SAGA's names, field values); amounts and dates exactly as in the input.
       terms:
         - "document primar (the source document), not notă contabilă: SAGA posts the notă"
@@ -91,7 +91,7 @@ systems:
     # direct to Google AI Studio (owner, 2026-10-02): synthetic tenants only; its free tier may
     # use what it is sent. Model ids are the bare form (gemini-…), not OpenRouter's google/….
     key_env: GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC
-    does: "read scans / PDFs without XML or text layer, and bank statement tables from any PDF (00_LAW §3.5), into the extract contract"
+    does: "read scans / PDFs without XML or text layer, and bank statement tables from any PDF (LAW L28), into the extract contract"
     cannot: [read_xml_documents, skip_deterministic_checks, emit, classify]
     card:
       instructions:
@@ -112,7 +112,7 @@ roles:
     pack: null
     output: "source_doc_id from the closed ArticoleSourceDoc list + confidence"
     status: shadow
-    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
@@ -130,7 +130,7 @@ roles:
     pack: null
     output: "inbound | outbound | n/a"
     status: shadow
-    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
@@ -152,11 +152,11 @@ roles:
     output: "proposed parts of an expense report; a person confirms"
     status: shadow
     route: google_ai_studio
-    model: gemini-3.5-flash-lite   # = tiers.everyday[0] (owner, 2026-10-02, 00_LAW §8 A4)
+    model: gemini-3.5-flash-lite   # = tiers.everyday[0] (owner, 2026-10-02, LAW L31)
     tiers:
       everyday: [gemini-3.5-flash-lite, gemini-3.1-flash-lite]
       strong: [gemini-3.8-flash, gemini-3.7-flash]
-      # 00_LAW §8 A6: only on a day an operator chose `reserve`. Evaluated 2026-10-03 (owner
+      # LAW L31: only on a day an operator chose `reserve`. Evaluated 2026-10-03 (owner
       # chose the order): 3.5 Flash 6/6; 3 Flash (preview: Google may change or withdraw it)
       # 6/6; 3.6 Flash read right whatever it answered but Google was busy (503) for 4 of 6,
       # so it comes last. A wrong read is refused anyway.
@@ -182,14 +182,14 @@ roles:
     node: extract
     system: document_reading
     pack: null
-    output: "normalized/tables.json + markdown.md (EXTRACT.md), then the statement checks"
+    output: "normalized/tables.json + markdown.md (ARCHITECTURE.md §15), then the statement checks"
     status: wired
     route: google_ai_studio
-    model: gemini-3.5-flash-lite   # = tiers.everyday[0] (owner, 2026-10-02, 00_LAW §8 A4)
+    model: gemini-3.5-flash-lite   # = tiers.everyday[0] (owner, 2026-10-02, LAW L31)
     tiers:
       everyday: [gemini-3.5-flash-lite, gemini-3.1-flash-lite]
       strong: [gemini-3.8-flash, gemini-3.7-flash]
-      # 00_LAW §8 A6: only on a day an operator chose `reserve`. Evaluated 2026-10-03 (owner
+      # LAW L31: only on a day an operator chose `reserve`. Evaluated 2026-10-03 (owner
       # chose the order): 3.5 Flash 6/6; 3 Flash (preview: Google may change or withdraw it)
       # 6/6; 3.6 Flash read right whatever it answered but Google was busy (503) for 4 of 6,
       # so it comes last. A wrong read is refused anyway.
@@ -203,8 +203,8 @@ roles:
       gemini-3.5-flash: {rpm: 5, tpm: 250000, rpd: 20}
       gemini-3-flash-preview: {rpm: 5, tpm: 250000, rpd: 20}
     note: >-
-      WP-36: reads a synthetic tenant's statement PDF when MODEL_CALLS=live and the key is set
-      (extract/gemini.py); Document AI (WP-21) reads otherwise. Never a client tenant's.
+      reads a synthetic tenant's statement PDF when MODEL_CALLS=live and the key is set
+      (extract/gemini.py); Document AI reads otherwise. Never a client tenant's.
     card:
       task: >-
         This file is a Romanian bank statement (extras de cont) in RON. Read its header and
@@ -222,7 +222,7 @@ roles:
     pack: v3_classify
     output: "doc_class, needs_ocr, needs_human, confidence"
     status: shadow
-    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
@@ -250,7 +250,7 @@ roles:
     pack: null
     output: "a ranking of the articole that already matched (v1: a person still picks)"
     status: shadow
-    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
@@ -267,7 +267,7 @@ roles:
     pack: v3_judge
     output: "V3Judge {accounts_ok, risk, needs_human}"
     status: wired
-    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
@@ -301,10 +301,10 @@ roles:
     pack: null
     hitl_kinds: [v3_approve]
     output: "plain-language explanation shown with the question"
-    status: wired   # WP-50: explains the question; no node reads it
-    model: z-ai/glm-5.3   # owner, 2026-10-03 (WP-51: DeepSeek trains on prompts)
+    status: wired   # explains the question; no node reads it
+    model: z-ai/glm-5.3   # owner, 2026-10-03 (DeepSeek trains on prompts)
     provider: {only: [z-ai], allow_fallbacks: false, data_collection: deny}
-    alternates:   # owner, 2026-10-03 (00_LAW §8 A7; WP-53): only while z-ai fails the data policy
+    alternates:   # owner, 2026-10-03 (LAW L32): only while z-ai fails the data policy
       - {model: z-ai/glm-5.3, provider: {only: [together], allow_fallbacks: false, data_collection: deny}}
       - {model: moonshotai/kimi-k2.6, provider: {only: [moonshotai], allow_fallbacks: false, data_collection: deny}}
     card:
@@ -322,7 +322,7 @@ roles:
     pack: recon_review
     output: "confirm | contest | abstain (a contest only asks a person)"
     status: wired
-    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       independence: "Worded apart from jev_v3_judge (JevAnnex: different prompt)."
@@ -346,10 +346,10 @@ roles:
     pack: null
     hitl_kinds: [recon_ambiguous, need_rj_export, recon_review_contest]
     output: "plain-language explanation shown with the question"
-    status: wired   # WP-50: explains the question; no node reads it
-    model: z-ai/glm-5.3   # owner, 2026-10-03 (WP-51: DeepSeek trains on prompts)
+    status: wired   # explains the question; no node reads it
+    model: z-ai/glm-5.3   # owner, 2026-10-03 (DeepSeek trains on prompts)
     provider: {only: [z-ai], allow_fallbacks: false, data_collection: deny}
-    alternates:   # owner, 2026-10-03 (00_LAW §8 A7; WP-53): only while z-ai fails the data policy
+    alternates:   # owner, 2026-10-03 (LAW L32): only while z-ai fails the data policy
       - {model: z-ai/glm-5.3, provider: {only: [together], allow_fallbacks: false, data_collection: deny}}
       - {model: moonshotai/kimi-k2.6, provider: {only: [moonshotai], allow_fallbacks: false, data_collection: deny}}
     card:
@@ -366,7 +366,7 @@ roles:
     pack: v2_declaration_gate
     output: "V2Gate suggestion; cannot clear material"
     status: wired
-    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter; WP-20)
+    model: typesafe/jev-1.13   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [typesafe], allow_fallbacks: false, data_collection: deny}
     card:
       questions:
@@ -405,10 +405,10 @@ roles:
     pack: null
     hitl_kinds: [v2_close, control_disposition]
     output: "plain-language explanation shown with the question"
-    status: wired   # WP-50: explains the question; no node reads it
-    model: z-ai/glm-5.3   # owner, 2026-10-03 (WP-51: DeepSeek trains on prompts)
+    status: wired   # explains the question; no node reads it
+    model: z-ai/glm-5.3   # owner, 2026-10-03 (DeepSeek trains on prompts)
     provider: {only: [z-ai], allow_fallbacks: false, data_collection: deny}
-    alternates:   # owner, 2026-10-03 (00_LAW §8 A7; WP-53): only while z-ai fails the data policy
+    alternates:   # owner, 2026-10-03 (LAW L32): only while z-ai fails the data policy
       - {model: z-ai/glm-5.3, provider: {only: [together], allow_fallbacks: false, data_collection: deny}}
       - {model: moonshotai/kimi-k2.6, provider: {only: [moonshotai], allow_fallbacks: false, data_collection: deny}}
     card:
@@ -427,7 +427,7 @@ roles:
     status: shadow
     model: z-ai/glm-5.3   # owner, 2026-10-03 (OpenRouter)
     provider: {only: [z-ai], allow_fallbacks: false, data_collection: deny}
-    alternates:   # owner, 2026-10-03 (00_LAW §8 A7; WP-53): only while z-ai fails the data policy
+    alternates:   # owner, 2026-10-03 (LAW L32): only while z-ai fails the data policy
       - {model: z-ai/glm-5.3, provider: {only: [together], allow_fallbacks: false, data_collection: deny}}
       - {model: moonshotai/kimi-k2.6, provider: {only: [moonshotai], allow_fallbacks: false, data_collection: deny}}
     card:
@@ -441,6 +441,6 @@ roles:
 forbidden:
   - a model on a graph edge
   - a role without a row here
-  - model aliases, openrouter/auto, fallback model lists (tiers: 00_LAW §8 A4)
+  - model aliases, openrouter/auto, fallback model lists (tiers: LAW L31)
   - a client tenant on any route but eu_route
   - a persona or a decision field in a System Two card

@@ -1,4 +1,4 @@
-"""WP-37: the reading evaluation — how well a model reads statements whose answers are known.
+"""the reading evaluation — how well a model reads statements whose answers are known.
 
 Six invented statements (``cases()``), each a real PDF built here with its known answer. They
 vary what bank statements vary: column labels, column order, wrapped descriptions, total rows,
@@ -15,7 +15,7 @@ and scored:
 
 Nothing is minted or stored except the model-call records. ``--model`` reads with another
 Google AI Studio model for comparison (e.g. a Pro model on the hard cases); production keeps
-the catalog's one pinned model (00_LAW §3 invariant 5).
+the catalog's one pinned model (LAW L28).
 
     GRAPHUSERTOKEN_OPERATOR=… uv run python -m poarta_contabila.ocr_eval --base-url https://…
     GRAPHUSERTOKEN_OPERATOR=… uv run python -m poarta_contabila.ocr_eval --base-url https://… \\

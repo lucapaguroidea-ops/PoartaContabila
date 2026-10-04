@@ -1,6 +1,6 @@
 name: bonuri_decont
 note: 'An expense report split into its parts: two bonuri (one with our CUI) and a workings sheet are
-  evidence of the 542 settlement (WP-73 G2, no Job); an SPV invoice part is a Job once its zip is uploaded.
+  evidence of the 542 settlement (no Job); an SPV invoice part is a Job once its zip is uploaded.
   Known gap: the books carry the deductible bon''s VAT on 4426, which C0 does not imply (the 542 settlement
   is not built in v1).'
 firm: bonuri

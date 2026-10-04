@@ -1,4 +1,4 @@
-"""SAGA C "Import date" XML mouths: invoices (WP-03) and bank receipts / payments (WP-19).
+"""SAGA C "Import date" XML mouths: invoices (WP-03) and bank receipts / payments.
 
 Invoices go through ``iesire_factura_xml`` / ``intrare_factura_xml``.
 
@@ -141,7 +141,7 @@ def packaged_number(doc: CanonicalDocument) -> str:
 
 
 def export_key(module_id: str, job_id: str, schema_version: str) -> str:
-    """Write-once key for a package (IDEMPOTENCY.md)."""
+    """Write-once key for a package (ARCHITECTURE.md §16)."""
     return f"{module_id}:{job_id}:{schema_version}"
 
 

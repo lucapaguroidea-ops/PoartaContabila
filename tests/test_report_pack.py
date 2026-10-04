@@ -1,4 +1,4 @@
-"""WP-07: SAGA report pack (purchase/sales journals) as the eye, and intent_check."""
+"""SAGA report pack (purchase/sales journals) as the eye, and intent_check."""
 
 from __future__ import annotations
 
@@ -171,7 +171,7 @@ def test_runtime_prefers_uploaded_journals(cat):
 
 
 def test_the_report_pack_eye_reads_bank_documents_from_the_journal():
-    """WP-73 G8: the journals hold invoices only; a statement line SAGA holds is in Banca."""
+    """the journals hold invoices only; a statement line SAGA holds is in Banca."""
     from poarta_contabila.sinks.exports import ExportEye, SinkLine
     from poarta_contabila.sinks.saga_eye import ReportPackEye
 

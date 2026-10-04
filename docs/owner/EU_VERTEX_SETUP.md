@@ -6,14 +6,15 @@ OpenRouter route.
 
 **Blocked by** (all four must be cleared before the first client document):
 
-1. **Owner decision: the EU route per model family.** `00_LAW.md` §3 invariant 5 names Scaleway
-   as the EU host. Scaleway's hosted models do not include Gemini, so Gemini document reading on
-   Vertex AI EU is a second EU route. The law needs the owner's change first, e.g.:
+1. **Owner decision: the EU route per model family** (WP-D4, `BUILD.md`). `LAW.md` L33 lets
+   client data reach a model only through an EU route; Scaleway's hosted models do not include
+   Gemini, so Gemini document reading on Vertex AI EU is its own EU route, e.g.:
    - document reading: Vertex AI EU (this guide);
-   - System Two (DeepSeek / GLM): Scaleway;
-   - System One (Jev): open, because where Jev processes data is unknown.
+   - System Two (GLM): Scaleway or OpenRouter EU;
+   - System One (Jev): no EU route (WP-D4 lists the options).
 2. **A domain the owner controls**, for the Google Cloud organization (§A).
-3. **The live sender** (WP-20 / WP-24): Poarta sends nothing to any model yet.
+3. **A Vertex transport**: the live senders today are OpenRouter and Google AI Studio
+   (synthetic only); a Vertex sender is not built.
 4. **Leaving synthetic data**, together with the client-side paperwork in §D.
 
 `[verify]` marks a point to check in Google's or Railway's current documentation while doing the
@@ -36,7 +37,7 @@ Enterprise Agent Platform".
 | Nothing on data retention | Vertex AI **caches Gemini inputs in memory for up to 24 h** by default, and may **log prompts for abuse monitoring** unless the project is on invoiced billing or has an exception. Zero data retention needs both turned off, and no grounding with Google Search (§D). |
 | Proxy code with `vertexai.generative_models` (`google-cloud-aiplatform==1.44.0`) | That module was deprecated on 24 June 2025 with removal announced for 24 June 2026. Use the **Google Gen AI SDK** (`google-genai`) with `vertexai=True` and an EU `location` (§E). |
 | Proxy accepts any `Authorization` header; client uses `api_key="any-placeholder"` | An **open relay** to a billed Vertex project on a public URL. Not acceptable (§F). |
-| Proxy maps any model name containing "flash" to one model, else to another | A silent model swap, against `00_LAW.md` invariant 5 (one exact model per role, no aliases). |
+| Proxy maps any model name containing "flash" to one model, else to another | A silent model swap, against `LAW.md` L28 (one exact model per role, no aliases). |
 | Proxy forwards only the last message, as text | It drops the role card (system message), the history and the PDF or image. Document reading cannot work through it. |
 | Writes the credentials JSON to a file in the working directory | Load the key from the variable into memory; never write it to disk (§E). |
 | Footer "For medical advice … consult a professional" | Text from a generator, removed. |
@@ -49,7 +50,7 @@ Poarta controls its own code, so it needs **no OpenRouter-compatible proxy**. Th
 transport inside Poarta, chosen per role:
 
 - `ARTICOLE_MODEL_ROLES_v1.yaml`: each document-reading role (`ocr_extract`,
-  `ocr_decont_split`) gets an `eu_route` in the checked shape of WP-35:
+  `ocr_decont_split`) gets an `eu_route` in the checked shape (`model_roles.EuRoute`):
 
   ```yaml
   eu_route:
@@ -63,9 +64,9 @@ transport inside Poarta, chosen per role:
   A non-EU region, `global` or an alias does not load.
 - `model_roles.route_check`: a tenant with `data_class: client` goes only to `eu_route`, and a
   role without one refuses. This rule already exists.
-- The live sender (blocked, item 3) gets one Vertex transport beside the OpenRouter one.
-- What is recorded under `MODEL_CALLS=dry` stays the same, so the shadow and smoke runs
-  (WP-26, WP-29) show the route before anything is sent.
+- The senders (item 3) get one Vertex transport beside the OpenRouter and AI Studio ones.
+- What is recorded under `MODEL_CALLS=dry` stays the same, so the shadow and smoke runs show
+  the route before anything is sent.
 
 A separate proxy service (§F) is only worth it for a third-party tool that can speak nothing
 but the OpenAI / OpenRouter format.
@@ -230,7 +231,7 @@ Only for a tool that cannot be changed. It must:
 
 ## H. Before the first client document
 
-- [ ] Decision on the EU route recorded in `00_LAW.md`, item 1 above.
+- [ ] Decision on the EU route recorded (WP-D4 closed; `LAW.md` changed if needed), item 1 above.
 - [ ] Organization, policies and project done (§A–§C). `gcloud org-policies describe
       gcp.resourceLocations --organization=ORG_ID` shows `in:eu-locations`.
 - [ ] Key created as an exception, enforcement restored, key expiry set, file deleted.

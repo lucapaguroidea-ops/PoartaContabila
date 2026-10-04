@@ -1,4 +1,4 @@
-"""WP-56: each OpenRouter key's spend, read from OpenRouter — never computed, never the key."""
+"""each OpenRouter key's spend, read from OpenRouter — never computed, never the key."""
 
 from __future__ import annotations
 

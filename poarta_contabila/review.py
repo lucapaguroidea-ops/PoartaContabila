@@ -1,4 +1,4 @@
-"""The review page (WP-66, 00_LAW §8 A8): a thin page over the operator API.
+"""The review page (LAW L26): a thin page over the operator API.
 
 Three static files, served without a token: they hold no data. The page asks the person for
 the operator token (kept in the tab's session storage) and their name, reads

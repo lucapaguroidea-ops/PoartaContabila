@@ -43,7 +43,7 @@ def test_ready_with_database_applies_schema():
         assert client.get("/ready").status_code == 200
 
 
-# ----- WP-34: request-size cap and token report -----
+# ----- request-size cap and token report -----
 
 
 def test_tokens_are_reported_never_shown():

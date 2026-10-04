@@ -1,4 +1,4 @@
-"""Model roles (00_LAW §3.5): one pinned model per role; dry runs record and send nothing."""
+"""Model roles (LAW L28): one pinned model per role; dry runs record and send nothing."""
 
 from __future__ import annotations
 
@@ -39,8 +39,8 @@ def test_every_model_call_site_has_one_role(cat):
         "jev_v3_judge",
         "jev_v2_gate",
         "jev_recon_review",
-        "ocr_extract",  # WP-36: reads synthetic statements directly (Google AI Studio)
-        "sys2_explain_approve",  # WP-50: explanations shown next to the question
+        "ocr_extract",  # reads synthetic statements directly (Google AI Studio)
+        "sys2_explain_approve",  # explanations shown next to the question
         "sys2_explain_recon",
         "sys2_explain_close",
     }
@@ -52,10 +52,10 @@ def test_every_model_call_site_has_one_role(cat):
     # chosen by the owner, not guessed (document reading 2026-10-02, OpenRouter 2026-10-03)
     jev = "typesafe/jev-1.13"
     assert {r.role_id: r.model for r in roles.values() if r.model} == {
-        "ocr_extract": "gemini-3.5-flash-lite",  # tiers.everyday[0] (00_LAW §8 A4)
+        "ocr_extract": "gemini-3.5-flash-lite",  # tiers.everyday[0] (LAW L31)
         "ocr_decont_split": "gemini-3.5-flash-lite",
         **{rid: jev for rid, r in roles.items() if r.system == "system_one"},
-        # WP-51: DeepSeek trains on prompts (OpenRouter data policy); Z.AI does not
+        # DeepSeek trains on prompts (OpenRouter data policy); Z.AI does not
         "sys2_explain_approve": "z-ai/glm-5.3",
         "sys2_explain_recon": "z-ai/glm-5.3",
         "sys2_explain_close": "z-ai/glm-5.3",
@@ -220,7 +220,7 @@ def test_model_roles_view_never_shows_a_key(cat, monkeypatch):
     resp = o.http.get("/model-roles", headers=o.op)
     assert "sk-or-test-secret" not in resp.text
     roles = {r["role_id"]: r for r in resp.json()}
-    # WP-55: Jev has its own key; System Two keeps OPENROUTER_SYS2_API_KEY
+    # Jev has its own key; System Two keeps OPENROUTER_SYS2_API_KEY
     assert roles["jev_v3_judge"]["key_env"] == "OPENROUTER_SYS1_API_KEY"
     assert roles["jev_v3_judge"]["key_set"] is True
     assert roles["sys2_explain_approve"]["key_env"] == "OPENROUTER_SYS2_API_KEY"
@@ -237,7 +237,7 @@ def test_the_catalog_names_the_key_each_system_uses():
     assert sorted(doc["enums"]["key_env"]) == sorted(set(KEY_ENV.values()))
 
 
-# ----- role cards (WP-25) -----
+# ----- role cards -----
 
 
 def _row(system="system_one", **over):
@@ -412,7 +412,7 @@ def test_postgres_model_call_store(cat):
     (got,) = store.recent("jev_v3_judge")
     assert got.card_hash == judge.card_hash and got.questions == judge.questions()
     assert {c.role_id for c in store.recent()} == {"jev_v3_judge", "jev_v2_gate"}
-    # WP-50: the latest sent call for an input; a recorded one is not an explanation
+    # the latest sent call for an input; a recorded one is not an explanation
     assert store.sent("jev_v3_judge", got.input_hash) is None
     sent = record(
         judge,
@@ -427,7 +427,7 @@ def test_postgres_model_call_store(cat):
     assert store.sent("jev_v3_judge", got.input_hash).call_id == sent.call_id
 
 
-# ----- shadow roles at their place in the flow (WP-26) -----
+# ----- shadow roles at their place in the flow -----
 
 
 def _roles_seen(o):
@@ -444,7 +444,7 @@ def test_shadow_roles_record_at_triage_bind_and_the_approval_question(cat):
     assert "jev_flux" not in seen  # one articol matched: Jev is skipped (JevAnnex)
     for rid in ("jev_source_doc", "jev_our_role", "jev_v3_classify"):
         assert seen[rid]["status"] == "recorded" and seen[rid]["reason"].startswith("shadow")
-    assert seen["sys2_explain_approve"]["reason"] == "dry run: recorded, not sent"  # WP-50
+    assert seen["sys2_explain_approve"]["reason"] == "dry run: recorded, not sent"
     assert seen["jev_our_role"]["input"]["supplier"]["cui"] == "20000005"
     explain = seen["sys2_explain_approve"]
     assert explain["input"]["kind"] == "v3_approve"
@@ -539,7 +539,7 @@ def test_only_shadow_roles_are_observed(cat):
     calls = InMemoryModelCallStore()
     roles = dict(_pinned(cat).model_roles)
     unwired = roles["sys2_draft_rule"].model_copy(update={"status": "not_wired"})
-    roles["sys2_draft_rule"] = unwired  # every catalog role has a call site since WP-32
+    roles["sys2_draft_rule"] = unwired  # every catalog role has a call site
     gw = ModelGateway(roles=roles, calls=calls, mode="dry", synthetic=lambda cui: True)
     gw.observe("jev_v3_judge", {"tenant_cui": CUI}, CUI)  # wired: goes through Jev, not here
     gw.observe("sys2_draft_rule", {"tenant_cui": CUI}, CUI)  # not_wired
@@ -549,7 +549,7 @@ def test_only_shadow_roles_are_observed(cat):
     assert calls.rows == []
 
 
-# ----- WP-35: the EU route's shape -----
+# ----- the EU route's shape -----
 
 EU = {
     "provider": "vertex",

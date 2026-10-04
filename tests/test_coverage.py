@@ -1,4 +1,4 @@
-"""WP-69: the coverage map — every reachable catalog row × the scenarios and tests that drive it."""
+"""the coverage map — every reachable catalog row × the scenarios and tests that drive it."""
 
 from __future__ import annotations
 

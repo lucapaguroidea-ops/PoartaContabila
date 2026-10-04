@@ -290,7 +290,7 @@ flux:
       expect_accounts: ["5121", "5311"]
       tolerance: "0.05"
       require_all_accounts: false
-    note: "job_extras: one job per statement pack (legacy rows). job_extras_line (WP-13): one job per movement line, matched per line on date + amount + side (ARTICOLE_EXTRAS_GRAIN)."
+    note: "job_extras: one job per statement pack (legacy rows). job_extras_line: one job per movement line, matched per line on date + amount + side (ARTICOLE_EXTRAS_GRAIN)."
 
   # ===== ingest — storno =====
   - articol_id: storno_intrare

@@ -1,4 +1,4 @@
-"""WP-04: ingest_source_doc through `packaged`, with v3_approve before any SAGA write."""
+"""ingest_source_doc through `packaged`, with v3_approve before any SAGA write."""
 
 from __future__ import annotations
 
@@ -259,7 +259,7 @@ def test_postgres_stores_package_once(cat):
 
 
 def test_a_nextup_tenant_gets_no_prefile(cat):
-    """00_LAW §8 A2 §3: nothing is written to NextUp; the job stops before any package."""
+    """LAW L8: nothing is written to NextUp; the job stops before any package."""
     w = World(cat)
     w.deps.book_of_record = lambda cui: "nextup"
     w.graph = build_ingest_graph(w.deps, checkpointer=MemorySaver())

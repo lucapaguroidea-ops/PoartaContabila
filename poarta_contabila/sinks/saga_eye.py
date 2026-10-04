@@ -1,7 +1,7 @@
 """SagaEye: the read-only witness protocol (ARCHITECTURE.md §6).
 
 Core graphs depend only on this protocol. v1 reads the SAGA report pack /
-RJ-CM export (WP-07); FDB SQL is parked (WP-15).
+RJ-CM export; FDB SQL is parked (WP-15).
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ class SagaEye(Protocol):
 
 
 class FakeSagaEye:
-    """Witness with nothing in it. For tests and for graphs before WP-07."""
+    """Witness with nothing in it. For tests and for a tenant with no eye yet."""
 
     def covers(self, cui: str, period: str) -> bool:
         return False
@@ -71,7 +71,7 @@ class FakeSagaEye:
         return {}
 
 
-# ----- SAGA report pack: purchase / sales journals (WP-07, harvest C-F11) -----
+# ----- SAGA report pack: purchase / sales journals (harvest C-F11) -----
 #
 # One row per document: date, number, partner (name, tax id), total incl. VAT, and a
 # base/VAT column pair per rate. Headers sit in the first rows and are located by label.
@@ -159,9 +159,9 @@ def read_saga_tva_journal(path: str | Path, side: Literal["cumparari", "vanzari"
 class ReportPackEye:
     """SagaEye over the report pack's purchase/sales journals (+ balance when given).
 
-    The journals hold invoices only. With *journal* (the registru jurnal of the same firm),
-    its bank documents, journal lines and turnover are read from it for the months it covers
-    (WP-73 G8): otherwise a statement line SAGA already holds would look absent."""
+     The journals hold invoices only. With *journal* (the registru jurnal of the same firm),
+     its bank documents, journal lines and turnover are read from it for the months it covers
+    : otherwise a statement line SAGA already holds would look absent."""
 
     def __init__(
         self,

@@ -1,4 +1,4 @@
-"""WP-33: the answer log — every answer a person submits to a question, append-only.
+"""the answer log — every answer a person submits to a question, append-only.
 
 The graphs keep the answer inside their checkpoints, which are working state, not a record.
 This log is the record: for each submission, which thread and question it answered, what was

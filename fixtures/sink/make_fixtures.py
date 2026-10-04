@@ -1,4 +1,4 @@
-"""Generate synthetic witness exports in the real SAGA C / NextUp layouts (A2).
+"""Generate synthetic witness exports in the real SAGA C / NextUp layouts (LAW L8).
 
 Every company, CUI, number and amount here is invented (CUIs carry valid check digits).
 The layouts mirror real exports: header rows, column order, Excel date serials, numeric
@@ -27,7 +27,7 @@ def saga_rj() -> None:
 
 
 def saga_rj_smoke() -> None:
-    """The smoke run's books (WP-47): a clean August holding exactly the smoke's August
+    """The smoke run's books: a clean August holding exactly the smoke's August
     documents (an SPV purchase, its payment, a customer receipt), then September as in
     saga_rj.xls, in one export."""
     _saga_rj("saga_rj_smoke.xls", august=True)

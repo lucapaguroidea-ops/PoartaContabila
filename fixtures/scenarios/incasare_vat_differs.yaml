@@ -1,6 +1,6 @@
 name: incasare_vat_differs
 note: 'TVA la încasare, a purchase''s VAT booked 1.00 higher on 4428: M1_8 sees 4428 off the VAT still
-  open on the documents (WP-75); C0 and the snapshot see it too.'
+  open on the documents; C0 and the snapshot see it too.'
 firm: incasare
 period: 2026-05
 seed: 1

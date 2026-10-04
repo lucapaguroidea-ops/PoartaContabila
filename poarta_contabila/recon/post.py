@@ -1,4 +1,4 @@
-"""POST recon (WP-27): how did SAGA post this document? Deterministic, no model.
+"""POST recon: how did SAGA post this document? Deterministic, no model.
 
 For an ``acked`` Job (SAGA shows its document validated), the registru jurnal's lines of that
 posting are found — the invoice journal (SAGA ``Intrari`` / ``Iesiri``, NextUp ``JC`` / ``JV``),
@@ -11,7 +11,7 @@ POST profile's ``fallback_accounts``):
 
 An expected account matches a used one by prefix (``401`` ← ``401.00001``; class ``6`` ← ``628``).
 
-Amounts (WP-31): once the accounts fit, every expected account the profile's
+Amounts: once the accounts fit, every expected account the profile's
 ``account_amounts`` lists (``401`` / ``4111`` → the document's gross, ``4426`` / ``4427`` /
 ``4428`` → its VAT) is checked: the amount the posting moves on it (each line once, on either
 side) against the document, within the articol's ``tolerance`` (else the profile's). Accounts
@@ -48,7 +48,7 @@ PostVerdict = Literal["how_ok", "how_mismatch", "need_rj_export"]
 
 
 class AccountAmount(Closed):
-    """What the posting moved on one expected account, against the document (WP-31)."""
+    """What the posting moved on one expected account, against the document."""
 
     account: str
     of: Literal["gross", "vat"]

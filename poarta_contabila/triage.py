@@ -1,4 +1,4 @@
-"""folder_triage (WP-02): a Pack either passes every emit gate or it does not become a Job.
+"""folder_triage: a Pack either passes every emit gate or it does not become a Job.
 
 Gates (HANDBOOK §4, ARCHITECTURE §2): class ∧ identity ∧ primary ∧ the pack's
 ``emit`` JsonLogic rule, then a job_kind from ArticoleJobs. Fail closed: any
@@ -6,7 +6,7 @@ gate that cannot be evaluated is a failed gate. Jev is not consulted here; the
 caller supplies ``source_doc_id`` (sniff) and the graph asks a human when it is
 ``unknown`` or a receipt's CUI is unclear.
 
-A container (a SourceDoc row with ``split``, e.g. ``decont_cheltuieli``, A2) never
+A container (a SourceDoc row with ``split``, e.g. ``decont_cheltuieli``, LAW L16) never
 emits. When its own identity and primary gates pass, the graph asks ``decont_split``
 for its parts; each part becomes a child Pack (same tenant, firm folder and period,
 its own hash) that passes or fails the same gates. XML first: a part that has the
@@ -192,7 +192,7 @@ def child_pack(cat: Catalog, container: Pack, part: SplitPart) -> Pack:
     )
 
 
-# ----- which batches a firm has (WP-67): the review page lists their questions -----
+# ----- which batches a firm has: the review page lists their questions -----
 
 
 @dataclass

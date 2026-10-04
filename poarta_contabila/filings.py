@@ -1,4 +1,4 @@
-"""Filings (WP-12): what is due for a firm-month, and what closes it.
+"""Filings: what is due for a firm-month, and what closes it.
 
 This system never submits to ANAF. A due item comes from an ArticoleFiling row whose
 ``require`` / ``forbid`` fit the period's CO.DiT (no CO.DiT → nothing is assumed due).

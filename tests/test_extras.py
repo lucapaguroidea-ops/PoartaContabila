@@ -1,4 +1,4 @@
-"""WP-13: PDF bank statements — a pack, one Job per movement line, never the statement total."""
+"""PDF bank statements — a pack, one Job per movement line, never the statement total."""
 
 from __future__ import annotations
 
@@ -165,7 +165,7 @@ def test_statement_lines_are_the_source_of_bank_movements(cat):
     assert out["diff"]["synthetic_delta"]["5121:debit"]["delta"] == "-500.00"  # not in SAGA
 
 
-# ----- WP-19: the bank mouths -----
+# ----- the bank mouths -----
 
 PARTNER = "20000005"  # invented, valid check digit
 BIND = {
@@ -311,7 +311,7 @@ def test_a_bank_reference_names_the_line_only_when_unique():
     assert [d.maps.get("referinta") for d in shared] == [None, None]
 
 
-# ----- WP-22: the proposal on the question -----
+# ----- the proposal on the question -----
 
 
 def test_an_unbound_payment_is_asked_with_the_invoice_it_settles(cat):
@@ -369,7 +369,7 @@ def test_an_invoice_paid_in_two_lines_is_proposed_for_what_stays_open(cat):
     assert rest["edit"]["maps"] == {"factura_numar": "AB 0099", "factura_id": invoice_id}
 
 
-# ----- WP-45: a balance row is not a line, whatever column its label is in -----
+# ----- a balance row is not a line, whatever column its label is in -----
 
 
 def _with_rows(*extra):

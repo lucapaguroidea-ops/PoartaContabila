@@ -1,4 +1,4 @@
-"""WP-37: the reading evaluation — known statements, scored readings, any AI Studio model."""
+"""the reading evaluation — known statements, scored readings, any AI Studio model."""
 
 from __future__ import annotations
 
@@ -173,7 +173,7 @@ def test_the_reader_override_keeps_every_guard(cat):
 
 
 def test_two_pages_ties_with_the_closing_balance_read_as_a_row(cat):
-    """WP-45, as seen live on 2026-10-02: 61 rows for 60 lines, the extra one the closing
+    """as seen live on 2026-10-02: 61 rows for 60 lines, the extra one the closing
     balance with its label in the date column."""
     case = next(c for c in cases() if c.name == "two_pages")
 

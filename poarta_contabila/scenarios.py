@@ -1,4 +1,4 @@
-"""Scenario runner (WP-71): synthetic months driven over HTTP, expected path against actual.
+"""Scenario runner: synthetic months driven over HTTP, expected path against actual.
 
 A scenario is YAML in ``fixtures/scenarios/``: a firm (:mod:`poarta_contabila.synthetic`), a
 month, a seed and at most one named defect; how the books stand when documents arrive; the

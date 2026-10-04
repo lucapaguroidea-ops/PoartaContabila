@@ -1,4 +1,4 @@
-"""PRE recon (WP-05): is this document already in the books? Deterministic, no model.
+"""PRE recon: is this document already in the books? Deterministic, no model.
 
 Witnesses: the registru jurnal (a :class:`SagaEye`) and, for purchases, the SPV
 register. The profile is the ``reconcile_sink`` row on stage ``pre`` that flux

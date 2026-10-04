@@ -1,4 +1,4 @@
-"""WP-20: Jev Layer 1 (v3_judge) and Layer 2 (v2_declaration_gate) — JSON only, closed
+"""Jev Layer 1 (v3_judge) and Layer 2 (v2_declaration_gate) — JSON only, closed
 models, cached on (pack, input_hash), fail closed. The transport is mocked: the wire is not
 built until it is read from the official docs."""
 

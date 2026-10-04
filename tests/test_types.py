@@ -1,4 +1,4 @@
-"""WP-00: domain types are closed (extra=forbid) and keep money/dates as strings."""
+"""domain types are closed (extra=forbid) and keep money/dates as strings."""
 
 from __future__ import annotations
 

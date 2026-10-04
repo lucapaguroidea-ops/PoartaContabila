@@ -1,4 +1,4 @@
-"""A2: witness export readers (SAGA C and NextUp) and the export-backed eye."""
+"""LAW L8: witness export readers (SAGA C and NextUp) and the export-backed eye."""
 
 from __future__ import annotations
 
@@ -159,7 +159,7 @@ def test_saga_eye_documents(saga_lines):
     )
     assert isinstance(eye, SagaEye)
     docs = {d.number: d for d in eye.documents("1000009", "2026-09")}
-    assert set(docs) == {"1427", "AB0058", "FX-101", "1"}  # "1": the bank payment (WP-13)
+    assert set(docs) == {"1427", "AB0058", "FX-101", "1"}  # "1": the bank payment
     assert (docs["1"].doc_class, docs["1"].gross, docs["1"].analytic) == (
         "plata",
         "1210.00",

@@ -1,4 +1,4 @@
-"""WP-23: reconcile_sink — the month's undecided PRE checks, answered on recon:{cui}:{period}."""
+"""reconcile_sink — the month's undecided PRE checks, answered on recon:{cui}:{period}."""
 
 from __future__ import annotations
 

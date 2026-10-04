@@ -1,4 +1,4 @@
-"""WP-06: Windows agent — pull, backup label, import as AGENT, snapshot → acked."""
+"""Windows agent — pull, backup label, import as AGENT, snapshot → acked."""
 
 from __future__ import annotations
 
@@ -358,7 +358,7 @@ def test_postgres_agent_store(cat):
 
 
 def test_a_bank_line_matches_saga_under_the_reference_it_was_imported_with():
-    """WP-71 found it: a bank line goes into SAGA numbered with the bank's reference
+    """The scenario runner found it: a bank line goes into SAGA numbered with the bank's reference
     (render_bank_line's Numar), so the snapshot shows that number, not EXT-…."""
     from poarta_contabila.agent import SnapshotDoc, _matches
     from poarta_contabila.types import Line, PartnerRef, SourceRef, TenantRef, Totals

@@ -1,11 +1,11 @@
-"""The extract contract (EXTRACT.md): what any backend leaves under the source object's prefix.
+"""The extract contract (ARCHITECTURE.md §15): what a backend leaves under the source's prefix.
 
     {prefix}/normalized/markdown.md        text the graph may read
     {prefix}/normalized/tables.json        [{headers, rows}] as strings
     {prefix}/normalized/extract_meta.json  backend, source_hash, model_or_version, needs_ocr,
                                            identity_ok
 
-An extract is done once per ``(source_hash, backend)`` (IDEMPOTENCY.md): the files are
+An extract is done once per ``(source_hash, backend)`` (ARCHITECTURE.md §16): the files are
 written first, then the row (``domain.extracts``) that proves them; a second upload of the
 same file reuses them and never calls the backend again.
 """

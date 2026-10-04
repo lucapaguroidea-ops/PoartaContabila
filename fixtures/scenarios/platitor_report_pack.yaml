@@ -1,7 +1,7 @@
 name: platitor_report_pack
 note: >-
   The clean month with SAGA's report pack (purchase / sales journals) uploaded too: the eye
-  reads invoices from the journals and bank documents from the registru jurnal (WP-73 G8), so
+  reads invoices from the journals and bank documents from the registru jurnal, so
   the fee and salaries SAGA already holds are found; the snapshot carries net, VAT and the
   partner's CUI.
 firm: platitor

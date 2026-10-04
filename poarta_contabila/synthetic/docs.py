@@ -1,4 +1,4 @@
-"""Synthetic documents (WP-70): the files a path reads, built from a seed.
+"""Synthetic documents: the files a path reads, built from a seed.
 
 Each document is a small frozen record (what it says) with methods that render the bytes a
 person would upload: an SPV zip or UBL XML (CIUS-RO, the tags of ``fixtures/ubl``), a PDF
@@ -153,7 +153,7 @@ class Invoice:
         supplier, customer = self.parties(firm)
         out = [
             '<?xml version="1.0" encoding="UTF-8"?>',
-            "<!-- Synthetic CIUS-RO document (WP-70). Firms, CUIs and amounts are invented. -->",
+            "<!-- Synthetic CIUS-RO document. Firms, CUIs and amounts are invented. -->",
             f'<{root} xmlns="urn:oasis:names:specification:ubl:schema:xsd:{root}-2"',
             '  xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:'
             'CommonAggregateComponents-2"',
@@ -342,7 +342,7 @@ class Workings:
 
 @dataclass(frozen=True)
 class Payroll:
-    """A stat de salarii (evidence, A2 §6): the books post it; nothing here posts it."""
+    """A stat de salarii (evidence, LAW L17): the books post it; nothing here posts it."""
 
     ref: str
     period: str
@@ -541,7 +541,7 @@ class ExpenseReport:
                 "bon_our_cui_on_doc": None,
                 "counterparty_cui": None,
             }
-            if isinstance(doc, Bon):  # evidence of the 542 settlement (WP-73 G2)
+            if isinstance(doc, Bon):  # evidence of the 542 settlement
                 part.update(
                     source_doc_id="decont_part_evidence",
                     kinds=["pdf"],

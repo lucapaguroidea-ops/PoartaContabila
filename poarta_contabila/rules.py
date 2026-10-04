@@ -1,4 +1,4 @@
-"""Explained rules (WP-09): what the books may hold with no source document here.
+"""Explained rules: what the books may hold with no source document here.
 
 A rule is named, versioned, and written by a person (``POST /rules``); a new body is a
 new version, earlier ones are kept. It matches either
@@ -221,7 +221,7 @@ class PostgresRuleStore:
         return [ExplainedRule.model_validate(r[0], strict=False) for r in rows]
 
 
-# ----- HITL answers that use rules (monthly_close, WP-10) -----
+# ----- HITL answers that use rules (monthly_close) -----
 
 
 class ExplainedRuleResume(Closed):

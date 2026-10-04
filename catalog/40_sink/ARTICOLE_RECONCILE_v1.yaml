@@ -14,7 +14,7 @@ enums:
   number_match: [exact, alnum, digits_core]
   verdict_review: [confirm, contest, abstain]
   sink_source: [registru_jurnal, cartea_mare]
-  account_amount: [gross, vat]   # which document amount a synthetic account carries (POST, WP-31)
+  account_amount: [gross, vat]   # which document amount a synthetic account carries (POST)
 
 # --- flux rows for reconcile_sink (also listed in ArticoleGraph.allowed_flux) ---
 flux:
@@ -57,7 +57,7 @@ flux:
     hitl: on_contest_or_ambiguous
     write_modules: []
 
-  - articol_id: recon_pre_storno   # WP-73 G4, owner accepted 2026-10-03
+  - articol_id: recon_pre_storno   # owner accepted 2026-10-03
     graph_id: reconcile_sink
     schema_version: "1"
     status: draft
@@ -120,7 +120,7 @@ profiles:
     sink_source: registru_jurnal
     match_keys: [number, date]
     number_match: [exact, alnum, digits_core]
-    number_match_note: "[de confirmat] A2: exact = trimmed, upper; alnum = letters+digits only; digits_core = digits without leading zeros, counts only with the same partner CUI."
+    number_match_note: "[de confirmat] LAW L18: exact = trimmed, upper; alnum = letters+digits only; digits_core = digits without leading zeros, counts only with the same partner CUI."
     expect_accounts_from: flux_or_job
     fallback_accounts: ["401", "4111"]
     tolerance: "0.05"
@@ -155,14 +155,14 @@ profiles:
     sink_source: registru_jurnal
     match_keys: [number, date]
     number_match: [exact, alnum, digits_core]
-    number_match_note: "[de confirmat] A2: exact = trimmed, upper; alnum = letters+digits only; digits_core = digits without leading zeros, counts only with the same partner CUI."
+    number_match_note: "[de confirmat] LAW L18: exact = trimmed, upper; alnum = letters+digits only; digits_core = digits without leading zeros, counts only with the same partner CUI."
     expect_accounts_from: flux_or_job
     fallback_accounts: ["401", "4111", "4426", "4427"]
     tolerance: "0.05"
     require_all_accounts: false
     llm_review: true
     how: true
-    # WP-31: the amount the posting moves on each expected account that is listed here, against
+    # the amount the posting moves on each expected account that is listed here, against
     # the document; accounts not listed (class 6/7: net may split) are not compared.
     account_amounts: {"401": gross, "4111": gross, "4426": vat, "4427": vat}
 
@@ -185,7 +185,7 @@ profiles:
     sink_source: registru_jurnal
     match_keys: [number, date]
     number_match: [exact, alnum, digits_core]
-    number_match_note: "[de confirmat] A2: exact = trimmed, upper; alnum = letters+digits only; digits_core = digits without leading zeros, counts only with the same partner CUI."
+    number_match_note: "[de confirmat] LAW L18: exact = trimmed, upper; alnum = letters+digits only; digits_core = digits without leading zeros, counts only with the same partner CUI."
     expect_accounts_from: flux
     fallback_accounts: ["4428"]
     tolerance: "0.05"
@@ -229,4 +229,4 @@ final:
   pre + already_posted → ingest must not package
   pre + absent → ingest may package
   post + how_mismatch → HITL recon_how_mismatch
-  extras PDF is not keyed by date+gross on one Job — see catalog/60_harvest/ARTICOLE_EXTRAS_GRAIN_v1.yaml
+  extras PDF is not keyed by date+gross on one Job — see catalog/60_practice/ARTICOLE_EXTRAS_GRAIN_v1.yaml

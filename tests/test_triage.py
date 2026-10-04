@@ -1,4 +1,4 @@
-"""WP-02: folder_triage emit gates, aisle routing, and one Job per (tenant, source_hash)."""
+"""folder_triage emit gates, aisle routing, and one Job per (tenant, source_hash)."""
 
 from __future__ import annotations
 
@@ -95,7 +95,7 @@ def test_extras_pdf_lines_are_job_extras_line(cat):
             source_doc_id="extras_statement_pdf", kinds=["pdf"], our_role="n/a", identity_ok=True
         ),
     )
-    assert d.emit and d.job_kind == "job_extras_line"  # WP-13: one Job per movement line
+    assert d.emit and d.job_kind == "job_extras_line"  # one Job per movement line
 
 
 def test_storno_ubl_emits_job_storno(cat):

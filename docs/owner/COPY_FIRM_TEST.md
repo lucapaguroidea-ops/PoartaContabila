@@ -1,6 +1,6 @@
 # Copy-firm test — what the owner runs in SAGA C, and what to send back
 
-Proves the four `draft` mouths (WP-03, WP-19) and settles the `[de confirmat]` formats in
+Proves the four `draft` mouths (WP-03: invoices, receipts, payments) and settles the `[de confirmat]` formats in
 `RESEARCH_LOG.md` R1. Everything here is invented data in a **new, empty test firm**: no
 client's database, no real CUI, nothing from it ever comes back into this repo except the
 files and answers listed in §4.
@@ -164,7 +164,7 @@ Only on `Firma Test SRL`, never on a client's folder.
    ```
 
    The password stays in a local environment variable: never in a file, this repo or Railway
-   (00_LAW §3.2). The folder of the client library may be named differently on your machine.
+   (LAW L10). The folder of the client library may be named differently on your machine.
 
 Send back: SAGA C's version (Help → Despre), the Firebird version, the list of tables, and the
 query that finds FX-101 and A-77 with number, date, total and validated flag. Claude Code may

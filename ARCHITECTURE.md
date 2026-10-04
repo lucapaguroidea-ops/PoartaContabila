@@ -1,6 +1,9 @@
-# Architecture — what to build
+# Architecture — the system as built
 
-Self-contained. Catalogs in `catalog/` are the row-level law. This file is the machine.
+The machine, as built on 2026-10-04; what is not built yet is named in §17. `LAW.md` is the
+law (cited as `L<n>`). The catalog (`catalog/`) is the row-level law and the system's
+ontology: what each document, path, gate and account *means* and how they connect. The domain
+store (§4) is its data model: what is held and where. This file is how the two run.
 
 ## 1. Shape
 
@@ -8,14 +11,14 @@ Self-contained. Catalogs in `catalog/` are the row-level law. This file is the m
 sources (SPV UBL, S3 dump, Telegram, email, photo, SPV register, SAGA report pack)
     → Railway  four compiled LangGraph graphs
          model roles in nodes (catalog ArticoleModelRoles): Jev classify ·
-         DeepSeek/GLM explain · Gemini read scans — via OpenRouter, pinned models
+         GLM explain · Gemini read scans — pinned models (L28–L32)
          Postgres domain + checkpointer · Bucket blobs
     → XML/DBF packages
     → Windows VPS  SAGA C as AGENT (Import; Validare human in v1)
     ← SagaEye v1 from SAGA report pack / RJ-CM export
 ```
 
-SAGA is the mouth. The report pack is the v1 eye. This system hops documente primare through articole de cale and PreFiles. It does not keep books.
+SAGA is the mouth (L5, L9). The report pack is the eye (L6). This system hops documente primare through articole de cale and PreFiles. It does not keep books.
 
 Deploy: Railway project `faithful-mercy`, region `europe-west4` (LAW: EU region); the operator
 token is kept in the browser tab only (the review page).
@@ -29,7 +32,7 @@ token is kept in the browser tab only (the review page).
 | reconcile_sink | `recon:{cui}:{period}` | Jobs + sink lines | pre/post verdict |
 | monthly_close | `close:{cui}:{period}` | lock | file / hold + V4 |
 
-Do not nest compiled graphs. Glue = domain-store ids.
+Do not nest compiled graphs (L20). Glue = domain-store ids.
 
 ### folder_triage
 
@@ -129,7 +132,7 @@ Parked: `bon_via_nota`.
 
 Facturi routing: FurnizorCIF == societate CUI → Ieșiri; ClientCIF == societate CUI → Intrări. Analytics from Lane A maps.
 
-Validare: human until the module fixture is green on a copy firm.
+Validare: human until the module is proven in SAGA C (L11, L42).
 
 `hard_failures > 0` on prefile controls ⇒ do not package.
 
@@ -146,15 +149,15 @@ PRE may conclude `absent` only for covered months (`need_rj_export` otherwise).
 
 SAGA readers: the journal register and balance (`sinks/exports.py`) and the report pack's purchase/sales journals (`ReportPackEye`, `sinks/saga_eye.py`; preferred: they carry partner CUIs, net and VAT). `intent_check` compares the posted document with the package; a difference goes to a person.
 
-v1 reads SAGA report pack / RJ-CM export (practice takeover pack), or, for a tenant with `book_of_record = nextup`, NextUp's journal and balance exports (A2, eye only). FDB SQL later on a pinned SAGA C build. Core graphs depend only on the protocol.
+v1 reads SAGA report pack / RJ-CM export (practice takeover pack), or, for a tenant with `book_of_record = nextup`, NextUp's journal and balance exports (L8, eye only). A read-only database copy later, on a pinned SAGA C build (§17). Core graphs depend only on the protocol.
 
-Watched v1: 401, 4111, 4426, 4427, 4428, 5121, 5311.
+Watched: 401, 4111, 4426, 4427, 4428, 5121, 5311 (L37).
 
 ## 7. CO.DiT
 
 Write order: exig defaults → T* → F* → F7/A* → derive().  
 Hard pair → ValidationError, document not saved.  
-Axes in `catalog/10_lege_firma` plus additive `catalog/60_harvest/ARTICOLE_CODIT_AXES_v1.yaml`.  
+Axes in `catalog/10_lege_firma` plus additive `catalog/60_practice/ARTICOLE_CODIT_AXES_v1.yaml`.  
 Empty profile must not default to `tva_platitor`.  
 Period document, not a sticky tenant flag.
 
@@ -165,7 +168,7 @@ Kind ∈ ArticoleHITL ∪ HITL_ADD ∩ graph.allowed_hitl. Unknown kind = bug. R
 Core kinds:
 
 - `v3_approve` resume `{decision: approve|reject|edit, edit?}` — XOR, not three bools
-  (on an unbound bank line the question carries `proposal`: the invoices it could settle and, when one leads, a ready `edit`; WP-22)
+  (on an unbound bank line the question carries `proposal`: the invoices it could settle and, when one leads, a ready `edit`)
 - `v2_close` resume `{action: file|hold|patch_maps|reopen, explained_rule?}`
 - `wait_validare`, `request_devalidare`, `define_articol`, `define_module`, `explained_rule`, `need_rj_export`
 - additive: `decision_menu` (client sends `option` only; server stamps confirmer/at), `codit_premise`, `filing_receipt`, `control_disposition`
@@ -183,33 +186,33 @@ Agent never devalidates. Agent never auto-restores. Archive metadata must includ
 
 ## 10. HTTP
 
-As built (2026-10-03). Operator routes take `GRAPHUSERTOKEN_OPERATOR`, or the build agent's
-`GRAPHUSERTOKEN_CLAUDE_SYSBUILDER` for synthetic tenants only (WP-38); every answer may carry
-`X-Operator-Name` (WP-33). Agent routes take `GRAPHUSERTOKEN_AGENT_SHARED`.
+Operator routes take `GRAPHUSERTOKEN_OPERATOR`, or the build agent's
+`GRAPHUSERTOKEN_CLAUDE_SYSBUILDER` for synthetic tenants only (L35); every answer may carry
+`X-Operator-Name` (L26, L41). Agent routes take `GRAPHUSERTOKEN_AGENT_SHARED`.
 
 ```
-GET  /health  /ready                          # liveness; readiness and token strength (WP-34)
-GET  /review  /review/{file}                  # the review page, no token (00_LAW §8 A8)
+GET  /health  /ready                          # liveness; readiness and token strength
+GET  /review  /review/{file}                  # the review page, no token (L26)
 
 # tenants and witnesses
 PUT  /tenants/{cui}                           # name, firm folder, book of record, bank accounts, data_class
 POST /tenants/{cui}/exports/{rj|balanta|spv_register}
-PUT  /codit/{cui}/{period}   GET /codit/{cui}/{period}            # CO.DiT (WP-11)
+PUT  /codit/{cui}/{period}   GET /codit/{cui}/{period}            # CO.DiT
 
 # documents in
 POST /ingest                                  # SPV zip / UBL XML → Job (XML first)
 POST /extras/{cui}                            # bank statement: PDF + header (+ tables)
-POST /decont/{cui}                            # expense report → folder_triage (WP-28)
-GET  /reading/{cui}/budget  /reading/{cui}/waiting                 # document reading (A5, A6)
+POST /decont/{cui}                            # expense report → folder_triage
+GET  /reading/{cui}/budget  /reading/{cui}/waiting                 # document reading (L31, §12.1)
 POST /reading/{cui}/choice  /reading/{cui}/retry  /reading/{cui}/waiting/{wait_id}/skip
 
 # questions and answers (the HITL surface; the review page is a client of it)
-GET  /inbox/{cui}/{period}                    # what waits on an accountant (WP-66, WP-67)
+GET  /inbox/{cui}/{period}                    # what waits on an accountant
 GET  /jobs/{job_id}              POST /jobs/{job_id}/resume          # ingest_source_doc
 GET  /triage/{batch_id}          POST /triage/{batch_id}/resume      # folder_triage
 POST /recon/{cui}/{period}  GET …  POST /recon/{cui}/{period}/resume # reconcile_sink
 POST /close/{cui}/{period}  GET …  POST /close/{cui}/{period}/resume # monthly_close
-GET  /answers                                 # every answer, who gave it (WP-33)
+GET  /answers                                 # every answer, who gave it
 
 # the month
 GET  /periods/{cui}/{period}/diff             # Layer 1: PeriodDiff and controls
@@ -217,10 +220,10 @@ POST /filings/{cui}/{period}  GET …  POST /filings/{cui}/{period}/{filing_id}/
 POST /rules                      GET /rules/{cui}                    # explained rules
 
 # model roles
-GET  /model-roles  /model-calls  /model-keys  # pins, what was sent, spend per key (WP-56)
-POST /model-roles/{role_id}/choice            # operators only (A7)
-POST /model-roles/{role_id}/compare           # main pin vs approved alternates (WP-59)
-POST /ocr-eval/{cui}                          # the reading evaluation (WP-37)
+GET  /model-roles  /model-calls  /model-keys  # pins, what was sent, spend per key
+POST /model-roles/{role_id}/choice            # operators only (L32)
+POST /model-roles/{role_id}/compare           # main pin vs approved alternates
+POST /ocr-eval/{cui}                          # the reading evaluation
 
 # the Windows agent
 GET  /agent/pull   POST /agent/imported  /agent/snapshot  /agent/ack-backup
@@ -230,14 +233,14 @@ Agent token ≠ operator token ≠ build agent's token ≠ model keys. No `SAGA_
 
 ## 11. Package
 
-As built (2026-10-03). Four compiled graphs, one module each; glue is the Postgres domain store.
+Four compiled graphs, one module each; glue is the Postgres domain store.
 
 ```
 poarta_contabila/
   triage.py ingest.py reconcile.py close.py   # the four graphs: folder_triage, ingest_source_doc,
                                               #   reconcile_sink, monthly_close
   runtime.py           # wiring: stores, bucket, checkpointer, graphs, model gateway, inbox
-  app.py operator_api.py agent_api.py review.py ui/   # HTTP; the review page (00_LAW §8 A8)
+  app.py operator_api.py agent_api.py review.py ui/   # HTTP; the review page (L26)
   catalog.py flux.py hitl.py jsonlogic.py     # Catalog Cale loader, matches(), typed HITL
   types/               # closed domain types; money and fiscal dates are strings
   jobs.py packages.py registry.py storage.py answers.py rules.py codit.py filings.py
@@ -245,10 +248,10 @@ poarta_contabila/
   recon/               # PRE / POST / settle (deterministic, no model)
   period_diff.py       # Layer 1 + ArticoleControls; not a ledger
   sinks/               # SAGA mouth (saga_xml.py), eye (saga_eye.py), witness exports, SPV register
-  jev.py model_roles.py explain.py provider_policy.py key_usage.py   # model roles (00_LAW §3.5)
+  jev.py model_roles.py explain.py provider_policy.py key_usage.py   # model roles (L28)
   reading_waits.py ocr_eval.py synthetic_docs.py smoke.py coverage.py agent.py db/schema.sql
-  synthetic/           # seeded invented firms, documents and SAGA books (WP-70)
-  scenarios.py         # YAML scenarios (fixtures/scenarios/) over HTTP, simulated SAGA agent (WP-71)
+  synthetic/           # seeded invented firms, documents and SAGA books
+  scenarios.py         # YAML scenarios (fixtures/scenarios/) over HTTP, simulated SAGA agent
 ```
 
 No ReAct supervisor. No `Journal.post`.
@@ -269,7 +272,7 @@ role would be sent (`GET /model-calls`, with the card hash) and sends nothing.
 
 ### 12.1 Model routing in detail (behind LAW §5)
 
-Moved here from the law's amendments A3–A7 (owner, 2026-10-04: the law keeps the principles).
+The mechanics behind L31 and L32 (owner, 2026-10-04: the law keeps the principles).
 
 - **Document-reading tiers** (Google AI Studio, synthetic only). A role lists `tiers`:
   `everyday` models (most requests a day), `strong` models (more capable, fewer a day),
@@ -322,7 +325,7 @@ entered. AGENT is an "Operare" (or "Standard") user with modificare, ștergere, 
 validare taken away (Validare is human in v1), no access to Închidere lună or to the
 listing menu beyond what the snapshot needs, and access to its tenant's firm only. A
 non-Admin user cannot operate on a closed month nor devalidate one, so SAGA itself enforces
-"month closed ⇒ agent writes 0" (00_LAW §3.9). Which right "Import date" itself needs is
+"month closed ⇒ agent writes 0" (L12). Which right "Import date" itself needs is
 `[de confirmat]` on the copy firm.
 
 Running an import (R1, "Diverse → Import date"):
@@ -346,7 +349,7 @@ matching document validated. A snapshot never moves a job out of `acked`.
 
 ## 14. Env
 
-As read by the code (2026-10-03).
+As read by the code.
 
 ```
 DATABASE_URL=          # one Postgres: schema `domain` + LangGraph checkpointer tables
@@ -354,23 +357,87 @@ S3_ENDPOINT= S3_REGION= S3_ACCESS_KEY= S3_SECRET_KEY= S3_BUCKET=
 GRAPHUSERTOKEN_AGENT_SHARED=       # the Windows agent (old name AGENT_SHARED_TOKEN)
 GRAPHUSERTOKEN_OPERATOR=           # people: tenants, uploads, ingest, answers (≠ agent token;
                                    #   old name OPERATOR_TOKEN)
-GRAPHUSERTOKEN_CLAUDE_SYSBUILDER=  # the build agent: operator routes, synthetic tenants only (WP-38)
+GRAPHUSERTOKEN_CLAUDE_SYSBUILDER=  # the build agent: operator routes, synthetic tenants only (L35)
 MODEL_CALLS=off                # off | dry (record only) | live (synthetic tenants only)
-OPENROUTER_SYS1_API_KEY=       # Jev (System One) roles: own key and credit limit (WP-55)
+OPENROUTER_SYS1_API_KEY=       # Jev (System One) roles: own key and credit limit
 OPENROUTER_SYS2_API_KEY=       # System Two roles (explanations, rule drafts)
-OPENROUTER_MANAGEMENT_KEY=     # optional: GET /model-keys also reads the account's credits and keys (WP-56)
-POLICY_REFRESH_SECONDS=86400   # OpenRouter provider data policies, re-read (WP-53; 0 = off)
-GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC=  # document reading: Gemini direct, synthetic tenants only (WP-36)
-READING_RETRY_SECONDS=60       # parked statements read again (A5; 0 = off)
-DOCUMENT_AI_PROCESSOR=          # projects/{p}/locations/{eu}/processors/{id} (WP-21)
+OPENROUTER_MANAGEMENT_KEY=     # optional: GET /model-keys also reads the account's credits and keys
+POLICY_REFRESH_SECONDS=86400   # OpenRouter provider data policies, re-read (0 = off)
+GOOGLE_AI_STUDIO_DIRECT_SYNTHETIC=  # document reading: Gemini direct, synthetic tenants only (L30)
+READING_RETRY_SECONDS=60       # parked statements read again (§12.1; 0 = off)
+DOCUMENT_AI_PROCESSOR=          # projects/{p}/locations/{eu}/processors/{id}
 DOCUMENT_AI_CREDENTIALS_JSON=   # service-account key; else Application Default Credentials
 JEV_BASE_URL= JEV_API_KEY=      # only for a direct Jev route; on OpenRouter these stay unset
-MAX_UPLOAD_MB=32               # request-body cap; over it → 413 (WP-34)
+MAX_UPLOAD_MB=32               # request-body cap; over it → 413
 POARTA_CATALOG_DIR=            # optional: another catalog/ directory (tests)
 ```
 
 Not read by any code (planned, or left from earlier designs): `OPENROUTER_BASE_URL`,
 `ANAF_SPV_CLIENT_ID`, `ANAF_SPV_CLIENT_SECRET`. EU-route variables are named per role in the
-catalog's `eu_route` once WP-D4 is decided (`docs/EU_VERTEX_SETUP.md` §E).
+catalog's `eu_route` once WP-D4 is decided (`docs/owner/EU_VERTEX_SETUP.md` §E).
 
 Absent: `SAGA_SYSDBA`, Firebird write password, `CIEL_SA`, `NEXTUP_*`.
+
+## 15. Extract contract
+
+One contract for every backend (`ubl`, `document_ai`, `gemini`; later `mt940`, `docling`).
+Under the source object's bucket prefix:
+
+```
+normalized/markdown.md        text the graph may read
+normalized/tables.json        list of {headers, rows} as strings
+normalized/extract_meta.json  {backend, source_hash, model_or_version, needs_ocr, identity_ok}
+```
+
+- XML first (L14): when a document exists as XML (UBL CIUS-RO, EU e-invoice), the XML is parsed
+  into CanonicalDocument fields; a PDF of the same document is never read. In SPV zips,
+  `semnatura_*.xml` is the signature companion. Code: `extract/ubl.py` — `read_spv_zip`
+  (members split by root element), `parse_ubl` (totals checked, fail closed), `to_canonical`
+  (tenant side, signed storno). Unit codes (`H87`, `C62`) reach SAGA unmapped until `maps`
+  covers them.
+- `skip_if: [has_text_layer, is_ubl]` is on the SourceDoc row.
+- Graph state stores field strings, not raw model JSON.
+- Statement PDFs of synthetic tenants are read by Gemini through Google AI Studio
+  (`extract/gemini.py`; L31, §12.1) or by Google Document AI (`extract/document_ai.py`); a
+  client tenant's need the EU route (L33). A statement becomes line Jobs, never one Job per
+  statement total (`catalog/60_practice/ARTICOLE_EXTRAS_GRAIN_v1.yaml`).
+- An extract is written once per `(source_hash, backend)` (`extract/contract.py`,
+  `domain.extracts`); a later backend (Docling) keeps the same three files and node names.
+
+## 16. Idempotency keys
+
+The domain row (Postgres) is written after the SAGA side effect; a resume re-enters the node
+from its first line (L22).
+
+| Object | Key | Collision |
+|---|---|---|
+| Job | `(tenant_cui, source_hash)` | second emit is a no-op |
+| threads | `job:{job_id}`, `batch:{batch_id}`, `recon:{cui}:{period}`, `close:{cui}:{period}` | prefixes never mixed (L23) |
+| extract | `source_hash` + backend | reuse `normalized/` |
+| package XML/DBF | `export_key` = `{module_id}:{job_id}:{schema_version}` | written once |
+| PRE / POST recon | `(job_id, stage, sink_snapshot_id)` | |
+| Jev answer | `(pack, input_hash)`, hash of `{pack, version, input}` | reused, never paid twice |
+| HITL resume | `(thread_id, interrupt_id)` | same body twice = same state |
+| CloseRun lock | `(cui, period)` | one expected-set hash |
+| ControlRun | `(cui, period, control_id, snapshot_id)` | |
+| FilingItem | `(cui, period, filing_id)` | a receipt closes it, a date does not |
+| Backup label | `{cui}:{folder}:{utc}` | restore refused on a tenant mismatch |
+
+Money and fiscal dates in graph state are strings; Decimal lives inside the compute node (L24).
+
+## 17. Not built yet
+
+What the law or the catalog names and the code does not do yet. Open work is in `BUILD.md`;
+rows not yet in the catalog are in `SURFACE.md`.
+
+| Piece | State | Tracked in |
+|---|---|---|
+| The Windows agent program (pull, backup, Import date, snapshot) | the HTTP side is built (§13); the program is not in this repo | `BUILD.md`; copy-firm test §6, §10 |
+| SAGA C proof of every write module | all `draft`; tags from R1 only | WP-03; the SAGA C loops |
+| A read-only SAGA database copy as an eye | parked | WP-15; copy-firm test §9 |
+| DBF note mouth (`nota_nc_dbf`), bonuri (`bon_via_nota`) | decision / parked | WP-D3, WP-14; Loop 5 |
+| Storno, partner and article mouths | wait on SAGA's own sample XML | copy-firm test §3 |
+| EU route for client data | `eu_route: null` on every role: client tenants are refused | WP-D4 |
+| Evidence ledger (friction and control per gate) | the answer log exists; the report does not | `BUILD.md`, Loop kit |
+| SAGA WEB as a second mouth | not started; a change of law (L5, L46) | `RESEARCH_LOG.md` R5 |
+| `chat:` face | parked | WP-17 |

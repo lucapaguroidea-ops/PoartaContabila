@@ -1,4 +1,4 @@
-"""What each OpenRouter key has spent, read from OpenRouter (WP-56): never computed here.
+"""What each OpenRouter key has spent, read from OpenRouter: never computed here.
 
 - **The service's keys** (each OpenRouter ``key_env`` of the catalog: ``OPENROUTER_SYS1_API_KEY``,
   ``OPENROUTER_SYS2_API_KEY``): ``GET https://openrouter.ai/api/v1/key`` with that key gives its

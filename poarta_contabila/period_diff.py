@@ -1,12 +1,12 @@
-"""PeriodDiff and ArticoleControls, Layer 1 (WP-08). Not a ledger.
+"""PeriodDiff and ArticoleControls, Layer 1. Not a ledger.
 
 Left operand: the expected set (this period's Jobs and their documents) plus explained
-rules (WP-09). Right operand: what the SagaEye shows. Nothing is plugged: a remainder
+rules. Right operand: what the SagaEye shows. Nothing is plugged: a remainder
 is a bucket row or a failed control, never an adjusting entry.
 
 - **Buckets.** Every sink document of the period is matched to an expected one (by the
   SAGA key a job carries, else side + number + date + gross) → ``expected``; else to a
-  document rule → ``explained_sink_only`` with its ``rule_id`` (WP-09); else
+  document rule → ``explained_sink_only`` with its ``rule_id``; else
   ``unexplained``. Line rules explain journal movements (bank fees, payroll) on the
   parity side; lines of documents already counted are never counted twice.
 - **Outbound holes.** Expected jobs not ``acked`` / ``already_in_sink``.
@@ -14,7 +14,7 @@ is a bucket row or a failed control, never an adjusting entry.
   documents imply (purchase: 401 Cr gross, 4426 Dr VAT; sale: 4111 Dr gross, 4427 Cr
   VAT; a statement line: 5121 on its side) against the eye's turnover. A movement with no
   expected source (a payment on 5121 before bank jobs exist) is a difference, on purpose.
-- **A statement line's counterpart (WP-46, owner 2026-10-02).** Bound to a customer it
+- **A statement line's counterpart (owner 2026-10-02).** Bound to a customer it
   implies 4111, to a supplier 401, on the side opposite 5121 (what ``incasare_xml`` /
   ``plata_xml`` post). Never bound (it was already in the books when it arrived), it counts
   the books' own counterpart only when its bank document there is one journal line, 401
@@ -25,7 +25,7 @@ is a bucket row or a failed control, never an adjusting entry.
   that does not apply (its ``require`` axes are absent) or whose precondition
   ("after maps exist") is not met.
 
-``material`` ⇒ V2 ``file`` is impossible (00_LAW 13). Prefile controls gate packaging.
+``material`` ⇒ V2 ``file`` is impossible (LAW L25). Prefile controls gate packaging.
 """
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ def expected_turnover(
 ) -> dict[str, dict[str, Decimal]]:
     """The turnover the expected documents imply on the watched accounts.
 
-    VAT by the period's CO.DiT (WP-73 G6, C0's note; accounts [de confirmat]): a payer with
+    VAT by the period's CO.DiT (C0's note; accounts [de confirmat]): a payer with
     exigibility at delivery → 4426 / 4427; TVA la încasare → 4428 at the invoice; a
     neplătitor carries purchase VAT in the cost (nothing on 4426). A payer's invoice from
     abroad (*reverse_charged*: jobs on ``foreign_invoice_inbound`` with no VAT) is reverse
@@ -128,14 +128,14 @@ def expected_turnover(
         elif it.doc_class in _OUT:
             add("4111", "debit", it.gross)
             add("4428" if incasare else "4427", "credit", it.vat)
-        elif it.doc_class == "incasare":  # a statement line (WP-13): the bank side only
+        elif it.doc_class == "incasare":  # a statement line: the bank side only
             add("5121", "debit", it.gross)
         elif it.doc_class == "plata":
             add("5121", "credit", it.gross)
     return t
 
 
-_COUNTERPART = {"customer": "4111", "supplier": "401"}  # incasare_xml / plata_xml (WP-46)
+_COUNTERPART = {"customer": "4111", "supplier": "401"}  # incasare_xml / plata_xml
 _POSTED_COUNTERPART = {"incasare": "4111", "plata": "401"}
 
 
@@ -170,7 +170,7 @@ def _la_incasare(axes: dict[str, str]) -> bool:
 def vat_exigible(
     exp: list[ExpectedJob], prior: list[ExpectedJob], axes: dict[str, str]
 ) -> list[tuple[str, str, Decimal]]:
-    """TVA la încasare (WP-73 G6): a bound bank line makes its invoice's VAT share exigible —
+    """TVA la încasare: a bound bank line makes its invoice's VAT share exigible —
     a payment 4426 Dr / 4428 Cr, a receipt 4428 Dr / 4427 Cr; the share is the line's amount
     × the invoice's VAT / gross, half up. The invoice is looked for among this month's and
     *prior* months' expected documents (same partner CUI, number)."""
@@ -186,7 +186,7 @@ def vat_exigible(
 
 
 def open_4428(exp: list[ExpectedJob], prior: list[ExpectedJob]) -> Decimal:
-    """M1_8 (WP-75): the VAT still not exigible at the month's end, as a 4428 balance (debit
+    """M1_8: the VAT still not exigible at the month's end, as a 4428 balance (debit
     positive) — purchases' VAT less the share paid, minus sales' VAT less the share collected,
     over this month's and *prior* months' documents and bank lines. Older documents are not
     seen (the window is SETTLE_MONTHS): their open VAT shows as a difference."""
@@ -213,7 +213,7 @@ def standard_rate(cat: Catalog, period: str) -> str | None:
 def bank_counterparts(
     exp: list[ExpectedJob], matched: dict[str, SinkDoc], lines: list[Any]
 ) -> list[tuple[str, str, Decimal]]:
-    """``(account, side, amount)`` the period's statement lines imply opposite 5121 (WP-46).
+    """``(account, side, amount)`` the period's statement lines imply opposite 5121.
 
     *matched*: job id → the bank document the books show for it; *lines*: the month's
     journal lines. A bound line implies its partner's account; a line never bound implies
@@ -288,7 +288,7 @@ def build_period_diff(
     prior: list[ExpectedJob] | None = None,
 ) -> tuple[PeriodDiff, list[ControlRun]]:
     """PeriodDiff + one ControlRun per v2/both control row. *stalled*: the month's jobs with no
-    document on their thread (minted, never started); each is an outbound hole (WP-73 G2)."""
+    document on their thread (minted, never started); each is an outbound hole."""
     axes = axes or {}
     rules = [r for r in rules or [] if r.cui == cui and r.applies_to(period)]
     exp = [e for e in expected if e.job.status not in _NOT_EXPECTED]
@@ -468,7 +468,7 @@ def _line_rule_for(sd: SinkDoc, lines, line_rules) -> str | None:
 
 
 def can_file(diff: PeriodDiff) -> bool:
-    """V2 ``file`` is possible only when Layer 1 is clean (00_LAW 13)."""
+    """V2 ``file`` is possible only when Layer 1 is clean (LAW L25)."""
     return not diff.material and diff.hard_failures == 0
 
 
@@ -579,7 +579,7 @@ def _evaluate(cid: str, row: dict[str, Any], ctx: _Ctx, analytic: dict[str, Acco
     if cid == "T_regime_4428":
         tva = ctx.axes.get("tva")
         if tva is None:
-            return "FAIL", "TVA regime unknown (CO.DiT axis tva, WP-11)", None
+            return "FAIL", "TVA regime unknown (CO.DiT axis tva)", None
         moved = ctx.turnover.get("4428", {})
         if tva != "tva_platitor" and (_balance(moved) or Decimal(moved.get("debit", "0"))):
             return "FAIL", "4428 moves on a non-payer", None
@@ -587,7 +587,7 @@ def _evaluate(cid: str, row: dict[str, Any], ctx: _Ctx, analytic: dict[str, Acco
     if cid == "T_regime_442x":
         tva = ctx.axes.get("tva")
         if tva is None:
-            return "INFO", "TVA regime unknown (CO.DiT, WP-11)", None
+            return "INFO", "TVA regime unknown (CO.DiT)", None
         moved = [a for a in ("4423", "4424") if a in ctx.turnover]
         if tva != "tva_platitor" and moved:
             return "FAIL", f"{', '.join(moved)} move on a non-payer", None

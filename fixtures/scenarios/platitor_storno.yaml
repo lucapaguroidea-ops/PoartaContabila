@@ -1,6 +1,6 @@
 name: platitor_storno
 note: 'Credit notes on both sides bind storno_iesire / storno_intrare (job_storno); PRE checks them on
-  recon_pre_storno (WP-73 G4). Approved, they stop at the package: no rendered storno mouth yet (G5, owner
+  recon_pre_storno. Approved, they stop at the package: no rendered storno mouth yet (owner
   checklist), so C1 fails.'
 firm: platitor
 period: 2026-05

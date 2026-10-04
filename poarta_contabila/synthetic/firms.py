@@ -1,4 +1,4 @@
-"""Invented firms and partners (WP-70): five CO.DiT profiles that differ where the paths do.
+"""Invented firms and partners: five CO.DiT profiles that differ where the paths do.
 
 Every CUI is built from an invented body plus its check digit (``cui_is_valid``); IBANs use
 the non-existent bank code ``AAAA`` with a correct check pair. Nothing names a real firm.
@@ -258,7 +258,7 @@ def firm(key: str, *, book_of_record: Literal["saga", "nextup"] = "saga") -> Fir
         return f
     from dataclasses import replace
 
-    # a firm of its own (another CUI): one firm-period has one book of record (A2 §3)
+    # a firm of its own (another CUI): one firm-period has one book of record (LAW L8)
     n = int(f.folder)
     return replace(
         f,

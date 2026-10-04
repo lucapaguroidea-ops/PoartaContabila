@@ -1,4 +1,4 @@
-"""WP-08: ArticoleControls Layer 1 + PeriodDiff; hard failures block package and file."""
+"""ArticoleControls Layer 1 + PeriodDiff; hard failures block package and file."""
 
 from __future__ import annotations
 
@@ -260,7 +260,7 @@ def test_postgres_period_store(cat):
     assert (n, m) == (len(runs), 1)
 
 
-# ----- WP-46: a statement line's counterpart (owner, 2026-10-02) -----
+# ----- a statement line's counterpart (owner, 2026-10-02) -----
 
 from poarta_contabila.period_diff import bank_counterparts  # noqa: E402
 from poarta_contabila.sinks.exports import SinkLine  # noqa: E402
@@ -376,7 +376,7 @@ def test_the_fixture_payment_with_its_statement_line_ties_401(cat):
     assert _status(runs, "C0_synthetic_parity") == "PASS"
 
 
-# ----- WP-73 G6: C0's implied VAT follows the period's CO.DiT -----
+# ----- C0's implied VAT follows the period's CO.DiT -----
 
 
 def _items(*specs):
@@ -439,7 +439,7 @@ def test_tva_la_incasare_moves_the_paid_share(cat):
 
 
 def test_a_job_minted_without_a_thread_is_an_outbound_hole(cat):
-    """WP-73 G2: the close counts every Job of the month, even one never started."""
+    """the close counts every Job of the month, even one never started."""
     exp = [_exp(*PURCHASE)]
     diff, runs = build_period_diff(
         cat, CUI, PERIOD, exp, CleanEye([_sd(*PURCHASE)]), axes=PAYER, stalled=["job-x"]
@@ -449,7 +449,7 @@ def test_a_job_minted_without_a_thread_is_an_outbound_hole(cat):
 
 
 def test_m1_8_compares_the_vat_still_open_with_4428(cat):
-    """WP-75: open VAT on la-încasare documents (less the share paid) == the balanță's 4428."""
+    """open VAT on la-încasare documents (less the share paid) == the balanță's 4428."""
     from poarta_contabila.period_diff import open_4428
     from poarta_contabila.types import PartnerRef
 

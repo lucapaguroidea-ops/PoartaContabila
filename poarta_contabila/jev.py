@@ -10,8 +10,8 @@
   Layer 2 (:func:`make_v2`) gives no suggestion. Jev never opens a gate by itself.
 - **Layer 2 cannot clear ``material``**: ``close.py`` drops such suggestions.
 
-The wire (WP-20, RESEARCH_LOG.md R2): OpenRouter's Decisions endpoint (``POST
-/api/alpha/decisions``, bearer ``OPENROUTER_SYS1_API_KEY``: System One's own key, WP-55)
+The wire (RESEARCH_LOG.md R2): OpenRouter's Decisions endpoint (``POST
+/api/alpha/decisions``, bearer ``OPENROUTER_SYS1_API_KEY``: System One's own key)
 with the role's pinned model and provider, ``state`` = the pack input and
 ``questions`` = the role card's questions. Each
 answer (``noul`` probability; ``choice`` + ``confidence``) is mapped onto the pack's closed
@@ -303,10 +303,10 @@ def role_transport(
     ``off``: refuses. ``dry``: the role and the tenant are checked (``route_check``) and the
     call is recorded in *calls* (``domain.model_calls``) with exactly what the role would be
     sent; then :class:`JevError`, so the node fails closed as if Jev gave no answer.
-    ``live`` (WP-20): a wired role of a synthetic tenant is sent to OpenRouter's Decisions
+    ``live``: a wired role of a synthetic tenant is sent to OpenRouter's Decisions
     endpoint when its key is set, and recorded ``sent`` (or ``failed``); without the key it
     records as in ``dry``. *http*: an ``httpx.Client`` (tests); *key*: the env lookup.
-    *router* (``provider_policy.Router``, WP-53): the pin the data policy allows now; a
+    *router* (``provider_policy.Router``): the pin the data policy allows now; a
     data-policy refusal reads the policies again and tries the new pin once.
     """
     from poarta_contabila.model_roles import RouteRefused, record, role_for_pack, route_check

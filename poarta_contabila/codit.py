@@ -1,4 +1,4 @@
-"""CO.DiT (WP-11): a firm's tax profile for one period — a period document, not a sticky flag.
+"""CO.DiT: a firm's tax profile for one period — a period document, not a sticky flag.
 
 Write order (ARCHITECTURE §7): defaults → T* → F* → F7 / A* → derive().
 
@@ -283,7 +283,7 @@ class PostgresCoditStore:
             )
 
 
-# ----- V4 after file (WP-11 open, closed here) -----
+# ----- V4 after file  -----
 
 
 class V4Edit(Closed):

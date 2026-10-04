@@ -1,4 +1,4 @@
-"""WP-03 / WP-19: SAGA "Import date" mouths — invoices, receipts, payments."""
+"""WP-03 / SAGA "Import date" mouths — invoices, receipts, payments."""
 
 from __future__ import annotations
 
@@ -215,7 +215,7 @@ def test_fixture_documents_are_valid_canonical(docs):
         assert isinstance(doc, CanonicalDocument)
 
 
-# ----- WP-19: receipts / payments -----
+# ----- receipts / payments -----
 
 
 @pytest.fixture(scope="module")

@@ -58,7 +58,7 @@ kinds:
     effects: [tag_sink_lines, set_v2_action]
     cannot: [clear_blocking_without_rule]
 
-  # A2 · split an expense report into child packs before emit
+  # LAW L16 · split an expense report into child packs before emit
   - kind: decont_split
     schema_version: "1"
     graph_ids: [folder_triage]

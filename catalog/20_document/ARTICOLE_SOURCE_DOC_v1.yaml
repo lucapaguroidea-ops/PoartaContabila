@@ -121,7 +121,7 @@ rows:
       needs_counterparty_cui: false
       bon_cui_fork: false
     flux_candidates: [foreign_invoice_inbound, foreign_invoice_outbound]
-    note: "SPV not required. XML first (A2): an XML e-invoice is primary if present, else the scan."
+    note: "SPV not required. XML first (LAW L14): an XML e-invoice is primary if present, else the scan."
 
   - source_doc_id: bon_fiscal
     schema_version: "1"

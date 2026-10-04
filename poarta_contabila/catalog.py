@@ -1,7 +1,7 @@
-"""Catalog Cale loader (WP-01): Lane B YAML → one checked, read-only registry.
+"""Catalog Cale loader: Lane B YAML → one checked, read-only registry.
 
 Every YAML under ``catalog/`` declares ``catalog: <Name>``. One file per name is
-the base; files with ``mode: additive`` append rows to it (``60_harvest``).
+the base; files with ``mode: additive`` append rows to it (``60_practice``).
 Anything unexpected fails closed with :class:`CatalogError`: unparseable YAML,
 an unknown catalog name, two base files, a duplicate id, a reference to an
 articol / module / HITL kind / graph / control that does not exist, or a

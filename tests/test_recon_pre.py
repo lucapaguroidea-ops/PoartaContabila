@@ -1,4 +1,4 @@
-"""WP-05: PRE recon — already in the books (RJ) or the SPV register → no package."""
+"""PRE recon — already in the books (RJ) or the SPV register → no package."""
 
 from __future__ import annotations
 
@@ -297,7 +297,7 @@ def test_two_hits_are_ambiguous(cat):
 
 
 def test_storno_is_checked_on_its_own_pre_articol(cat, saga_lines):
-    """WP-73 G4 (owner, 2026-10-03): recon_pre_storno; before it a storno always asked."""
+    """Owner, 2026-10-03: recon_pre_storno; before it a storno always asked."""
     doc = _doc("FX-120", "2026-09-20", "-121.00", doc_class="storn_iesire", storno=True)
     store = InMemoryReconStore()
     out = _check(cat, _eye(saga_lines), store=store, doc=doc)
@@ -387,7 +387,7 @@ def test_postgres_recon_store_keeps_the_first_verdict(cat):
 
 
 def test_a_credit_note_has_its_own_pre_articol():
-    """WP-73 G4: recon_pre_storno takes a storno on the number / date profile."""
+    """recon_pre_storno takes a storno on the number / date profile."""
     from poarta_contabila.catalog import load_catalog
     from poarta_contabila.flux import MatchContext, match_articole
 

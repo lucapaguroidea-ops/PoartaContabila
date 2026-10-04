@@ -1,4 +1,4 @@
-"""A2 XML first: SPV zips are split by root element; UBL totals are checked, never guessed."""
+"""LAW L14 XML first: SPV zips are split by root element; UBL totals are checked, never guessed."""
 
 from __future__ import annotations
 

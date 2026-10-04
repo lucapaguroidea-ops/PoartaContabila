@@ -59,7 +59,7 @@ rows:
     flux_candidates: []
     note: "Feeds expected set and PRE recon. Not a WriteModule source."
 
-  # ----- A2 · witness exports (read-only eye) -----
+  # ----- LAW L8 · witness exports (read-only eye) -----
   - source_doc_id: sink_rj_nextup
     schema_version: "1"
     status: draft
@@ -83,7 +83,7 @@ rows:
       needs_counterparty_cui: false
       bon_cui_fork: false
     flux_candidates: []
-    note: "NextUp registru jurnal export -> SinkLine[]. Eye only (A2). Not a Job."
+    note: "NextUp registru jurnal export -> SinkLine[]. Eye only (LAW L8). Not a Job."
 
   - source_doc_id: sink_balanta_saga
     schema_version: "1"
@@ -108,7 +108,7 @@ rows:
       needs_counterparty_cui: false
       bon_cui_fork: false
     flux_candidates: []
-    note: "SAGA balanta de verificare -> solduri. Account codes via cell format (A2)."
+    note: "SAGA balanta de verificare -> solduri. Account codes via cell format (LAW L18)."
 
   - source_doc_id: sink_balanta_nextup
     schema_version: "1"
@@ -135,7 +135,7 @@ rows:
     flux_candidates: []
     note: "NextUp balanta -> solduri, plus analytic -> partner CIF map (Lane A seed)."
 
-  # ----- A2 · containers and evidence -----
+  # ----- LAW L16, L17 · containers and evidence -----
   - source_doc_id: decont_cheltuieli
     schema_version: "1"
     status: draft
@@ -159,10 +159,10 @@ rows:
       needs_counterparty_cui: false
       bon_cui_fork: false
     split:
-      children: [decont_part_evidence, ro_efactura_ubl, ro_efactura_pdf, workings]  # WP-73 G2
+      children: [decont_part_evidence, ro_efactura_ubl, ro_efactura_pdf, workings]  # owner, 2026-10-03
       hitl: decont_split
     flux_candidates: []
-    note: "Container (A2): split into child packs before emit; the report itself is evidence. Implied SPV invoices come from their .xml; a PDF-only child waits in _incomplete_spv. 542 settlement not built in v1 [de confirmat]."
+    note: "Container (LAW L16): split into child packs before emit; the report itself is evidence. Implied SPV invoices come from their .xml; a PDF-only child waits in _incomplete_spv. 542 settlement not built in v1 [de confirmat]."
 
   - source_doc_id: stat_salarii
     schema_version: "1"
@@ -187,10 +187,10 @@ rows:
       needs_counterparty_cui: false
       bon_cui_fork: false
     flux_candidates: []
-    note: "Evidence only (A2): payroll is explained_sink_only in the book; supports the payroll rule and d112_payroll."
+    note: "Evidence only (LAW L17): payroll is explained_sink_only in the book; supports the payroll rule and d112_payroll."
 
-  # ----- WP-73 · owner accepted 2026-10-03 (docs/CATALOG_GAPS.md) -----
-  - source_doc_id: foreign_invoice_xml   # G1
+  # ----- owner accepted 2026-10-03 -----
+  - source_doc_id: foreign_invoice_xml
     schema_version: "1"
     status: draft
     fiscal_class: foreign_invoice
@@ -213,9 +213,9 @@ rows:
       needs_counterparty_cui: false
       bon_cui_fork: false
     flux_candidates: [foreign_invoice_inbound, foreign_invoice_outbound, foreign_rc_neplatitor]
-    note: "A2 §1: an e-invoice from abroad as UBL XML (counterparty without a RO CUI) is the primary; its PDF is a companion. A payer's EUR invoice still stops at the package (FX parked, WP-18)."
+    note: "LAW L14: an e-invoice from abroad as UBL XML (counterparty without a RO CUI) is the primary; its PDF is a companion. A payer's EUR invoice still stops at the package (FX parked, WP-18)."
 
-  - source_doc_id: decont_part_evidence   # G2
+  - source_doc_id: decont_part_evidence
     schema_version: "1"
     status: draft
     fiscal_class: decont
@@ -238,4 +238,4 @@ rows:
       needs_counterparty_cui: false
       bon_cui_fork: false
     flux_candidates: []
-    note: "A receipt or a foreign invoice inside an expense report: evidence of its 542 settlement, posted in SAGA with the report (A2 §5, [de confirmat]). Until WP-14. Whether our CUI is on a receipt may still be given (bon_our_cui_on_doc)."
+    note: "A receipt or a foreign invoice inside an expense report: evidence of its 542 settlement, posted in SAGA with the report (LAW L16, [de confirmat]). Until WP-14. Whether our CUI is on a receipt may still be given (bon_our_cui_on_doc)."

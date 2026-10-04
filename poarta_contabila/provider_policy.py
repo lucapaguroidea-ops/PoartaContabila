@@ -1,4 +1,4 @@
-"""Provider data policies and the approved alternates (00_LAW §8 A7; WP-53).
+"""Provider data policies and the approved alternates (LAW L32).
 
 Every OpenRouter role sends ``data_collection: deny``: OpenRouter routes only to endpoints
 whose provider neither trains on nor keeps prompts, and refuses (HTTP 404, "data policy")

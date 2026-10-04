@@ -1,4 +1,4 @@
-"""WP-09: explained rules — versioned, person-written, and the only way to explain."""
+"""explained rules — versioned, person-written, and the only way to explain."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ FEES = {
     "document": {"doc_class": "intrare", "number_prefix": "COM", "gross_max": "100.00"},
 }
 PAYMENTS = {
-    "description": "Plăți furnizori din extras (până la WP-13)",
+    "description": "Plăți furnizori din extras (fără extras citit)",
     "scope": "line",
     "line": {"debit": "401*", "credit": "5121*", "journal": "Banca"},
 }

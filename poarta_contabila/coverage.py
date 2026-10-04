@@ -1,10 +1,10 @@
-"""Coverage map (WP-69): every catalog row a document or a month can reach × what drives it.
+"""Coverage map: every catalog row a document or a month can reach × what drives it.
 
 Two directions in one report:
 
 - **catalog → data.** Each row of the catalog a document or a month can reach (articole de
   cale, source docs, job kinds, HITL kinds with their actor, controls as PASS and as FAIL,
-  recon profiles, write modules, filings, close kinds), with the scenarios (WP-71) whose
+  recon profiles, write modules, filings, close kinds), with the scenarios whose
   expected path names it and the tests that name it. A row counts as covered only when a
   *passing* scenario's expected path names it; a test naming it is shown, never counted.
   A reachable row no scenario covers is a scenario to write. A row out of reach is listed
@@ -21,7 +21,7 @@ is a problem (exit code 1), so the table cannot go stale silently.
 
     uv run python -m poarta_contabila.coverage [--json] [--no-run]
 
-By default every scenario in ``fixtures/scenarios/`` is run locally first (WP-71).
+By default every scenario in ``fixtures/scenarios/`` is run locally first.
 """
 
 from __future__ import annotations
@@ -99,8 +99,8 @@ _BON = Reach("parked", "WP-14", "bonuri walk through ArticolBon / bon_via_nota, 
 _FOREIGN_SCAN = Reach(
     "no_code_path",
     None,
-    "an invoice from abroad is read only as XML (foreign_invoice_xml, WP-73 G1); a scan or "
-    "PDF has no extract, and in an expense report it is evidence (G2)",
+    "an invoice from abroad is read only as XML (foreign_invoice_xml); a scan or "
+    "PDF has no extract, and in an expense report it is evidence",
 )
 _TRIAGE = Reach(
     "no_code_path",
@@ -135,10 +135,10 @@ OUT_OF_REACH: dict[tuple[Table, str], Reach] = {
         "parked", "WP-14", "no route mints a bon since an expense report's receipts are evidence"
     ),
     ("source_doc", "extras"): Reach(
-        "no_code_path", None, "statements arrive as PDF only (extras_statement_pdf, WP-13)"
+        "no_code_path", None, "statements arrive as PDF only (extras_statement_pdf)"
     ),
     ("source_doc", "extras_pdf"): Reach(
-        "no_code_path", None, "superseded by extras_statement_pdf (WP-13); no route mints it"
+        "no_code_path", None, "superseded by extras_statement_pdf; no route mints it"
     ),
     ("source_doc", "instructions"): Reach("no_code_path", None, "no upload route"),
     ("source_doc", "recon_vendor"): Reach("no_code_path", None, "no upload route"),
@@ -149,9 +149,9 @@ OUT_OF_REACH: dict[tuple[Table, str], Reach] = {
         "no_code_path", None, "every route names its source doc; none mints 'unknown'"
     ),
     # ----- job kinds -----
-    ("job_kind", "job_bon"): Reach("parked", "WP-14", "no route mints a bon (WP-73 G2)"),
+    ("job_kind", "job_bon"): Reach("parked", "WP-14", "no route mints a bon"),
     ("job_kind", "job_extras"): Reach(
-        "no_code_path", None, "statement packs are line jobs (job_extras_line, WP-13)"
+        "no_code_path", None, "statement packs are line jobs (job_extras_line)"
     ),
     # ----- HITL kinds -----
     ("hitl", "which_cui"): Reach("no_code_path", None, _NOT_ASKED),
@@ -174,7 +174,7 @@ OUT_OF_REACH: dict[tuple[Table, str], Reach] = {
     ("hitl", "no_counterparty"): Reach("no_code_path", None, _NOT_ASKED),
     ("hitl", "request_devalidare"): Reach("no_code_path", None, _NOT_ASKED),
     ("hitl", "recon_review_contest"): Reach(
-        "live_only", "WP-74", "MODEL_CALLS=dry: llm_review abstains, so nothing is contested"
+        "live_only", None, "MODEL_CALLS=dry: llm_review abstains, so nothing is contested"
     ),
     ("hitl", "patch_maps"): Reach(
         "no_code_path", None, "v2_close's patch_maps action holds the month; Lane A maps not built"
@@ -187,7 +187,7 @@ OUT_OF_REACH: dict[tuple[Table, str], Reach] = {
     ),
     ("hitl", "decision_menu"): Reach("no_code_path", None, _NOT_ASKED),
     ("hitl", "control_disposition"): Reach(
-        "no_code_path", None, "the answer's checker exists (WP-09); no node asks it"
+        "no_code_path", None, "the answer's checker exists; no node asks it"
     ),
     # ----- controls -----
     ("control", control_key("M1_9_4424_watched", "PASS")): Reach(
@@ -219,7 +219,7 @@ OUT_OF_REACH: dict[tuple[Table, str], Reach] = {
 }
 
 
-# ----- what a scenario run reports (WP-71 produces these) -----
+# ----- what a scenario run reports (the scenario runner produces these) -----
 
 
 @dataclass(frozen=True)
@@ -439,7 +439,7 @@ def build_map(
 
 
 def render(cmap: CoverageMap) -> str:
-    lines = ["Coverage map (WP-69)", ""]
+    lines = ["Coverage map", ""]
     if cmap.scenarios:
         lines.append(f"scenarios run: {len(cmap.scenarios)}")
         lines += [f"  {s}" for s in cmap.scenarios]
