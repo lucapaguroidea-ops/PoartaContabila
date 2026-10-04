@@ -15,7 +15,8 @@ file to open), `SURFACE.md` (what is still to map).
    (sink product, FDB write policy, graph topology, interrupt kinds, watched accounts, any rule
    of `LAW.md`), or when it adds, removes or relaxes a gate (L43). Do not invent the answer.
 4. History (done WPs, superseded briefs, the practice harvest) is on branch `pre-tidy` and in git
-   log. Read it only to trace why something is as it is; it is never a source of rules.
+   log. Read it to trace why something is as it is, or for the detail behind a `SURFACE.md` row;
+   it is never a source of rules.
 
 ## Operating loop
 

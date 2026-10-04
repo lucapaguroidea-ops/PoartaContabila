@@ -302,3 +302,124 @@ typed stub that refuses (fail closed) and the item says what the owner must do.
   mouth would be a sink-product change (a dated amendment), only once a client is on it. Open
   for Saga: does one key reach every firm of the account, does a new key end the old one, can
   a key belong to a non-Admin user, does the web finish screen keep sync "Nr.+data".
+
+## R6 · The EU route per model family: options, prices, LangSmith — WP-D4
+
+- Question: where each model role could serve client data in the EU, at what price, and whether
+  LangSmith helps. Read 2026-10-03 for the owner; the decision stays WP-D4 (`BUILD.md`).
+
+Research of 2026-10-03 (sources below). Until the owner decides, every role keeps `eu_route: null`
+and a client tenant is refused by every model role (Jev: cautious values and a person; System
+Two: the question without an explanation; reading: the statement's tables must be sent).
+
+- **Document reading (Gemini) → Vertex AI, EU multi-region `eu`.** Every model the catalog pins
+  (`gemini-3.5-flash-lite`, `-3.1-flash-lite`, `-3.8-flash`, `-3.7-flash`; reserve `-3.5-flash`,
+  `-3.6-flash`) is GA on the `eu` multi-region, which Google ties to EU ML processing; a
+  regional endpoint alone does not guarantee it. Zero retention: turn off caching and get the
+  abuse-monitoring exception (invoiced billing) or an enterprise ZDR contract
+  (`docs/owner/EU_VERTEX_SETUP.md` §D). Code: `EU_LOCATIONS["vertex"]` lacks `eu`; no Vertex transport.
+- **System Two (GLM) — two candidates:**
+  - **Scaleway Generative APIs, `glm-5.2`** (one version behind the `z-ai/glm-5.3` pin; also
+    `deepseek-v4-flash-0731`). Paris; zero data retention by default; no training; a French
+    company, outside the US CLOUD Act; OpenAI-compatible chat. Caveats: an automatic cache of
+    intermediate values (not prompt text) that cannot be turned off; the full request may be
+    kept up to 2 weeks after a server error (500).
+  - **OpenRouter EU in-region (`https://eu.openrouter.ai/api/v1`), `z-ai/glm-5.3`** on Mistral or
+    Inceptron (Kimi K2.6 on Inceptron). Keeps the current pin and sender, but needs OpenRouter's
+    Business or Enterprise plan (price from sales), and OpenRouter, Inc. (US) stays in the chain.
+- **System One (Jev): no EU route.** `typesafe/jev-1.13` is served only by TypeSafe AI, Inc. (US;
+  operated from the US West Coast per third-party listings; its DPA names no location and uses
+  EU SCC Module 2). Zero data retention for enterprise customers on request. It is not on
+  OpenRouter's EU list. Options: (a) no Jev on client data, its decisions go to a person (how the
+  code behaves today); (b) change L33 to allow TypeSafe under SCCs plus an enterprise ZDR
+  contract and a transfer assessment; (c) an EU model in System One's place for client data,
+  evaluated against Jev on synthetic data first.
+
+Sources: Scaleway supported models (validated 2026-08-14) and Generative APIs data privacy
+(`github.com/scaleway/docs-content`, `pages/generative-apis/reference-content/`); OpenRouter
+sovereign AI guide (`openrouter.ai/docs/guides/features/sovereign-ai`) and its models API with
+`region=eu` / `eu.openrouter.ai` (read 2026-10-03: 70 EU-eligible models); TypeSafe legal and
+DPA (`docs.typesafe.ai/legal`, `typesafe.ai/legal/data-processing`); Gemini EU listings
+(`opper.ai/models/eu/gemini`) and Google's data residency page (not readable from the session).
+
+**Pricing, read 2026-10-03** (per million tokens, before tax; EUR → USD at the ECB rate of
+2026-10-02, 1 EUR = 1.1225 USD):
+
+| Role / model | OpenRouter (the pinned provider) | Scaleway serverless, Paris |
+|---|---|---|
+| System Two `z-ai/glm-5.3` on Z.AI (alternate: same on Together) | $1.40 in / $4.40 out | not served |
+| nearest on Scaleway: `glm-5.2` | Z.AI $1.40 / $4.40 | €1.80 / €5.50 (≈ $2.02 / $6.17); batch €0.90 / €2.75 (≈ $1.01 / $3.09) |
+| System Two alternate `moonshotai/kimi-k2.6` on Moonshot | $0.95 / $4.00 | not served |
+| System One `typesafe/jev-1.13` on TypeSafe | $0.042 / $0 | not served |
+| Document reading (Gemini, direct on Google AI Studio) | — | not served |
+| `deepseek-v4-flash` (dropped: its OpenRouter provider trained on prompts) | $0.09 / $0.18 (DeepInfra) to $0.44 / $1.32 (Cloudflare) | €0.40 / €0.80, cached €0.08 |
+
+- Per System Two explanation (≈ 1,550 input / 610 output tokens, the live sample of 2026-10-03):
+  OpenRouter ≈ $0.0049 at list price (≈ $0.0042 as billed for those 5 calls); Scaleway live
+  ≈ $0.0069 (about 1.4×); Scaleway batch ≈ $0.0035 (about 30 % below OpenRouter).
+- OpenRouter: "no markup on inference pricing (however we do charge a fee when purchasing
+  credits)" — the percentage was not on the FAQ page. Its EU in-region route
+  (`eu.openrouter.ai`) needs a Business or Enterprise plan, priced on request.
+- Scaleway: "You benefit from a free tier on the first 1,000,000 tokens" (reads as once per
+  account); "All requests performed using Batches API are priced with a -50% discount".
+- Scaleway Batches API (how-to validated 2026-02-17; FAQ): a JSONL file in an Object Storage
+  bucket of the same project, one model per file ("The `method`, `url`, and `model` fields must
+  remain consistent across all requests"); "We aim to process any batch within 24 hours.
+  After this delay, batch processing will be stopped, and any remaining unprocessed queries
+  will not be billed"; no rate limit. No model is excluded from batching in the docs, but none
+  names `glm-5.2` either: **[de confirmat]** with one small test batch (no Scaleway key in the
+  build sessions).
+- Owner, 2026-10-03: with several clients, System Two's explanations could be batched on
+  Scaleway (EU, Paris), bringing its cost below OpenRouter's. What that implies:
+  - only System Two moves: Jev and Gemini are not on Scaleway, and Jev's `v3_judge` sits on the
+    path to every approval, so a 24-hour wait there would stall the flow;
+  - an explanation arrives up to 24 hours after its question (e.g. a nightly batch for the
+    questions still waiting); until then the question shows without one, as today when none
+    comes back;
+  - requests a batch drops after 24 hours are sent again or left unexplained;
+  - input and output pass through our own Scaleway bucket: deleting them after each batch is
+    ours; Scaleway may keep a full request up to 2 weeks after a server error (above);
+  - `glm-5.2` reasons at `max` by default: each line sets low effort, as the current sender
+    does; and it is one version behind the GLM 5.3 pin, so it is compared with it on the
+    synthetic questions first (`POST /model-roles/{role_id}/compare`).
+
+Sources (2026-10-03): `openrouter.ai/api/v1/models/{model}/endpoints`, `openrouter.ai/docs/faq`;
+`scaleway.com/en/pricing/model-as-a-service/`; `github.com/scaleway/docs-content`
+`pages/generative-apis/` (`faq.mdx`, `concepts.mdx`, `how-to/use-batch-processing.mdx`);
+`ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml`.
+
+**LangSmith (tracing and evaluation), read 2026-10-03** — the owner asked whether to use it,
+host it on Railway, migrate to it, and use its EU option on client data.
+
+- Self-hosting: "Self-hosted LangSmith is an add-on to the Enterprise plan … Contact our sales
+  team if you want to get a license key". It installs on Kubernetes (Helm) with ClickHouse
+  (traces), PostgreSQL, Redis and blob storage. Railway is not Kubernetes, and a single VPS
+  would mean running a cluster for an Enterprise product: in practice it is LangChain's cloud
+  or an Enterprise contract. LangGraph itself (open source) stays on Railway either way.
+- Cloud plans: Developer $0 (1 seat, 5k base traces a month), Plus $39 per seat (10k base
+  traces), Enterprise custom ("Self-hosted and hybrid deployment options"). Base traces are
+  kept 14 days, extended traces 180 days (extra fee).
+- EU: "organizations on https://eu.smith.langchain.com are in GCP EU"; regional instances on
+  all plans, free included; "pricing is the same across supported cloud regions"; paid in USD.
+  GDPR, SOC 2 Type 2, a DPA on request. But: "We do not have a legal entity in the EU for
+  customer contracting today" — a US contracting party, the same concern as OpenRouter above.
+- Migrating what is built: not worth it. The answer log (who answered, append-only), the
+  model-call record (role, pin, card hash, synthetic guard), the catalog, gates, scenarios and
+  coverage map are the system's record and law, kept in our Postgres; a trace store with
+  14 / 180-day retention does not replace them. What LangSmith adds is side-by-side model
+  evaluation (better than `POST /model-roles/{role_id}/compare`) and a run-by-run trace view:
+  an addition, not a migration.
+- Client data: a trace holds the whole document (CUIs, amounts, partners), so LangSmith would be
+  a new place client data goes — under L33 a dated change of law, a DPA and a
+  transfer assessment. Little gain for explanations (what each model was given and answered,
+  under which card, and what the person decided are already recorded; its online scoring
+  would be another model reading client data, and its annotation queues a second review
+  surface beside the review page, which L26 keeps free of outside services). More gain if
+  multi-step AI work on client data is built later: decide it then, with this WP, against a
+  self-hostable open-source tracing tool on our own EU hosting (not checked yet).
+- Recommendation (2026-10-03): migrate nothing now. If the WP-D4 model evaluations want it
+  (Scaleway `glm-5.2`, Kimi, an EU model in Jev's place), the hosted EU free tier on synthetic
+  data only, fed from `fixtures/scenarios/`: no amendment, no migration.
+
+Sources (2026-10-03): `docs.langchain.com/langsmith/self-hosted`,
+`docs.langchain.com/langsmith/regions-faq`, `www.langchain.com/pricing`.

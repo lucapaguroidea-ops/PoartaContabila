@@ -1,5 +1,8 @@
 # Poarta Primară
 
+*Poarta Primară* is the product; *Graful Primar* the engine (four LangGraph graphs);
+`poarta_contabila` the Python package, in the repository PoartaContabila (`LAW.md` §10).
+
 **What it is.** A system that walks a Romanian accounting practice's *documente primare*
 (e-Factura invoices, bank statements, receipts, expense reports) to SAGA C, the accounting
 program that keeps the books. It reads each document, decides which path it is on, checks the

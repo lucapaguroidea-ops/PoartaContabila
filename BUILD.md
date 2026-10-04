@@ -12,7 +12,7 @@ and articole against how one accountant actually keeps many clients, once SAGA C
 and the system has run on real client months, to find the balance point between the least
 friction and enough control. Part B (the SAGA C loops, synthetic data) and Part C (a pilot on
 client data) exist to get there with observation, not assumption. The repo tidy (Part A,
-WP-76) made the repo say what is true now. Approved by the owner on 2026-10-04 (decisions Q1–Q13 below).
+done 2026-10-04) made the repo say what is true now. Approved by the owner on 2026-10-04 (decisions Q1–Q13 below).
 
 | Part | Hands on |
 |---|---|
@@ -26,8 +26,7 @@ WP-76) made the repo say what is true now. Approved by the owner on 2026-10-04 (
 | id | status | depends | title |
 |---|---|---|---|
 | WP-03 | in-progress | — | Invoice XML mouths proven on a copy firm (Loop 0: `docs/owner/COPY_FIRM_TEST.md`) |
-| WP-76 | in-progress | — | Repo tidy: current state only (Part A) |
-| WP-77 | todo | WP-76 | Surface states in `coverage.py`; `SURFACE.md` generated (B6 item 1) |
+| WP-77 | todo | — | Surface states in `coverage.py`; `SURFACE.md` generated (B6 item 1) |
 | WP-78 | todo | WP-77 | Evidence ledger (B6 item 5), before Loop 1 |
 | WP-79 | todo | WP-77 | Loop kit: `loops prepare` / `loops read` (B6 item 2) |
 | WP-80 | todo | WP-03, WP-79 | Loop 1: RO e-Factura sales + purchases, bank settlement (B5) |
@@ -59,7 +58,7 @@ state:
 
 | State | Means | Proven by |
 |---|---|---|
-| **possible** | named (catalog, plan, harvest), not yet on a path we run | a line in `SURFACE.md` |
+| **possible** | named (catalog, plan, the practice harvest), not yet on a path we run | a line in `SURFACE.md` |
 | **synthetic** | a passing scenario drives it (what `coverage.py` calls covered today) | `scenarios.py` |
 | **saga** | it went round-trip through a SAGA C test firm and the result matched | a loop's evidence |
 | **out** | will not be built, with the reason | owner decision |
@@ -75,9 +74,9 @@ A loop takes **one slice**: a handful of rows, one or two client types, two or t
 | Step | Who | What |
 |---|---|---|
 | 1. Pick | build agent, owner OKs | the slice, its rows, its exit criteria (fixed now, not later) |
-| 2. Generate | build agent | synthetic months for the slice's firms (`synthetic/`), seeded; documents + our mouth XML |
+| 2. Generate | build agent | synthetic months for the slice's firms (`poarta_contabila/synthetic/`), seeded; documents + our mouth XML |
 | 3. Ingest | runtime | our pipeline runs them on synthetic tenants, as today |
-| 4. Import | owner (or the agent once Copy-firm §10 passes) | packages into the slice's SAGA C test firm; the owner validates; anything with no mouth is keyed by hand from the generator's list |
+| 4. Import | owner (or the agent, if copy-firm §10 shows Import date can run without a person) | packages into the slice's SAGA C test firm; the owner validates; anything with no mouth is keyed by hand from the generator's list |
 | 5. Export | owner | the slice's SAGA exports (RJ, balanță, jurnale), as for a client |
 | 6. Read | build agent | exports become the eye: reconcile + close against them |
 | 7. Compare | build agent | three diffs: generator ↔ SAGA (did SAGA book what we meant?), SAGA export ↔ our reader (did we read it right?), our simulated `Book` ↔ SAGA (does the generator's SAGA model match SAGA?) |
@@ -116,7 +115,7 @@ Loop 0 is the infrastructure; every later loop assumes it passed.
 | 2 | bank statements: fees, transfers, unmatched lines | plătitor | `incasare_/plata_xml`; fees keyed | RJ, balanță |
 | 3 | storno (both sides) | plătitor | storno mouths (after Loop 0 §3) | jurnale |
 | 4 | TVA la încasare | încasare | invoice + settlement mouths | jurnale with neexigible columns, 4428 |
-| 5 | expense reports, bonuri with and without CUI | bonuri | DBF/nota decision (D7) or keyed | RJ, balanță |
+| 5 | expense reports, bonuri with and without CUI | bonuri | DBF/nota decision (Q7) or keyed | RJ, balanță |
 | 6 | abroad: foreign invoices both sides, reverse charge | abroad | `FacturaTip` "T" if Loop 0 proves it | jurnale, D390/D300 inputs |
 | 7 | non-payer reverse charge (WP-D3) | neplătitor | as Loop 6 | balanță 4423/446x |
 | 8 | payroll | plătitor | keyed (no mouth) | RJ, balanță |
@@ -124,7 +123,7 @@ Loop 0 is the infrastructure; every later loop assumes it passed.
 | 10 | volume and mix: realistic months, all firms | all five | all | all |
 | 11+ | the **possible** rows left in `SURFACE.md`, in slices the owner orders | | | |
 
-The client types are today's five synthetic firms (`synthetic/firms.py`), each set up once as
+The client types are today's five synthetic firms (`poarta_contabila/synthetic/firms.py`), each set up once as
 a SAGA C test firm with the **same invented CUI**, so a SAGA export maps onto its synthetic
 tenant with no translation.
 
@@ -142,7 +141,7 @@ loops' evidence: 5124 and 4423/4424 may need to block for încasare and abroad f
    the three diffs and the proposed gap list.
 3. **Readers pinned to real exports**: each loop's real SAGA exports become fixtures; the
    readers' tests run on them.
-4. **Simulated book calibrated**: `synthetic/books.py` renderers checked against the same real
+4. **Simulated book calibrated**: `poarta_contabila/synthetic/books.py` renderers checked against the same real
    exports (the third diff at zero), so synthetic-only scenarios stay honest between loops.
 5. **Evidence ledger**: `python -m poarta_contabila.evidence <tenant|all> <period>` reads what
    the runtime already stores (`domain.answers`, `domain.jobs`, `domain.control_runs`,
@@ -270,8 +269,8 @@ that, a graph loop runs whenever the ledger shows a graph has moved off its bala
 | Q1 | Tidy before the loop program | yes: tidy first, then the loop kit |
 | Q2 | `LAW.md`: amendments folded into rules with stable ids, history only in git | yes: amendments folded in, stable rule ids, history in git; the owner reviewed `LAW.md`; in force 2026-10-04 |
 | Q3 | Delete the history files (done-WP log, gap list, `annex/`, `docs/harvest/`; branch `pre-tidy` keeps them) | yes, after the harvest's unbuilt items are in `SURFACE.md` |
-| Q4 | WP numbers continue (WP-76 …) rather than restart | continue from WP-76 |
-| Q5 | `catalog/60_practice/` renamed (e.g. `60_practice/`) | rename to `60_practice/` |
+| Q4 | WP numbers continue rather than restart | continue (the tidy was number 76) |
+| Q5 | The practice catalog folder renamed (it was `60_harvest/`) | rename to `60_practice/` |
 | Q6 | Client-type matrix = the five synthetic firms; others added as **possible** rows | the five synthetic firms; others as **possible** rows |
 | Q7 | Slices with no XML mouth (expenses, bonuri, payroll, fees): keyed by you from a list, or wait for `nota_nc_dbf` | keyed by the owner from a printed list; the DBF mouth decided after Loop 5 |
 | Q8 | Your time: one SAGA C session per loop, 10–30 documents per firm-month at first | one SAGA C session per loop, 10–30 documents per firm-month |
@@ -285,7 +284,7 @@ that, a graph loop runs whenever the ledger shows a graph has moved off its bala
 
 ### WP-03 Invoice XML mouths
 - Exporter in `sinks/saga_xml.py`. Tags only from a successful copy-firm import.
-- Record `fixture:` path and `approved_at` on the module row after human green. Still `status: draft` until that happens; then `active`.
+- Record `fixture:` path and `approved_at` on the module row after human green. Still `status: draft` until that happens; then `active` once the owner approves (L42).
 - Tests: XML well-formed; FurnizorCIF/ClientCIF routing documented in a unit test with synthetic CUIs.
 - Corrected 2026-10-02 from R1 (the manual's "Import date"): every tag written is quoted there, in
   its order. `FacturaCotaTVA` (not in the manual) is gone; `ProcTVA` on every line (a line without
@@ -297,124 +296,21 @@ that, a graph loop runs whenever the ledger shows a graph has moved off its bala
   SPV zip reader and the register do not keep one).
 
 ### WP-D3 Non-payer reverse charge books (`decision`)
-- Ask: expected sink accounts for `foreign_rc_neplatitor` — harvest Y1 used 446x; some SAGA books use 4423.
+- Ask: expected sink accounts for `foreign_rc_neplatitor` — the practice's year-end VAT re-verification used 446x; some SAGA books use 4423.
 - Until answered: articol exists, `expect_accounts: []`, `nota_nc_dbf` always-HITL, or SAGA-native + `explained_rule`.
 - Do not silently fill 4423 or 446.
 
 ### WP-D4 The EU route per model family (`decision`)
 Owner, 2026-10-03: kept open until the work reaches client data; synthetic firms go on as set up.
-Research of 2026-10-03 (sources below). Until the owner decides, every role keeps `eu_route: null`
-and a client tenant is refused by every model role (Jev: cautious values and a person; System
-Two: the question without an explanation; reading: the statement's tables must be sent).
+Until the owner decides, every role keeps `eu_route: null` and a client tenant is refused by
+every model role (Jev: cautious values and a person; System Two: the question without an
+explanation; reading: the statement's tables must be sent). The options, prices and the
+LangSmith question are researched in `RESEARCH_LOG.md` R6 (2026-10-03). In short:
 
-- **Document reading (Gemini) → Vertex AI, EU multi-region `eu`.** Every model the catalog pins
-  (`gemini-3.5-flash-lite`, `-3.1-flash-lite`, `-3.8-flash`, `-3.7-flash`; reserve `-3.5-flash`,
-  `-3.6-flash`) is GA on the `eu` multi-region, which Google ties to EU ML processing; a
-  regional endpoint alone does not guarantee it. Zero retention: turn off caching and get the
-  abuse-monitoring exception (invoiced billing) or an enterprise ZDR contract
-  (`docs/owner/EU_VERTEX_SETUP.md` §D). Code: `EU_LOCATIONS["vertex"]` lacks `eu`; no Vertex transport.
-- **System Two (GLM) — two candidates:**
-  - **Scaleway Generative APIs, `glm-5.2`** (one version behind the `z-ai/glm-5.3` pin; also
-    `deepseek-v4-flash-0731`). Paris; zero data retention by default; no training; a French
-    company, outside the US CLOUD Act; OpenAI-compatible chat. Caveats: an automatic cache of
-    intermediate values (not prompt text) that cannot be turned off; the full request may be
-    kept up to 2 weeks after a server error (500).
-  - **OpenRouter EU in-region (`https://eu.openrouter.ai/api/v1`), `z-ai/glm-5.3`** on Mistral or
-    Inceptron (Kimi K2.6 on Inceptron). Keeps the current pin and sender, but needs OpenRouter's
-    Business or Enterprise plan (price from sales), and OpenRouter, Inc. (US) stays in the chain.
-- **System One (Jev): no EU route.** `typesafe/jev-1.13` is served only by TypeSafe AI, Inc. (US;
-  operated from the US West Coast per third-party listings; its DPA names no location and uses
-  EU SCC Module 2). Zero data retention for enterprise customers on request. It is not on
-  OpenRouter's EU list. Options: (a) no Jev on client data, its decisions go to a person (how the
-  code behaves today); (b) change L33 to allow TypeSafe under SCCs plus an enterprise ZDR
-  contract and a transfer assessment; (c) an EU model in System One's place for client data,
-  evaluated against Jev on synthetic data first.
-
-Sources: Scaleway supported models (validated 2026-08-14) and Generative APIs data privacy
-(`github.com/scaleway/docs-content`, `pages/generative-apis/reference-content/`); OpenRouter
-sovereign AI guide (`openrouter.ai/docs/guides/features/sovereign-ai`) and its models API with
-`region=eu` / `eu.openrouter.ai` (read 2026-10-03: 70 EU-eligible models); TypeSafe legal and
-DPA (`docs.typesafe.ai/legal`, `typesafe.ai/legal/data-processing`); Gemini EU listings
-(`opper.ai/models/eu/gemini`) and Google's data residency page (not readable from the session).
-
-**Pricing, read 2026-10-03** (per million tokens, before tax; EUR → USD at the ECB rate of
-2026-10-02, 1 EUR = 1.1225 USD):
-
-| Role / model | OpenRouter (the pinned provider) | Scaleway serverless, Paris |
-|---|---|---|
-| System Two `z-ai/glm-5.3` on Z.AI (alternate: same on Together) | $1.40 in / $4.40 out | not served |
-| nearest on Scaleway: `glm-5.2` | Z.AI $1.40 / $4.40 | €1.80 / €5.50 (≈ $2.02 / $6.17); batch €0.90 / €2.75 (≈ $1.01 / $3.09) |
-| System Two alternate `moonshotai/kimi-k2.6` on Moonshot | $0.95 / $4.00 | not served |
-| System One `typesafe/jev-1.13` on TypeSafe | $0.042 / $0 | not served |
-| Document reading (Gemini, direct on Google AI Studio) | — | not served |
-| `deepseek-v4-flash` (dropped: its OpenRouter provider trained on prompts) | $0.09 / $0.18 (DeepInfra) to $0.44 / $1.32 (Cloudflare) | €0.40 / €0.80, cached €0.08 |
-
-- Per System Two explanation (≈ 1,550 input / 610 output tokens, the live sample of 2026-10-03):
-  OpenRouter ≈ $0.0049 at list price (≈ $0.0042 as billed for those 5 calls); Scaleway live
-  ≈ $0.0069 (about 1.4×); Scaleway batch ≈ $0.0035 (about 30 % below OpenRouter).
-- OpenRouter: "no markup on inference pricing (however we do charge a fee when purchasing
-  credits)" — the percentage was not on the FAQ page. Its EU in-region route
-  (`eu.openrouter.ai`) needs a Business or Enterprise plan, priced on request.
-- Scaleway: "You benefit from a free tier on the first 1,000,000 tokens" (reads as once per
-  account); "All requests performed using Batches API are priced with a -50% discount".
-- Scaleway Batches API (how-to validated 2026-02-17; FAQ): a JSONL file in an Object Storage
-  bucket of the same project, one model per file ("The `method`, `url`, and `model` fields must
-  remain consistent across all requests"); "We aim to process any batch within 24 hours.
-  After this delay, batch processing will be stopped, and any remaining unprocessed queries
-  will not be billed"; no rate limit. No model is excluded from batching in the docs, but none
-  names `glm-5.2` either: **[de confirmat]** with one small test batch (no Scaleway key in the
-  build sessions).
-- Owner, 2026-10-03: with several clients, System Two's explanations could be batched on
-  Scaleway (EU, Paris), bringing its cost below OpenRouter's. What that implies:
-  - only System Two moves: Jev and Gemini are not on Scaleway, and Jev's `v3_judge` sits on the
-    path to every approval, so a 24-hour wait there would stall the flow;
-  - an explanation arrives up to 24 hours after its question (e.g. a nightly batch for the
-    questions still waiting); until then the question shows without one, as today when none
-    comes back;
-  - requests a batch drops after 24 hours are sent again or left unexplained;
-  - input and output pass through our own Scaleway bucket: deleting them after each batch is
-    ours; Scaleway may keep a full request up to 2 weeks after a server error (above);
-  - `glm-5.2` reasons at `max` by default: each line sets low effort, as the current sender
-    does; and it is one version behind the GLM 5.3 pin, so it is compared with it on the
-    synthetic questions first (`POST /model-roles/{role_id}/compare`).
-
-Sources (2026-10-03): `openrouter.ai/api/v1/models/{model}/endpoints`, `openrouter.ai/docs/faq`;
-`scaleway.com/en/pricing/model-as-a-service/`; `github.com/scaleway/docs-content`
-`pages/generative-apis/` (`faq.mdx`, `concepts.mdx`, `how-to/use-batch-processing.mdx`);
-`ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml`.
-
-**LangSmith (tracing and evaluation), read 2026-10-03** — the owner asked whether to use it,
-host it on Railway, migrate to it, and use its EU option on client data.
-
-- Self-hosting: "Self-hosted LangSmith is an add-on to the Enterprise plan … Contact our sales
-  team if you want to get a license key". It installs on Kubernetes (Helm) with ClickHouse
-  (traces), PostgreSQL, Redis and blob storage. Railway is not Kubernetes, and a single VPS
-  would mean running a cluster for an Enterprise product: in practice it is LangChain's cloud
-  or an Enterprise contract. LangGraph itself (open source) stays on Railway either way.
-- Cloud plans: Developer $0 (1 seat, 5k base traces a month), Plus $39 per seat (10k base
-  traces), Enterprise custom ("Self-hosted and hybrid deployment options"). Base traces are
-  kept 14 days, extended traces 180 days (extra fee).
-- EU: "organizations on https://eu.smith.langchain.com are in GCP EU"; regional instances on
-  all plans, free included; "pricing is the same across supported cloud regions"; paid in USD.
-  GDPR, SOC 2 Type 2, a DPA on request. But: "We do not have a legal entity in the EU for
-  customer contracting today" — a US contracting party, the same concern as OpenRouter above.
-- Migrating what is built: not worth it. The answer log (who answered, append-only), the
-  model-call record (role, pin, card hash, synthetic guard), the catalog, gates, scenarios and
-  coverage map are the system's record and law, kept in our Postgres; a trace store with
-  14 / 180-day retention does not replace them. What LangSmith adds is side-by-side model
-  evaluation (better than `POST /model-roles/{role_id}/compare`) and a run-by-run trace view:
-  an addition, not a migration.
-- Client data: a trace holds the whole document (CUIs, amounts, partners), so LangSmith would be
-  a new place client data goes — under L33 a dated change of law, a DPA and a
-  transfer assessment. Little gain for explanations (what each model was given and answered,
-  under which card, and what the person decided are already recorded; its online scoring
-  would be another model reading client data, and its annotation queues a second review
-  surface beside the review page, which A8 keeps free of outside services). More gain if
-  multi-step AI work on client data is built later: decide it then, with this WP, against a
-  self-hostable open-source tracing tool on our own EU hosting (not checked yet).
-- Recommendation (2026-10-03): migrate nothing now. If the WP-D4 model evaluations want it
-  (Scaleway `glm-5.2`, Kimi, an EU model in Jev's place), the hosted EU free tier on synthetic
-  data only, fed from `fixtures/scenarios/`: no amendment, no migration.
-
-Sources (2026-10-03): `docs.langchain.com/langsmith/self-hosted`,
-`docs.langchain.com/langsmith/regions-faq`, `www.langchain.com/pricing`.
+- **Document reading (Gemini):** Vertex AI, EU multi-region `eu` (`docs/owner/EU_VERTEX_SETUP.md`).
+- **System Two (GLM):** Scaleway `glm-5.2` (Paris; batch at half price, up to 24 h late) or
+  OpenRouter EU in-region `z-ai/glm-5.3` (Business/Enterprise plan; a US company in the chain).
+- **System One (Jev):** no EU route. Options: no Jev on client data (a person decides, as the
+  code behaves today); change L33 to allow TypeSafe under SCCs with an enterprise ZDR contract;
+  or an EU model in Jev's place, evaluated against Jev on synthetic data first.
+- **LangSmith:** migrate nothing; at most its EU free tier on synthetic data for evaluations.
