@@ -16,6 +16,15 @@ CREATE TABLE IF NOT EXISTS domain.jobs (
     CONSTRAINT jobs_source_once UNIQUE (tenant_cui, source_hash)
 );
 
+-- every status a Job takes, insert-only (the evidence ledger: arrival, Validare, reopen)
+CREATE TABLE IF NOT EXISTS domain.job_events (
+    seq     bigserial PRIMARY KEY,
+    job_id  text NOT NULL REFERENCES domain.jobs (job_id),
+    status  text NOT NULL,
+    at      text NOT NULL                -- UTC, microseconds
+);
+CREATE INDEX IF NOT EXISTS job_events_job ON domain.job_events (job_id, seq);
+
 CREATE TABLE IF NOT EXISTS domain.canonical (
     job_id  text PRIMARY KEY REFERENCES domain.jobs (job_id),
     body    jsonb NOT NULL

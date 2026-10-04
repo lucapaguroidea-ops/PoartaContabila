@@ -205,6 +205,9 @@ class InMemoryBatchIndex:
     def for_tenant(self, cui: str) -> list[str]:
         return [b for b, (c, _) in reversed(self.rows.items()) if c == cui]
 
+    def for_period(self, cui: str, period: str) -> list[str]:
+        return [b for b, (c, p) in self.rows.items() if (c, p) == (cui, period)]
+
 
 class PostgresBatchIndex:
     """``domain.triage_batches``: one row per folder_triage batch (insert once)."""
@@ -227,6 +230,15 @@ class PostgresBatchIndex:
             rows = conn.execute(
                 "SELECT batch_id FROM domain.triage_batches WHERE cui = %s ORDER BY at DESC",
                 (cui,),
+            ).fetchall()
+        return [r[0] for r in rows]
+
+    def for_period(self, cui: str, period: str) -> list[str]:
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT batch_id FROM domain.triage_batches WHERE cui = %s AND period = %s"
+                " ORDER BY at",
+                (cui, period),
             ).fetchall()
         return [r[0] for r in rows]
 

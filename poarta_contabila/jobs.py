@@ -2,12 +2,17 @@
 
 A second emit of the same source returns the existing Job; it never mints a
 second one. Only a decision whose gates all passed may be stored.
+
+Every status a Job takes is also kept as an event (``domain.job_events``, insert-only): when
+it arrived, when it was acked, whether it came back after. The evidence ledger reads them
+(BUILD.md B6, item 5).
 """
 
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from poarta_contabila.types import JobRecord, TenantRef
@@ -39,11 +44,25 @@ def _new_job(pack: Pack, decision: EmitDecision) -> JobRecord:
 _PACKAGED_OR_LATER = ("packaged", "wait_validare", "acked")
 
 
+@dataclass(frozen=True)
+class JobEvent:
+    """A status a Job took, and when (UTC, microseconds)."""
+
+    job_id: str
+    status: str
+    at: str
+
+
+def _now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
 @dataclass
 class InMemoryJobStore:
     """Same contract as :class:`PostgresJobStore`, for tests."""
 
     jobs: dict[tuple[str, str], JobRecord] = field(default_factory=dict)
+    events: list[JobEvent] = field(default_factory=list)
 
     def get(self, job_id: str) -> JobRecord:
         for job in self.jobs.values():
@@ -57,6 +76,8 @@ class InMemoryJobStore:
             if job.job_id == job_id:
                 new = JobRecord.model_validate({**job.model_dump(), **fields})
                 self.jobs[key] = new
+                if new.status != job.status:
+                    self.events.append(JobEvent(job_id, new.status, _now()))
                 return new
         raise KeyError(job_id)
 
@@ -83,7 +104,13 @@ class InMemoryJobStore:
         if key in self.jobs:
             return EmitResult(self.jobs[key], created=False)
         self.jobs[key] = job
+        self.events.append(JobEvent(job.job_id, job.status, _now()))
         return EmitResult(job, created=True)
+
+    def events_for(self, cui: str, period: str) -> list[JobEvent]:
+        """Every status event of the jobs of *cui* in *period*, oldest first."""
+        ids = {j.job_id for j in self.for_period(cui, period)}
+        return [e for e in self.events if e.job_id in ids]
 
 
 class PostgresJobStore:
@@ -118,6 +145,10 @@ class PostgresJobStore:
                 ),
             ).fetchone()
             if row is not None:
+                conn.execute(
+                    "INSERT INTO domain.job_events (job_id, status, at) VALUES (%s, %s, %s)",
+                    (job.job_id, job.status, _now()),
+                )
                 return EmitResult(job, created=True)
             (body,) = conn.execute(
                 "SELECT body FROM domain.jobs WHERE tenant_cui = %s AND source_hash = %s",
@@ -135,14 +166,31 @@ class PostgresJobStore:
         return JobRecord.model_validate(row[0], strict=False)
 
     def update(self, job_id: str, **fields) -> JobRecord:
-        new = JobRecord.model_validate({**self.get(job_id).model_dump(), **fields})
+        old = self.get(job_id)
+        new = JobRecord.model_validate({**old.model_dump(), **fields})
         with self._psycopg.connect(self._dsn, autocommit=True) as conn:
             conn.execute(
                 "UPDATE domain.jobs SET status = %s, body = %s, updated_at = now()"
                 " WHERE job_id = %s",
                 (new.status, new.model_dump_json(), job_id),
             )
+            if new.status != old.status:
+                conn.execute(
+                    "INSERT INTO domain.job_events (job_id, status, at) VALUES (%s, %s, %s)",
+                    (job_id, new.status, _now()),
+                )
         return new
+
+    def events_for(self, cui: str, period: str) -> list[JobEvent]:
+        """Every status event of the jobs of *cui* in *period*, oldest first."""
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT e.job_id, e.status, e.at FROM domain.job_events e"
+                " JOIN domain.jobs j USING (job_id)"
+                " WHERE j.tenant_cui = %s AND j.period = %s ORDER BY e.seq",
+                (cui, period),
+            ).fetchall()
+        return [JobEvent(*r) for r in rows]
 
     def for_period(self, cui: str, period: str) -> list[JobRecord]:
         with self._psycopg.connect(self._dsn) as conn:

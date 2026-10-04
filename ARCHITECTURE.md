@@ -116,7 +116,7 @@ Close is a CloseRun, not a Job.
 
 | Store | Holds | Does not |
 |---|---|---|
-| Postgres `domain` schema: jobs, canonical, maps, expected_sets, explained_rules, write_modules, close_snapshots, codit, filings, control_runs, jev_answers | domain | FDB rows |
+| Postgres `domain` schema: jobs, job_events, answers, canonical, maps, expected_sets, explained_rules, write_modules, close_snapshots, codit, filings, control_runs, jev_answers | domain | FDB rows |
 | Postgres checkpointer | cursor, interrupts | domain |
 | Bucket | source, XML/DBF, report packs, backup labels, receipts | secrets |
 
@@ -213,6 +213,7 @@ GET  /triage/{batch_id}          POST /triage/{batch_id}/resume      # folder_tr
 POST /recon/{cui}/{period}  GET …  POST /recon/{cui}/{period}/resume # reconcile_sink
 POST /close/{cui}/{period}  GET …  POST /close/{cui}/{period}/resume # monthly_close
 GET  /answers                                 # every answer, who gave it
+GET  /evidence/{cui}/{period}                 # the evidence ledger: friction and control
 
 # the month
 GET  /periods/{cui}/{period}/diff             # Layer 1: PeriodDiff and controls
@@ -253,6 +254,7 @@ poarta_contabila/
   synthetic/           # seeded invented firms, documents and SAGA books
   scenarios.py         # YAML scenarios (fixtures/scenarios/) over HTTP, simulated SAGA agent
   surface.py           # the four surface states; generates SURFACE.md (with coverage.py)
+  evidence.py          # the evidence ledger of a firm-month (friction and control)
 ```
 
 No ReAct supervisor. No `Journal.post`.
@@ -439,6 +441,5 @@ every row's state, and the rows not yet in the catalog, are in `SURFACE.md`.
 | DBF note mouth (`nota_nc_dbf`), bonuri (`bon_via_nota`) | decision / parked | WP-D3, WP-14; Loop 5 |
 | Storno, partner and article mouths | wait on SAGA's own sample XML | copy-firm test §3 |
 | EU route for client data | `eu_route: null` on every role: client tenants are refused | WP-D4 |
-| Evidence ledger (friction and control per gate) | the answer log exists; the report does not | `BUILD.md`, Loop kit |
 | SAGA WEB as a second mouth | not started; a change of law (L5, L46) | `RESEARCH_LOG.md` R5 |
 | `chat:` face | parked | WP-17 |

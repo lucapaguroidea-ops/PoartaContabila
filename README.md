@@ -49,7 +49,7 @@ documents (SPV zips, UBL XML, statement PDFs, expense reports)
   the review page, model roles (Jev, GLM, Gemini) with their guards, synthetic firms and
   months, a scenario runner and a coverage map. Every catalog row is still `draft`.
 - Not built yet (`ARCHITECTURE.md` §17): the Windows agent program that presses Import in
-  SAGA C, SAGA proof of any write module, the EU route for client data, the evidence ledger.
+  SAGA C, SAGA proof of any write module, the EU route for client data.
 - Next (`BUILD.md`): **Loop 0**, the owner's copy-firm test in SAGA C
   (`docs/owner/COPY_FIRM_TEST.md`); then the **SAGA C loops** that prove every articol against
   real SAGA on synthetic data while measuring friction and control; then a **pilot** on a few

@@ -630,6 +630,10 @@ class InMemoryPeriodStore:
         for r in runs:
             self.runs.setdefault((diff.cui, diff.period, r.control_id, diff.snapshot_id), r)
 
+    def runs_for(self, cui: str, period: str) -> list[tuple[str, ControlRun]]:
+        """``(snapshot_id, run)`` of every control run of *cui* in *period*, oldest first."""
+        return [(k[3], r) for k, r in self.runs.items() if k[:2] == (cui, period)]
+
 
 class PostgresPeriodStore:
     """``domain.close_snapshots`` (the diff) and ``domain.control_runs`` (one row per control)."""
@@ -652,3 +656,14 @@ class PostgresPeriodStore:
                     " VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
                     (diff.cui, diff.period, r.control_id, diff.snapshot_id, r.model_dump_json()),
                 )
+
+    def runs_for(self, cui: str, period: str) -> list[tuple[str, ControlRun]]:
+        """``(snapshot_id, run)`` of every control run of *cui* in *period*, oldest first."""
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT r.snapshot_id, r.body FROM domain.control_runs r"
+                " JOIN domain.close_snapshots s USING (snapshot_id)"
+                " WHERE r.cui = %s AND r.period = %s ORDER BY s.captured_at, r.control_id",
+                (cui, period),
+            ).fetchall()
+        return [(sid, ControlRun.model_validate(body, strict=False)) for sid, body in rows]

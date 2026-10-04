@@ -517,6 +517,17 @@ def operator_router(
     def get_rules(cui: str, rt: Runtime = Depends(operator)) -> list[ExplainedRule]:
         return rt.rules.active(cui) if rt.rules is not None else []
 
+    @router.get("/evidence/{cui}/{period}")
+    def evidence(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
+        """The evidence ledger of one firm-month: friction and control, from stored data."""
+        if not _PERIOD.fullmatch(period):
+            raise HTTPException(422, "period is YYYY-MM")
+        if rt.registry.tenant(cui) is None:
+            raise HTTPException(404, f"tenant {cui} is not registered")
+        from poarta_contabila.evidence import ledger
+
+        return ledger(rt, cui, period)
+
     @router.get("/inbox/{cui}/{period}")
     def inbox(cui: str, period: str, rt: Runtime = Depends(operator)) -> dict[str, Any]:
         """LAW L26: every question waiting on an accountant for this firm (its

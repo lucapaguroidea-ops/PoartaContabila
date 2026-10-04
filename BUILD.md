@@ -26,7 +26,6 @@ done 2026-10-04) made the repo say what is true now. Approved by the owner on 20
 | id | status | depends | title |
 |---|---|---|---|
 | WP-03 | in-progress | — | Invoice XML mouths proven on a copy firm (Loop 0: `docs/owner/COPY_FIRM_TEST.md`) |
-| WP-78 | todo | — | Evidence ledger (B6 item 5), before Loop 1 |
 | WP-79 | todo | — | Loop kit: `loops prepare` / `loops read` (B6 item 2) |
 | WP-80 | todo | WP-03, WP-79 | Loop 1: RO e-Factura sales + purchases, bank settlement (B5) |
 | WP-81 | todo | WP-80 | Surface review: a `class` column and the owner's review worksheet, after Loop 0 and the first loops |
@@ -132,7 +131,7 @@ After Loop 4 and again after Loop 6, the owner reviews the watched accounts (LAW
 loops' evidence: 5124 and 4423/4424 may need to block for încasare and abroad firms
 (owner, 2026-10-04).
 
-#### B6. What gets built for the program (WP-78, WP-79)
+#### B6. What gets built for the program (WP-79)
 
 1. **Surface states** (built, `poarta_contabila/surface.py`): the loop kit writes each loop's
    evidence file into `surface/evidence/` for the owner to approve.
@@ -144,17 +143,13 @@ loops' evidence: 5124 and 4423/4424 may need to block for încasare and abroad f
    readers' tests run on them.
 4. **Simulated book calibrated**: `poarta_contabila/synthetic/books.py` renderers checked against the same real
    exports (the third diff at zero), so synthetic-only scenarios stay honest between loops.
-5. **Evidence ledger**: `python -m poarta_contabila.evidence <tenant|all> <period>` reads what
-   the runtime already stores (`domain.answers`, `domain.jobs`, `domain.control_runs`,
-   `domain.explained_rules`, the checkpointer) and reports per graph node and edge (visits),
-   per HITL kind (count, approved unchanged / changed / refused), per control (fired,
-   disposition, ever pointed at a real difference), per articol (volume, `needs_human` rate),
-   per model role (calls, overridden, cost), and per firm-month (documents, documents held for
-   a person, days from arrival to Validare). It measures the two sides Part D balances:
-   **friction** (questions asked, proposals changed, documents held) and **control** (errors a
-   gate caught, errors that got through). No minutes are recorded (Q10). Built before Loop 1;
-   anything it cannot measure from stored data is added to what the runtime stores, not
-   estimated.
+5. **Evidence ledger** (built, `poarta_contabila/evidence.py`; `GET /evidence/{cui}/{period}`):
+   friction (questions asked, asked again, proposals changed or refused, documents held for a
+   person) and control (stopped at a gate, controls failed then passed, caught late by POST,
+   reopened after ack) of a firm-month, with node visits and edges per graph, questions per
+   kind (and Jev agreed / overridden), controls, articole, model roles, days to Validare. Read
+   from stored data only; what it cannot measure is listed (`not_measured`). The loop kit
+   writes it into each loop's evidence.
 
 #### B7. SAGA WEB, after SAGA C
 

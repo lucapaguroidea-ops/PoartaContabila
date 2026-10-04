@@ -12,6 +12,8 @@ whether the graph took it:
 
 Rows are only ever added; no code path updates or deletes one. The question is kept as its
 sha256 (``question_hash``, without any ``error``) plus its kind; the answer is kept whole.
+``meta`` keeps what the question proposed, so the evidence ledger can tell an answer that took
+the proposal from one that changed it: Jev's verdict (``judge``) and a ready ``edit``.
 """
 
 from __future__ import annotations
@@ -57,6 +59,21 @@ def question_hash(question: dict[str, Any] | None) -> str | None:
     return hashlib.sha256(json.dumps(bare, sort_keys=True, default=str).encode()).hexdigest()
 
 
+JUDGE_KEYS = ("accounts_ok", "risk", "needs_human")
+
+
+def proposed(question: dict[str, Any] | None) -> dict[str, Any]:
+    """What *question* proposed: Jev's verdict, and a ready ``edit`` (a settlement proposal)."""
+    out: dict[str, Any] = {}
+    verdict = (question or {}).get("judge")
+    if isinstance(verdict, dict):
+        out["judge"] = {k: verdict.get(k) for k in JUDGE_KEYS}
+    proposal = (question or {}).get("proposal")
+    if isinstance(proposal, dict) and proposal.get("edit"):
+        out["proposed_edit"] = proposal["edit"]
+    return out
+
+
 def judge(before: dict[str, Any] | None, after: dict[str, Any] | None) -> tuple[Outcome, Any]:
     """What became of an answer, from the question before and after it was submitted."""
     if before is None:
@@ -90,6 +107,7 @@ def record(
         error=error,
         operator=operator,
         next_kind=(after or {}).get("kind") if outcome == "accepted" else None,
+        meta=proposed(before),
     )
 
 
