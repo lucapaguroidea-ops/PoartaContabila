@@ -1,8 +1,26 @@
-# Plan — tidy the repo, then map the surface through SAGA C in loops
+# Plan — from scaffolding to a system that steers one accountant's practice
 
-Status: **for the owner's review, 2026-10-03.** Nothing here is built or moved yet. Each
-decision the owner makes is marked **D1 … D9** (§C). Once approved, Part A runs first and
-this file is absorbed into `BUILD.md` (its WPs) and deleted, as Part A requires.
+Status: **for the owner's review, 2026-10-04.** Nothing here is built or moved yet. Decisions
+are marked **Q1 … Q13** (Part E). Once approved, Part A runs first and this file is absorbed
+into `BUILD.md` and deleted, as Part A requires.
+
+## Why this plan, in one paragraph
+
+The value lies in **Part D**: reviewing the four graphs, their paths, nodes, edges, catalogs
+and articole against how one accountant actually keeps many clients, once SAGA C is
+integrated and the system has run on varied, real client months. Only then is it visible which
+parts are the engine and which were scaffolding for discovering it, which gates catch errors
+and which are theatre, and what is missing to steer and speed the work. Parts A–C exist to get
+there with **observation, not assumption**: A makes the repo say what is true now; B proves
+every articol against real SAGA C on synthetic data and starts measuring friction; C runs the
+system on real clients through the EU route. Each part hands the next a named input:
+
+| Part | Hands on |
+|---|---|
+| A — tidy | a repo a first-time agent understands; `SURFACE.md` |
+| B — SAGA C loops (synthetic) | every surface row **saga** or **out**; readers and generator true to SAGA; the evidence ledger, already running |
+| C — pilot (client data) | months of real operation on several client types, measured by the same ledger |
+| D — graph loops | a system with less friction and the missing pieces, change by change, each one measured |
 
 ---
 
@@ -26,7 +44,7 @@ agent **what we build, how and why** may be lost; it moves into the entry file (
 |---|---|---|---|
 | `CLAUDE.md` | every session | loader | keep; points to `README.md` only |
 | `INDEX.md` | people, agents | map + mission lines | **merge** into a new `README.md` (A3) |
-| `00_LAW.md` (234 lines) | cited 50× in code (`§8` 42×, `§3` 8×) | law + amendment history A1–A8 | **rewrite**: today's rules, amendments folded in (D2) |
+| `00_LAW.md` (234 lines) | cited 50× in code (`§8` 42×, `§3` 8×) | law + amendment history A1–A8 | **rewrite**: today's rules, amendments folded in (Q2) |
 | `AGENTS.md` | build agent | how to work | **rewrite** short; takes the research rule from the GROK brief §5 |
 | `ARCHITECTURE.md` (333) | cited 16× in code | system to build | **rewrite** as built + "not built yet" per section |
 | `BUILD.md` (253) | cited by code (WP ids) | status table + open WPs | **rewrite**: open WPs only, plus Part B's program |
@@ -40,7 +58,7 @@ agent **what we build, how and why** may be lost; it moves into the entry file (
 | `docs/CATALOG_GAPS.md` | nobody in code | G1–G9, mostly decided | **delete**; open G5/G9 live on the checklist already |
 | `docs/harvest/*` (4 files) | catalog/code cite ~20 harvest ids (C-F11, J-07, D-01 …) | the practice's harvest; holds the **unbuilt surface** | **extract** unbuilt items into the surface backlog (A4), then delete |
 | `annex/*` (5 files) | nothing | superseded briefs, LangClaw contract and catalog | **delete** (after the GROK §5 rule moves to `AGENTS.md`) |
-| `catalog/60_harvest/*_ADD` | catalog loader (`mode: additive`) | live rows | keep the loader; **rename** the folder for what it holds (D5) |
+| `catalog/60_harvest/*_ADD` | catalog loader (`mode: additive`) | live rows | keep the loader; **rename** the folder for what it holds (Q5) |
 | `catalog/**`, `fixtures/**`, `poarta_contabila/**`, `tests/**` | the system | code and data | keep; only comments change (A4) |
 
 ### A3. Target layout
@@ -65,7 +83,8 @@ articole de cale to SAGA C, which posts; the system never keeps books), for whom
 accounting practice and its clients), why (no document reaches the books without its poartă;
 every exception reaches a person), how (catalog → four graphs → XML mouths → human Validare →
 SAGA exports as the eye), the hard limits (no SYSDBA, no FDB writes, models by role, client
-data only on the EU route), and what state the build is in.
+data only on the EU route), and what state the build is in, and that the destination is Part D (the review of the
+graphs against observed practice).
 
 ### A4. The citation problem, and its fix
 
@@ -139,10 +158,13 @@ A loop takes **one slice**: a handful of rows, one or two client types, two or t
 | 6. Read | build agent | exports become the eye: reconcile + close against them |
 | 7. Compare | build agent | three diffs: generator ↔ SAGA (did SAGA book what we meant?), SAGA export ↔ our reader (did we read it right?), our simulated `Book` ↔ SAGA (does the generator's SAGA model match SAGA?) |
 | 8. Review | owner | the gap list: each proposed row approved as `draft`, or `out`, or deferred |
-| 9. Close | build agent | rows → **saga**; reader, generator and simulated book fixed to SAGA's truth; real exports of the test firm become fixtures (invented data) |
+| 9. Record | runtime | the loop's evidence ledger (B6.5): every question you answered, how long it took, whether you changed the proposal, every control that fired and what you did with it |
+| 10. Close | build agent | rows → **saga**; reader, generator and simulated book fixed to SAGA's truth; real exports of the test firm become fixtures (invented data) |
 
-Each loop improves four things at once: the ingestion (step 3 failures), the reading (step 7
-second diff), the generator's realism (third diff), and the map (step 8).
+Each loop improves five things at once: the ingestion (step 3 failures), the reading (step 7
+second diff), the generator's realism (third diff), the map (step 8), and the evidence for
+Part D (step 9). Your answers in a loop are on synthetic documents, but the friction is real:
+it is your time and your clicks.
 
 ### B4. Rules that keep loops from sticking
 
@@ -194,6 +216,15 @@ tenant with no translation.
    readers' tests run on them.
 4. **Simulated book calibrated**: `synthetic/books.py` renderers checked against the same real
    exports (the third diff at zero), so synthetic-only scenarios stay honest between loops.
+5. **Evidence ledger**: `python -m poarta_contabila.evidence <tenant|all> <period>` reads what
+   the runtime already stores (`domain.answers`, `domain.jobs`, `domain.control_runs`,
+   `domain.explained_rules`, the checkpointer) and reports per graph node and edge (visits),
+   per HITL kind (count, minutes to answer, approved unchanged / changed / refused), per
+   control (fired, disposition, ever pointed at a real difference), per articol (volume,
+   `needs_human` rate), per model role (calls, overridden, cost), and per firm-month (your
+   minutes, documents, days from arrival to Validare, close duration). Built before Loop 1;
+   anything it cannot measure from stored data is added to what the runtime stores, not
+   estimated.
 
 ### B7. SAGA WEB, after SAGA C
 
@@ -207,19 +238,118 @@ SAGA WEB is no longer its own track. Once a client is on it (and not before):
 
 ---
 
-## Part C — Order and decisions
+## Part C — Pilot on client data (the bridge)
 
-Order: Part A (two build sessions; one owner review of `LAW.md`) → Loop 0 (owner) → B6 kit →
-Loops 1 … n. Part A does not wait for Loop 0, and Loop 0 does not wait for Part A.
+Part D needs **varied, real client months**: synthetic months show the paths, not the practice.
+Client data reaches a model only through the EU route (LAW; today 00_LAW §3.5), so the pilot
+is gated.
+
+1. **Gate:** WP-D4 decided and the EU route serving every role the pilot uses; Part B's
+   surface **saga** for the slices the pilot's clients need; the processing agreements and
+   client consent the practice requires.
+2. **Scope:** 3–5 real clients chosen to span the client types (plătitor, încasare,
+   neplătitor, abroad, bonuri), at least three consecutive months each, in production SAGA C
+   with the agent user of Copy-firm §6. Nothing from them enters this repo (LAW: no client data).
+3. **Run it as practice, not as a test:** you work these clients through the review page as you
+   would anyway. The evidence ledger runs the whole time. At each month-end, a short note from
+   you: what helped, what slowed you, what you did outside the system and why.
+4. **Hand-off to Part D:** the ledger for every pilot month, and your notes. Synthetic loops
+   (Part B, Loop 11+) continue alongside for rows the pilot's clients do not touch.
+
+---
+
+## Part D — Graph loops: review the system against observed practice
+
+This is where the plan's value is. By now the four graphs (`folder_triage`,
+`ingest_source_doc`, `reconcile_sink`, `monthly_close`), their 23+ articole, 27 HITL kinds and
+14+ controls have run on real practice. The review asks of every element: is it the engine,
+or scaffolding we needed to find the engine?
+
+### D1. Entry gate
+
+Part B ended (every row **saga** or **out**) and the pilot has at least three months on at least
+three client types in the ledger. Before that, a review of the graphs would be opinion.
+
+### D2. Five lenses
+
+Each loop looks at **one graph through one lens**, with the ledger open.
+
+1. **Integrity of logic and intent.** Does every node do what its articol says, and every edge
+   read only stored fields (LAW; today §3.4)? Paths never taken, nodes never visited, states
+   reached that no articol names, gates that cannot close, articole whose stated intent and
+   observed path differ.
+2. **LangGraph practice.** State schemas minimal and typed; side effects after `interrupt()`
+   behind idempotency keys; subgraph and thread boundaries (`batch:` `job:` `recon:`
+   `close:`); checkpoint size and retention; retries and timeouts on model and SAGA calls;
+   fan-out (`Send`) for batches; the shape of interrupt payloads; replay and history used for
+   audit; **versioning**: what happens to threads in flight when a graph changes. Each finding
+   cites LangGraph's own documentation, read on the day (RESEARCH_LOG rule), not memory.
+3. **Friction against value — no theatre of control.** Every gate and question is classed
+   from the ledger:
+   - **catches**: has stopped a real error → keep, make it cheaper to answer;
+   - **earns**: rarely needed, cheap → keep, batch it;
+   - **theatre**: always approved unchanged, never caught anything → remove, auto-approve with
+     sampling, or fold into one exception list at close.
+
+   The law's own gates (Validare by a person, no FDB writes, models by role, client data only
+   on the EU route) are outside this lens.
+4. **Missing, for one accountant with many clients.** Candidates the ledger and your notes
+   will confirm or drop: a portfolio view (which client is behind, against which deadline);
+   filings due as a calendar; one review session that batches questions across clients;
+   drafted requests to a client for missing documents; work ordered by deadline and
+   materiality; answers you keep repeating promoted to explained rules; month-over-month
+   anomalies per client; next month's workload forecast.
+5. **Overstated.** What was built to discover the structure and now costs more than it
+   returns: model calls where a deterministic rule now suffices, controls that repeat SAGA's
+   own checks, catalog rows no client uses, HITL kinds that are one kind in practice,
+   `draft` machinery that never became `active`.
+
+### D3. One loop
+
+| Step | Who | What |
+|---|---|---|
+| 1. Pick | owner | one graph × one lens, ordered by where the ledger shows your time goes |
+| 2. Read | build agent | the ledger for that graph, the graph's code and catalog rows |
+| 3. Propose | build agent | changes ranked by your minutes saved per month and by risk; each names the metric it should move |
+| 4. Decide | owner | accept, reject or defer each; changes to topology, interrupt kinds or watched accounts are drafted as amendments (LAW; today §7) |
+| 5. Build | build agent | one WP per change, behind a catalog flag where it can be |
+| 6. Measure | runtime | next month's ledger: did the metric move, did no real error get through |
+
+### D4. Rules that keep it honest
+
+1. A change ships with the metric it should move; one that does not move it is reverted.
+2. A gate that has ever caught a real error is removed only by your explicit decision.
+3. One graph × one lens per loop; findings for other lenses go to the backlog.
+4. Additions face the same test as removals: a missing piece is added when the ledger or your
+   notes show the time it saves.
+5. No change makes the system keep books, or lets a model decide a gate (LAW).
+
+### D5. When it ends
+
+Every graph has been through every lens once, and your minutes per client-month have reached
+the target you set (Q13). After that it becomes the practice's normal cycle: one graph loop a
+month on the latest ledger.
+
+---
+
+## Part E — Order and decisions
+
+Order: Part A (two build sessions; your review of `LAW.md`) → Loop 0 (you) → B6 kit and
+evidence ledger → Loops 1 … n → Part C pilot (once WP-D4 is decided) → Part D loops. Part A
+does not wait for Loop 0, and Loop 0 does not wait for Part A.
 
 | # | Decision | Recommendation |
 |---|---|---|
-| D1 | Tidy before the loop program | yes |
-| D2 | `LAW.md`: amendments folded into rules with stable ids, history only in git | yes; you review the text before it replaces `00_LAW.md` |
-| D3 | Delete `docs/BUILD_DONE.md`, `docs/CATALOG_GAPS.md`, `annex/`, `docs/harvest/` (tag `pre-tidy` keeps them) | yes, after the harvest's unbuilt items are in `SURFACE.md` |
-| D4 | WP numbers continue (WP-76 …) rather than restart | continue (git history keeps meaning) |
-| D5 | `catalog/60_harvest/` renamed (e.g. `60_practice/`) | yes, or keep the name if you prefer |
-| D6 | Client-type matrix = the five synthetic firms; others added as **possible** rows | yes; add any client type you know is coming |
-| D7 | Slices with no XML mouth (expenses, bonuri, payroll, fees): keyed by you from a list, or wait for `nota_nc_dbf` | keyed in loops; the DBF mouth decision after Loop 5 shows the volume |
-| D8 | Your time: one SAGA C session per loop, 10–30 documents per firm-month at first | confirm, or set the budget |
-| D9 | Language: English prose, Romanian fiscal terms, as today | keep |
+| Q1 | Tidy before the loop program | yes |
+| Q2 | `LAW.md`: amendments folded into rules with stable ids, history only in git | yes; you review the text before it replaces `00_LAW.md` |
+| Q3 | Delete `docs/BUILD_DONE.md`, `docs/CATALOG_GAPS.md`, `annex/`, `docs/harvest/` (tag `pre-tidy` keeps them) | yes, after the harvest's unbuilt items are in `SURFACE.md` |
+| Q4 | WP numbers continue (WP-76 …) rather than restart | continue |
+| Q5 | `catalog/60_harvest/` renamed (e.g. `60_practice/`) | yes, or keep the name |
+| Q6 | Client-type matrix = the five synthetic firms; others added as **possible** rows | yes; add any client type you know is coming |
+| Q7 | Slices with no XML mouth (expenses, bonuri, payroll, fees): keyed by you from a list, or wait for `nota_nc_dbf` | keyed in loops; decide the DBF mouth after Loop 5 |
+| Q8 | Your time: one SAGA C session per loop, 10–30 documents per firm-month at first | confirm, or set the budget |
+| Q9 | Language: English prose, Romanian fiscal terms | keep |
+| Q10 | The evidence ledger is built before Loop 1 and records your minutes per question | yes |
+| Q11 | Pilot: which 3–5 clients, from when (waits for WP-D4) | you choose, after Part B's first slices |
+| Q12 | Part D's entry gate: Part B ended + ≥3 pilot months on ≥3 client types | yes |
+| Q13 | Target: your minutes per client-month (sets when Part D ends) | set after the first pilot month shows today's figure |
