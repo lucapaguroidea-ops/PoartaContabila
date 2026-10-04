@@ -17,6 +17,9 @@ sources (SPV UBL, S3 dump, Telegram, email, photo, SPV register, SAGA report pac
 
 SAGA is the mouth. The report pack is the v1 eye. This system hops documente primare through articole de cale and PreFiles. It does not keep books.
 
+Deploy: Railway project `faithful-mercy`, region `europe-west4` (LAW: EU region); the operator
+token is kept in the browser tab only (the review page).
+
 ## 2. Four graphs
 
 | graph_id | thread | In | Out |
@@ -263,6 +266,46 @@ Each pack is a role in `catalog/50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (one pi
 provider pin, synthetic-only until the EU route) with a role card (Jev's questions and criteria,
 Gemini's extraction rules, the System Two brief; no persona); `MODEL_CALLS=dry` records what a
 role would be sent (`GET /model-calls`, with the card hash) and sends nothing.
+
+### 12.1 Model routing in detail (behind LAW §5)
+
+Moved here from the law's amendments A3–A7 (owner, 2026-10-04: the law keeps the principles).
+
+- **Document-reading tiers** (Google AI Studio, synthetic only). A role lists `tiers`:
+  `everyday` models (most requests a day), `strong` models (more capable, fewer a day),
+  optional `reserve`. Everyday models read first; the strong tier first only when the operator
+  sends `strong: true`, and alone for a **second run** of a read that did not confirm (holder
+  CUI, IBAN, every line tying opening − debits + credits = closing). A read that still does not
+  confirm is refused and never stored. The page count never decides the tier.
+- **Limits.** `rate_limits` per model: `rpm`, `tpm`, `rpd` (requests per Pacific day; every
+  attempt counts, a 503 included); an `rpd` the owner has not confirmed is `null` and only
+  Google's daily 429 stops it. The sender counts requests and tokens per model for the whole
+  process.
+- **Moving on.** The next model is taken at once on a 429 (a daily 429 skips the model until
+  Pacific midnight), after one retry 10 s later on a busy answer (5xx, unreachable), or when
+  this process's own count is full.
+- **Waiting.** When no model can read now, the statement is parked with its PDF
+  (`domain.reading_waits`) and read again every `READING_RETRY_SECONDS` and by
+  `POST /reading/{cui}/retry`; the same PDF uploaded while it waits is the same parked
+  statement. `GET /reading/{cui}/budget` shows reads left per model, what waits, and with
+  `documents=N` warns before a batch the day's budget does not cover.
+- **Reserve.** Read with only when an operator chooses: the parked upload's answer and the
+  budget carry the question (`wait` | `reserve` | skip one statement). `POST
+  /reading/{cui}/choice` is recorded insert-only (`domain.reading_choices`: who, when, which
+  statements, until when, how many released); `reserve` holds until the next Pacific midnight.
+  `POST /reading/{cui}/waiting/{wait_id}/skip {reason}` sets a statement aside; it is never read
+  by a model afterwards. **No paid key** is used for reserve reads.
+- **Recorded.** Every reading call records the model that read, its tier, whether it was the
+  first choice, and whether it was a second run.
+- **The reading evaluation** (`POST /ocr-eval/{cui}`) reads with one model only, never another
+  tier, so a score belongs to one model.
+- **OpenRouter alternates.** The provider list (`dataPolicy` per provider) is read daily and
+  right after a call is refused for its data policy (`domain.provider_policies`). An alternate
+  may name a provider other than the model's maker; a System Two alternate may be of the `kimi`
+  family. Each call records the pin it went by and why. With no pin passing: Jev answers with
+  cautious values and asks a person; System Two sends the question without an explanation;
+  `/model-roles` says so. `POST /model-roles/{role_id}/choice {choice: wait | pause |
+  allow_synthetic, until}` is recorded with who chose it; `allow_synthetic` expires by itself.
 
 ## 13. Windows agent
 

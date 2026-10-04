@@ -4,11 +4,11 @@ You are building Poarta Primară. This directory is the only source of truth.
 
 ## Before any code
 
-1. Read `INDEX.md`, `00_LAW.md`, this file, then the catalog file that owns the articol you will touch (`CATALOG_LOOKUP.md`).
+1. Read `INDEX.md`, `LAW.md`, this file, then the catalog file that owns the articol you will touch (`CATALOG_LOOKUP.md`).
 2. Read `BUILD.md`. Take the first work package whose status is `todo` and whose `depends` are done.
 3. If the WP is marked `decision`, stop and ask the human. Do not invent the answer.
 4. Do not open `annex/` except to recover a type name or XML tag already copied into `ARCHITECTURE.md`.
-5. Do not open the harvest zip or the Word drafts. Their verdicts that survived are already in `00_LAW.md` §6, `catalog/60_harvest/`, and `BUILD.md`.
+5. Do not open the harvest zip or the Word drafts. Their verdicts that survived are already in `LAW.md`, `SURFACE.md`, `catalog/60_harvest/`, and `BUILD.md`.
 
 ## Operating loop
 
@@ -61,7 +61,7 @@ mark the WP done in BUILD.md in the same change; move its details to docs/BUILD_
 | New filing obligation | `catalog/60_harvest/ARTICOLE_FILING_v1.yaml` |
 | New CO.DiT axis | `catalog/60_harvest/ARTICOLE_CODIT_AXES_v1.yaml` then T*/F* if hard |
 | New T*/F* pair | existing files in `catalog/10_lege_firma/` |
-| Graph topology | `catalog/30_cale/ARTICOLE_GRAPH_v1.yaml` + amendment in `00_LAW.md` |
+| Graph topology | `catalog/30_cale/ARTICOLE_GRAPH_v1.yaml` + the owner's dated change in `LAW.md` (L20, L46) |
 
 Do not create `ArticoleJev`, `ArticolePack`, or `ArticoleEmit`.
 

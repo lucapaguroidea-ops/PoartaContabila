@@ -5,7 +5,8 @@ This directory is the source of truth. Do not open the Word drafts, the harvest 
 ```
 INDEX.md                 this file
 AGENTS.md                how a coding agent must work
-00_LAW.md                unit, lexicon, invariants, locked decisions (§8 amendments)
+LAW.md                   the law: rules L1… with stable ids (00_LAW.md: superseded, kept until citations move)
+SURFACE.md               the articol map's surface: possible / synthetic / saga / out
 ARCHITECTURE.md          system to build (self-contained)
 BUILD.md                 work packages: the status table, and the open WPs' details
 EXTRACT.md               extract adaptor contract

@@ -1,5 +1,9 @@
 # 00 — Law
 
+> **Superseded by `LAW.md`** (owner, 2026-10-04). Kept only until the citations in code are
+> rewritten to `LAW.md` ids (`docs/PLAN.md` A5 step 4); then deleted. Where the two differ,
+> `LAW.md` governs.
+
 Status: LOCKED for implementers.  
 Package: `poarta_contabila` (A1).  
 Product face: Poarta Primară.

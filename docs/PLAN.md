@@ -106,8 +106,8 @@ A rewrite renumbers all of them. Fix, in this order:
 ### A5. Steps (one commit each, tests and ruff green each time)
 
 1. Branch `pre-tidy` (done 2026-10-04). Extract the harvest's unbuilt surface into `SURFACE.md`.
-2. Write `LAW.md` (stable ids) — **owner reviews the text before the commit** (it replaces a
-   locked file).
+2. Write `LAW.md` (stable ids) — **done 2026-10-04**: the owner reviewed it in a worksheet;
+   in force, `00_LAW.md` marked superseded until step 4.
 3. Rewrite `ARCHITECTURE.md` (with EXTRACT, IDEMPOTENCY), `AGENTS.md`, `BUILD.md`.
 4. Citation script + citation test; code comments updated.
 5. Write `README.md`, `CLAUDE.md`, `catalog/README.md`; move owner guides to `docs/owner/`.
@@ -206,6 +206,10 @@ Loop 0 is the infrastructure; every later loop assumes it passed.
 The client types are today's five synthetic firms (`synthetic/firms.py`), each set up once as
 a SAGA C test firm with the **same invented CUI**, so a SAGA export maps onto its synthetic
 tenant with no translation.
+
+After Loop 4 and again after Loop 6, the owner reviews the watched accounts (LAW L37) on the
+loops' evidence: 5124 and 4423/4424 may need to block for încasare and abroad firms
+(owner, 2026-10-04).
 
 ### B6. What gets built for the program (WPs, after Part A)
 
