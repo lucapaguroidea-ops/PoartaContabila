@@ -38,7 +38,7 @@ Every file in the repo is one of three things:
 3. **the plan**: open work, and the surface still to map.
 
 History (done WPs, superseded briefs, resolved gaps, retired frameworks) lives in git only,
-behind a tag `pre-tidy` on the last commit before Part A. Nothing that tells a first-time
+on branch `pre-tidy` (the last commit before Part A). Nothing that tells a first-time
 agent **what we build, how and why** may be lost; it moves into the entry file (A3).
 
 ### A2. Inventory (2026-10-03)
@@ -105,7 +105,7 @@ A rewrite renumbers all of them. Fix, in this order:
 
 ### A5. Steps (one commit each, tests and ruff green each time)
 
-1. Tag `pre-tidy`. Extract the harvest's unbuilt surface into `SURFACE.md`.
+1. Branch `pre-tidy` (done 2026-10-04). Extract the harvest's unbuilt surface into `SURFACE.md`.
 2. Write `LAW.md` (stable ids) — **owner reviews the text before the commit** (it replaces a
    locked file).
 3. Rewrite `ARCHITECTURE.md` (with EXTRACT, IDEMPOTENCY), `AGENTS.md`, `BUILD.md`.
@@ -351,7 +351,7 @@ does not wait for Loop 0, and Loop 0 does not wait for Part A.
 |---|---|---|
 | Q1 | Tidy before the loop program | yes: tidy first, then the loop kit |
 | Q2 | `LAW.md`: amendments folded into rules with stable ids, history only in git | yes: amendments folded in, stable rule ids, history in git; the owner reviews `LAW.md` before it replaces `00_LAW.md` |
-| Q3 | Delete `docs/BUILD_DONE.md`, `docs/CATALOG_GAPS.md`, `annex/`, `docs/harvest/` (tag `pre-tidy` keeps them) | yes, after the harvest's unbuilt items are in `SURFACE.md` |
+| Q3 | Delete `docs/BUILD_DONE.md`, `docs/CATALOG_GAPS.md`, `annex/`, `docs/harvest/` (branch `pre-tidy` keeps them) | yes, after the harvest's unbuilt items are in `SURFACE.md` |
 | Q4 | WP numbers continue (WP-76 …) rather than restart | continue from WP-76 |
 | Q5 | `catalog/60_harvest/` renamed (e.g. `60_practice/`) | rename to `60_practice/` |
 | Q6 | Client-type matrix = the five synthetic firms; others added as **possible** rows | the five synthetic firms; others as **possible** rows |
