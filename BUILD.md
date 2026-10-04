@@ -29,6 +29,9 @@ done 2026-10-04) made the repo say what is true now. Approved by the owner on 20
 | WP-79 | todo | — | Loop kit: `loops prepare` / `loops read` (B6 item 2) |
 | WP-80 | todo | WP-03, WP-79 | Loop 1: RO e-Factura sales + purchases, bank settlement (B5) |
 | WP-81 | todo | WP-80 | Surface review: a `class` column and the owner's review worksheet, after Loop 0 and the first loops |
+| WP-82 | todo | the loops end (Part B) | System map: deep-dive with the owner, then wireframes of the admin screens |
+| WP-83 | todo | WP-82 | System map: the system model exported as JSON from code and catalog, tested complete |
+| WP-84 | todo | WP-83 | System map: the read-only `/system` page, then the surface and ledger overlays |
 | WP-14 | parked | — | Bonuri through an accounting note (`bon_via_nota`, ArticolBon); Loop 5 |
 | WP-15 | parked | — | A read-only SAGA database copy as an eye (copy-firm test §9) |
 | WP-16 | parked | — | Agent Validare (L11) |
@@ -318,6 +321,66 @@ the loops' evidence:
 | `which_cui`, `name_ambiguous`, `xml_pdf_pair`, `no_counterparty`, `request_devalidare`, `define_module`, `codit_combo`, `codit_premise`, `decision_menu`, `control_disposition`, `patch_maps` | 11 | structural | is there a real moment in the month for this question? If yes, which node asks it; if no, **out** |
 | `extras`, `extras_pdf`, `foreign_invoice`, `unknown`, `job_extras`, `define_class`, `define_articol`, `stmt_no_identity`, `bon_cui_unclear` | 9 | semantic | mostly **out**, unless refusing is wrong in practice (a statement without the tenant's CUI: refuse, or ask?) |
 | `P_prefile_duplicate`, `P_prefile_hard_failures` (FAIL) | 2 | structural | keep as a second guard, or a duplicate check? |
+
+### WP-82 – WP-84 The system map (after the loops)
+
+Owner, 2026-10-04: screens for a system admin to observe the system's building blocks — where
+each graph starts and ends, what the gates are and how they work, where an actor comes in and
+what it does, how the elements link — as a visual map, with an itemised list of the elements
+of each element, and one visual language per element type. Wireframes first, between the moving
+pieces, to make those boundaries clear. Reviewed and deep-dived with the owner when the SAGA C
+loops end; until then nothing here is built.
+
+**The rule that keeps it true:** the map is generated from the system (code, catalog, scenario
+runs, ledger), never drawn by hand; a test fails when a graph node, a catalog row or a model
+role is missing from it (as `SURFACE.md` is kept current). Read-only; operator token; nothing
+loaded from outside its own origin and document values written as text (as the review page,
+L26); invented data only in wireframes and tests (L35, L36).
+
+**Element types** (each with its source; the deep-dive confirms or changes the list):
+
+| Type | What it is | Source |
+|---|---|---|
+| graph, node, edge | the four compiled graphs, their nodes and the edges between them, with each edge's condition | the compiled LangGraph graphs; `ARTICOLE_GRAPH_v1.yaml` |
+| hand-off | how one graph passes work to another (a Job, the recon window, a CloseRun) — never a call | domain store; L20 |
+| articol de cale | a state with its next path and its gate (L1) | Flux, Reconcile and Close rows |
+| articol contabil | **working definition (owner, 2026-10-04):** the accounts an articol de cale expects SAGA to post; to confirm in the deep-dive, and then in the LAW lexicon (L46) | the recon profiles' expected accounts; watched accounts (L37) |
+| poartă | a gate and how it works: emit gates, a question to a person, PRE / POST recon, a close control, Validare in SAGA | `fixtures/architecture.jsonlogic.json`; HITL; recon profiles; controls; L11 |
+| source document, job kind | what a file is, and the unit it becomes | SourceDoc, Jobs |
+| question kind | a HITL kind, its actor, the node that asks it, its answer shape | ArticoleHITL |
+| control | a Layer 1 check, blocking or advisory | ArticoleControls |
+| mouth, eye | a SAGA write module; a SAGA (or NextUp) export read back | WriteModule; `sinks/` |
+| filing | a declaration as a gate and its receipt | ArticoleFiling |
+| actor | Jev (System One), System Two, Gemini (each a pinned model role at its node), the SAGA agent, the person | model roles; ARCHITECTURE §13 |
+| catalog file | where a row is written | `catalog/` |
+
+**Wireframes, as planned** (Claude artifacts with invented data, for the owner to react to
+before anything is built):
+
+1. **System overview** — the four graphs as lanes from documents to the close, the hand-offs
+   between them, SAGA C (mouth and eye) and the person at their places; a legend of the element
+   types.
+2. **One graph's flow** — its nodes and edges from start to end; each node marked by what it is
+   (a gate, a question and its kind, a model role and what it may do, a side effect such as a
+   package for SAGA); each edge with the condition that takes it.
+3. **One element's detail** — an itemised card with typed links in and out. For an articol de
+   cale: its graph, source documents and job kind, its gates (emit, PRE / POST, controls), its
+   question kinds, its mouth, its articol contabil (the expected accounts), the model roles on
+   its path, the scenarios that drive it and its surface state.
+4. **Catalog by type** — an index per element type with counts, filters and search, each row
+   opening its detail card.
+5. **Overlays (later)** — the same map coloured by surface state (possible / synthetic / saga /
+   out), and with the evidence ledger's friction and control on each node and gate: the
+   instrument for Part D.
+
+**Work packages:**
+
+- **WP-82** — deep-dive with the owner on the element types and the screens; the wireframes
+  above; the owner's choices recorded here.
+- **WP-83** — `system_model`: the JSON export of the elements and their links from code and
+  catalog (LangGraph's own graph description for nodes and edges), with the completeness test.
+- **WP-84** — the `/system` page drawn from that JSON (the overview, a graph, a detail card,
+  the index), then the overlays from `surface.py` and `evidence.py`.
 
 ### WP-03 Invoice XML mouths
 - Exporter in `sinks/saga_xml.py`. Tags only from a successful copy-firm import.
