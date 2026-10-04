@@ -1,0 +1,264 @@
+# Rows not yet in the catalog: all start **possible** (SURFACE.md is generated from this file,
+# the catalog, the scenario runs, surface/out.yaml and surface/evidence/).
+# `source` names the item in the practice harvest (branch pre-tidy, docs/harvest/):
+# C-…, D-…, G-…, … are its catalogue ids, hWP-… its own work packages, not ours.
+# A legal value is research, not a row: named here, never stated (LAW L40).
+# A loop that takes a row into the catalog removes it here (BUILD.md B3, step 8).
+rows:
+- id: S-VAT-01
+  area: VAT regimes and VAT ties
+  kind: control
+  what: non-payer reverse charge seen in SAGA booked with payer mechanics (VAT deducted or netted)
+  source: D-07, I-01, G-13
+- id: S-VAT-02
+  area: VAT regimes and VAT ties
+  kind: control
+  what: one VAT regime per firm-period, read from one place; a regime flip inside an open period held
+  source: hWP-01, I-02, CO.DiT `A_FLIP`
+- id: S-VAT-03
+  area: VAT regimes and VAT ties
+  kind: control
+  what: 'D300 tie: balance 4426/4427/4423/4424 × purchase and sales journals × filed D300'
+  source: D-09, hWP-20
+- id: S-VAT-04
+  area: VAT regimes and VAT ties
+  kind: control
+  what: 4428 at period end without open TVA-la-încasare invoices
+  source: G-12, hWP-20
+- id: S-VAT-05
+  area: VAT regimes and VAT ties
+  kind: control
+  what: 4424 recoverable VAT by origin year, with the prescription horizon (research)
+  source: D-08, hWP-18, G-11
+- id: S-VAT-06
+  area: VAT regimes and VAT ties
+  kind: control
+  what: old-rate invoice after a rate change, its credit note and reissue net to zero
+  source: G-23
+- id: S-VAT-07
+  area: VAT regimes and VAT ties
+  kind: articol
+  what: VAT-registration threshold crossed mid-year (regime change event)
+  source: E-2
+- id: S-VAT-08
+  area: VAT regimes and VAT ties
+  kind: articol
+  what: 50 % deductibility (`TipDeducere` N50) and non-deductible (I) purchase lines
+  source: R5
+- id: S-BNK-01
+  area: bank, FX and payment platforms
+  kind: source_doc
+  what: bank statement in EUR/USD; lines kept in their currency, never read as RON
+  source: D-05, hWP-03/04, G-09, G-18
+- id: S-BNK-02
+  area: bank, FX and payment platforms
+  kind: control
+  what: bank reconciled per currency account; an unmapped currency account named
+  source: D-05, G-18, I-06
+- id: S-BNK-03
+  area: bank, FX and payment platforms
+  kind: control
+  what: month-end FX revaluation seen in SAGA; implied rate far from BNR's held for a person
+  source: D-06, hWP-25, G-17
+- id: S-BNK-04
+  area: bank, FX and payment platforms
+  kind: source_doc
+  what: payment-platform activity export (card acquirer, PSP)
+  source: C-F10, hWP-27
+- id: S-BNK-05
+  area: bank, FX and payment platforms
+  kind: source_doc
+  what: statement PDFs of more banks (parser per bank)
+  source: C-F9, hWP-27
+- id: S-BNK-06
+  area: bank, FX and payment platforms
+  kind: control
+  what: a bank account with no receipts in a month with sales
+  source: I-03, D-18
+- id: S-PRT-01
+  area: partners, openings, takeover
+  kind: control
+  what: 'partner identity: tax-ID normalisation, check digit, blank-ID foreign partners kept apart'
+  source: D-17, hWP-17, I-10, G-26
+- id: S-PRT-02
+  area: partners, openings, takeover
+  kind: control
+  what: second tax id of the client (VAT-only id) on an incoming invoice
+  source: G-08
+- id: S-PRT-03
+  area: partners, openings, takeover
+  kind: control
+  what: 'sub-ledger ties: 401/4111 analytics sum to the synthetic; a partner with both sides at take-on'
+  source: D-02, hWP-12, G-02, G-27
+- id: S-PRT-04
+  area: partners, openings, takeover
+  kind: workflow
+  what: 'takeover of a new client: opening balances, open items, off-balance memo (class 8), cut-off date'
+  source: D-11, hWP-13, H-03, G-03
+- id: S-PRT-05
+  area: partners, openings, takeover
+  kind: mouth
+  what: SAGA take-on grid and open-items import
+  source: C-F3, hWP-24
+- id: S-PRT-06
+  area: partners, openings, takeover
+  kind: mouth
+  what: partner import (DBF or `CLI_`/`FUR_` XML)
+  source: C-F4, `parteneri_xml`
+- id: S-PRT-07
+  area: partners, openings, takeover
+  kind: control
+  what: e-Factura and filings never re-sent for periods before go-live
+  source: I-14
+- id: S-CLS-01
+  area: close, corrections, completeness
+  kind: control
+  what: 'completeness: expected documents per month (SPV register, recurring suppliers, payroll) vs what
+    arrived'
+  source: D-18, hWP-14, I-03
+- id: S-CLS-02
+  area: close, corrections, completeness
+  kind: control
+  what: 'must-be-zero anomalies: VAT accounts at a non-payer, P&L carried into a new year, stale 473,
+    mirror pairs'
+  source: hWP-14, G-04, G-24
+- id: S-CLS-03
+  area: close, corrections, completeness
+  kind: control
+  what: 'income candidate: a domestic credit with no sales invoice within a window'
+  source: G-07
+- id: S-CLS-04
+  area: close, corrections, completeness
+  kind: close_kind
+  what: close order with FX and tax steps; a step declared, not implied
+  source: D-12, hWP-15, I-17
+- id: S-CLS-05
+  area: close, corrections, completeness
+  kind: workflow
+  what: 'correction routing by filing status: reopen and post in the month if not filed, storno dated
+    today if filed'
+  source: D-14, hWP-10, H-06, G-19
+- id: S-CLS-06
+  area: close, corrections, completeness
+  kind: control
+  what: 'a closed month is sealed: a later change shows as a superseded close, never silently'
+  source: B-04, hWP-11
+- id: S-CLS-07
+  area: close, corrections, completeness
+  kind: control
+  what: 'cut-off: an invoice for services of a closed prior period'
+  source: G-20
+- id: S-CLS-08
+  area: close, corrections, completeness
+  kind: workflow
+  what: 'year end: December close → financial statements → annual returns'
+  source: H-10, G-28
+- id: S-CLS-09
+  area: close, corrections, completeness
+  kind: control
+  what: balance rules at close (accounts that must not carry a balance, or a sign)
+  source: D-15
+- id: S-FIL-01
+  area: filings and obligations
+  kind: filing
+  what: D398 (OSS), D101 (annual profit tax), annual financial statements, D205, D207, F4109, D700, D100
+    non-resident WHT
+  source: E-1
+- id: S-FIL-02
+  area: filings and obligations
+  kind: workflow
+  what: 'filings calendar per client: deadlines with the non-working-day roll, zero-filing rules, "only
+    months with operations"'
+  source: E-1, hWP-09, I-15
+- id: S-FIL-03
+  area: filings and obligations
+  kind: control
+  what: 'obligation state per filing: must file × filed (receipt) × books ready; a filing closes by its
+    receipt'
+  source: E-3, B-09, H-11
+- id: S-FIL-04
+  area: filings and obligations
+  kind: source_doc
+  what: ANAF receipt PDF (recipisă) read into its filing
+  source: C-F8, `filing_receipt`
+- id: S-FIL-05
+  area: filings and obligations
+  kind: eye
+  what: 'D406 / SAF-T as filed: read, readiness, validate'
+  source: C-F6, C-F7, hWP-26
+- id: S-FIL-06
+  area: filings and obligations
+  kind: control
+  what: profit tax quarterly step; micro rate by quarter of crossing (research)
+  source: D-13, hWP-19, G-16
+- id: S-FIL-07
+  area: filings and obligations
+  kind: control
+  what: dividend paid without withholding record
+  source: G-22
+- id: S-XB-01
+  area: cross-border and marketplaces
+  kind: control
+  what: 'OSS: the B2C EU threshold as a switch with its crossing date; later invoices need destination
+    VAT'
+  source: D-10, hWP-35, G-15
+- id: S-XB-02
+  area: cross-border and marketplaces
+  kind: control
+  what: VIES classification of EU partners; D390 rows
+  source: hWP-35
+- id: S-XB-03
+  area: cross-border and marketplaces
+  kind: articol
+  what: 'marketplace clearing: payouts net of fees, gross sales recognised, clearing accounts at zero'
+  source: D-16, hWP-31, G-05, G-06
+- id: S-PAY-01
+  area: payroll and income
+  kind: source_doc
+  what: payroll statement (`stat_salarii`) on a route, against D112
+  source: E-1, Loop 8
+- id: S-PAY-02
+  area: payroll and income
+  kind: control
+  what: 421/431/444 tie to D112
+  source: E-1
+- id: S-WF-01
+  area: workflows for one accountant with many clients
+  kind: workflow
+  what: 'engagement backlog per client: one list of what is open, who it waits on'
+  source: B-01, hWP-29
+- id: S-WF-02
+  area: workflows for one accountant with many clients
+  kind: workflow
+  what: 'request and chase loop: missing documents → a drafted request to the client, grouped by addressee'
+  source: H-02, P-1, P-3
+- id: S-WF-03
+  area: workflows for one accountant with many clients
+  kind: workflow
+  what: status digest with two audiences (the accountant, the client)
+  source: P-6
+- id: S-WF-04
+  area: workflows for one accountant with many clients
+  kind: hitl
+  what: decision menu with options and a recorded decision (not only approve/edit/reject)
+  source: H-05, hWP-32, B-08
+- id: S-WF-05
+  area: workflows for one accountant with many clients
+  kind: workflow
+  what: 'review campaign: report before correction, then arbitration'
+  source: H-07, I-M07
+- id: S-WF-06
+  area: workflows for one accountant with many clients
+  kind: workflow
+  what: onboarding against a golden reference; external trial-balance compare
+  source: B-12, hWP-30, H-08
+- id: S-WF-07
+  area: workflows for one accountant with many clients
+  kind: workflow
+  what: rules and workflow version stamped on every run and report
+  source: hWP-34, B-05
+- id: S-WF-08
+  area: workflows for one accountant with many clients
+  kind: control
+  what: no client's data in another client's run or projection (PII zoning)
+  source: I-05, I-16, B-11, hWP-28

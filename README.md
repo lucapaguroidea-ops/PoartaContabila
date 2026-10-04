@@ -65,7 +65,7 @@ documents (SPV zips, UBL XML, statement PDFs, expense reports)
 | `AGENTS.md` | how an agent works here: before any code, the loop, hard bans |
 | `BUILD.md` | open work, the programs (SAGA C loops, pilot, graph loops), decisions |
 | `ARCHITECTURE.md` | the machine as built: graphs, types, storage, HTTP, package, env; not built yet |
-| `SURFACE.md` | what is not in the catalog yet: possible / synthetic / saga / out |
+| `SURFACE.md` | every row's state: possible / synthetic / saga / out (generated from `surface/`, the catalog and the scenarios) |
 | `RESEARCH_LOG.md` | external formats and APIs, quoted from official pages with dates |
 | `catalog/` | the row-level law (`catalog/README.md`: which file to open) |
 | `docs/owner/` | the owner's guides: copy-firm test, checklist, EU route setup |

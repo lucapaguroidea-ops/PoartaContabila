@@ -1,0 +1,4 @@
+# Rows the owner decided will not be built (state **out**), each with its reason.
+# A row: {ref: "<table>:<key>" for a catalog row (as coverage.py names it) or a surface/possible.yaml
+# id, reason: why, decided: "owner, YYYY-MM-DD"}.
+rows: []

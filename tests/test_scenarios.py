@@ -160,3 +160,14 @@ def test_an_invoice_from_abroad_is_not_labelled_as_from_spv():
     p = rt.ingest_upload(f.cui, g.purchase("p").spv_zip(f), "p.zip")
     assert rt.canonical(x["job"]["job_id"]).source.kind == "xml"
     assert rt.canonical(p["job"]["job_id"]).source.kind == "ubl_spv"
+
+
+def test_surface_md_is_generated_and_current(results):
+    """SURFACE.md is what ``python -m poarta_contabila.surface --write`` makes of this run."""
+    from poarta_contabila.surface import SURFACE_MD, render_markdown, surface
+
+    s = surface([r.outcome() for r in results.values()])
+    assert s.problems == []
+    assert SURFACE_MD.read_text(encoding="utf-8") == render_markdown(s), (
+        "SURFACE.md is stale: uv run python -m poarta_contabila.surface --write"
+    )

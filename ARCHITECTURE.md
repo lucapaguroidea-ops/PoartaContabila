@@ -252,6 +252,7 @@ poarta_contabila/
   reading_waits.py ocr_eval.py synthetic_docs.py smoke.py coverage.py agent.py db/schema.sql
   synthetic/           # seeded invented firms, documents and SAGA books
   scenarios.py         # YAML scenarios (fixtures/scenarios/) over HTTP, simulated SAGA agent
+  surface.py           # the four surface states; generates SURFACE.md (with coverage.py)
 ```
 
 No ReAct supervisor. No `Journal.post`.
@@ -428,7 +429,7 @@ Money and fiscal dates in graph state are strings; Decimal lives inside the comp
 ## 17. Not built yet
 
 What the law or the catalog names and the code does not do yet. Open work is in `BUILD.md`;
-rows not yet in the catalog are in `SURFACE.md`.
+every row's state, and the rows not yet in the catalog, are in `SURFACE.md`.
 
 | Piece | State | Tracked in |
 |---|---|---|

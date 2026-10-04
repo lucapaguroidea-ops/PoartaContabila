@@ -25,6 +25,8 @@ restate the change as: articol_id + poartă open/closed
 write or extend a failing test named in the WP
 smallest change that passes
 uv run pytest -q; uv run ruff check . && uv run ruff format --check .
+regenerate SURFACE.md if the catalog, the scenarios or surface/ changed:
+  uv run python -m poarta_contabila.surface --write
 one WP per commit: mark it done in BUILD.md and remove its details there
 ```
 
@@ -72,7 +74,7 @@ one WP per commit: mark it done in BUILD.md and remove its details there
 | New CO.DiT axis | `catalog/60_practice/ARTICOLE_CODIT_AXES_v1.yaml`, then T*/F* if hard |
 | New T*/F* pair | existing files in `catalog/10_lege_firma/` |
 | Graph topology | `catalog/30_cale/ARTICOLE_GRAPH_v1.yaml` + the owner's dated change in `LAW.md` (L20, L46) |
-| A row not yet ready for the catalog | `SURFACE.md` as **possible** |
+| A row not yet ready for the catalog | `surface/possible.yaml` (then regenerate `SURFACE.md`) |
 
 Do not create `ArticoleJev`, `ArticolePack`, or `ArticoleEmit`. A new catalog row enters as
 `status: draft` (L47).
