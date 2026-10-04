@@ -1,16 +1,19 @@
 # Plan — from scaffolding to a system that steers one accountant's practice
 
-Status: **for the owner's review, 2026-10-04.** Nothing here is built or moved yet. Decisions
-are marked **Q1 … Q13** (Part E). Once approved, Part A runs first and this file is absorbed
-into `BUILD.md` and deleted, as Part A requires.
+Status: **approved by the owner, 2026-10-04** (Q1–Q10 decided, Q11–Q12 open, Q13 retired;
+Part E). Part A is running. Part D is drafted and will be redrafted once more with the owner's
+documents on the semantic review. When Part A ends, this file is absorbed into `BUILD.md` and
+deleted.
 
 ## Why this plan, in one paragraph
 
 The value lies in **Part D**: reviewing the four graphs, their paths, nodes, edges, catalogs
 and articole against how one accountant actually keeps many clients, once SAGA C is
 integrated and the system has run on varied, real client months. Only then is it visible which
-parts are the engine and which were scaffolding for discovering it, which gates catch errors
-and which are theatre, and what is missing to steer and speed the work. Parts A–C exist to get
+parts are the engine and which were scaffolding for discovering it, and where the **balance
+point** lies between the least friction and enough control: for the design as it is, for that
+design with adjustments not yet considered, and for alternative designs or modular
+replacements. Parts A–C exist to get
 there with **observation, not assumption**: A makes the repo say what is true now; B proves
 every articol against real SAGA C on synthetic data and starts measuring friction; C runs the
 system on real clients through the EU route. Each part hands the next a named input:
@@ -20,7 +23,7 @@ system on real clients through the EU route. Each part hands the next a named in
 | A — tidy | a repo a first-time agent understands; `SURFACE.md` |
 | B — SAGA C loops (synthetic) | every surface row **saga** or **out**; readers and generator true to SAGA; the evidence ledger, already running |
 | C — pilot (client data) | months of real operation on several client types, measured by the same ledger |
-| D — graph loops | a system with less friction and the missing pieces, change by change, each one measured |
+| D — graph loops | for each graph, the chosen design at its balance point of friction and control, compared against its adjustments and alternatives |
 
 ---
 
@@ -219,10 +222,12 @@ tenant with no translation.
 5. **Evidence ledger**: `python -m poarta_contabila.evidence <tenant|all> <period>` reads what
    the runtime already stores (`domain.answers`, `domain.jobs`, `domain.control_runs`,
    `domain.explained_rules`, the checkpointer) and reports per graph node and edge (visits),
-   per HITL kind (count, minutes to answer, approved unchanged / changed / refused), per
-   control (fired, disposition, ever pointed at a real difference), per articol (volume,
-   `needs_human` rate), per model role (calls, overridden, cost), and per firm-month (your
-   minutes, documents, days from arrival to Validare, close duration). Built before Loop 1;
+   per HITL kind (count, approved unchanged / changed / refused), per control (fired,
+   disposition, ever pointed at a real difference), per articol (volume, `needs_human` rate),
+   per model role (calls, overridden, cost), and per firm-month (documents, documents held for
+   a person, days from arrival to Validare). It measures the two sides Part D balances:
+   **friction** (questions asked, proposals changed, documents held) and **control** (errors a
+   gate caught, errors that got through). No minutes are recorded (Q10). Built before Loop 1;
    anything it cannot measure from stored data is added to what the runtime stores, not
    estimated.
 
@@ -258,98 +263,102 @@ is gated.
 
 ---
 
-## Part D — Graph loops: review the system against observed practice
+## Part D — Graph loops: the balance of friction and control
 
-This is where the plan's value is. By now the four graphs (`folder_triage`,
-`ingest_source_doc`, `reconcile_sink`, `monthly_close`), their 23+ articole, 27 HITL kinds and
-14+ controls have run on real practice. The review asks of every element: is it the engine,
-or scaffolding we needed to find the engine?
+**Draft, to be redrafted** with the owner's documents on what the semantic review implies.
+
+By now the four graphs (`folder_triage`, `ingest_source_doc`, `reconcile_sink`,
+`monthly_close`), their articole, HITL kinds and controls have run on real practice. The review
+does not count time saved. It asks, for each graph: **where is the balance point between the
+least friction and enough control**, and does a different design reach a better one?
 
 ### D1. Entry gate
 
 Part B ended (every row **saga** or **out**) and the pilot has at least three months on at least
-three client types in the ledger. Before that, a review of the graphs would be opinion.
+three client types in the ledger (Q12, open). Before that, a review would be opinion.
 
-### D2. Five lenses
+### D2. Two measures
 
-Each loop looks at **one graph through one lens**, with the ledger open.
+From the evidence ledger (B6.5), per graph, node, gate and articol:
 
-1. **Integrity of logic and intent.** Does every node do what its articol says, and every edge
-   read only stored fields (LAW; today §3.4)? Paths never taken, nodes never visited, states
-   reached that no articol names, gates that cannot close, articole whose stated intent and
-   observed path differ.
-2. **LangGraph practice.** State schemas minimal and typed; side effects after `interrupt()`
-   behind idempotency keys; subgraph and thread boundaries (`batch:` `job:` `recon:`
-   `close:`); checkpoint size and retention; retries and timeouts on model and SAGA calls;
-   fan-out (`Send`) for batches; the shape of interrupt payloads; replay and history used for
-   audit; **versioning**: what happens to threads in flight when a graph changes. Each finding
-   cites LangGraph's own documentation, read on the day (RESEARCH_LOG rule), not memory.
-3. **Friction against value — no theatre of control.** Every gate and question is classed
-   from the ledger:
-   - **catches**: has stopped a real error → keep, make it cheaper to answer;
-   - **earns**: rarely needed, cheap → keep, batch it;
-   - **theatre**: always approved unchanged, never caught anything → remove, auto-approve with
-     sampling, or fold into one exception list at close.
+- **Friction:** questions asked of a person, proposals the person changed, documents held for
+  a person, rework after a refusal.
+- **Control:** real errors a gate stopped, real errors that got through (found later in SAGA,
+  at close or in a filing), differences a control pointed at that mattered.
 
-   The law's own gates (Validare by a person, no FDB writes, models by role, client data only
-   on the EU route) are outside this lens.
-4. **Missing, for one accountant with many clients.** Candidates the ledger and your notes
-   will confirm or drop: a portfolio view (which client is behind, against which deadline);
-   filings due as a calendar; one review session that batches questions across clients;
-   drafted requests to a client for missing documents; work ordered by deadline and
-   materiality; answers you keep repeating promoted to explained rules; month-over-month
-   anomalies per client; next month's workload forecast.
-5. **Overstated.** What was built to discover the structure and now costs more than it
-   returns: model calls where a deterministic rule now suffices, controls that repeat SAGA's
-   own checks, catalog rows no client uses, HITL kinds that are one kind in practice,
-   `draft` machinery that never became `active`.
+A gate that is always approved unchanged and never stopped anything is friction with no
+control: theatre. A gate that stopped real errors is control, whatever it costs, until a
+cheaper design gives the same control.
 
-### D3. One loop
+### D3. Three comparisons, each read semantically
+
+For one graph at a time, the review places three designs on the same two measures, and reads
+each element for what it means in the work (does this node, edge, gate or articol do what its
+intent says, for the accountant and the client?), not only for its counts:
+
+1. **The design as it is.** Its balance point, from the ledger: which elements carry control,
+   which carry only friction, which paths are never taken, which articole say one thing and
+   do another.
+2. **The design with adjustments not yet considered.** What is missing for one accountant
+   with many clients (a portfolio view, filings as a calendar, one review session across
+   clients, drafted requests for missing documents, repeated answers promoted to rules,
+   anomalies per client) and what is overstated (model calls a rule now does, controls that
+   repeat SAGA's own, catalog rows no client uses, HITL kinds that are one in practice).
+3. **Alternatives and modular replacements.** A different split of the graph, a node replaced
+   by a module, a gate moved to close as one exception list, a stage done by SAGA itself;
+   LangGraph's own practice (state schemas, idempotent side effects after `interrupt()`,
+   thread boundaries, checkpoint retention, retries, fan-out, versioning of threads in flight)
+   cited from its documentation read on the day, not memory.
+
+The law's own gates (Validare by a person, no FDB writes, models by role, client data only on
+the EU route) are fixed points in every comparison, not candidates.
+
+### D4. One loop
 
 | Step | Who | What |
 |---|---|---|
-| 1. Pick | owner | one graph × one lens, ordered by where the ledger shows your time goes |
-| 2. Read | build agent | the ledger for that graph, the graph's code and catalog rows |
-| 3. Propose | build agent | changes ranked by your minutes saved per month and by risk; each names the metric it should move |
-| 4. Decide | owner | accept, reject or defer each; changes to topology, interrupt kinds or watched accounts are drafted as amendments (LAW; today §7) |
+| 1. Pick | owner | one graph, ordered by where the ledger shows the most friction or the weakest control |
+| 2. Read | build agent | the ledger for that graph, its code, its catalog rows |
+| 3. Compare | build agent | the three designs of D3 on friction and control, with the semantic reading of each element |
+| 4. Decide | owner | the design to move toward; changes to topology, interrupt kinds or watched accounts are drafted as amendments (LAW; today §7) |
 | 5. Build | build agent | one WP per change, behind a catalog flag where it can be |
-| 6. Measure | runtime | next month's ledger: did the metric move, did no real error get through |
+| 6. Measure | runtime | the next months' ledger: did friction fall with control held, or control rise with friction held |
 
-### D4. Rules that keep it honest
+### D5. Rules that keep it honest
 
-1. A change ships with the metric it should move; one that does not move it is reverted.
-2. A gate that has ever caught a real error is removed only by your explicit decision.
-3. One graph × one lens per loop; findings for other lenses go to the backlog.
-4. Additions face the same test as removals: a missing piece is added when the ledger or your
-   notes show the time it saves.
+1. A change names the side it should move (friction down, or control up) and the side it must
+   hold; one that misses either is reverted.
+2. A gate that has ever stopped a real error is removed only by the owner's explicit decision.
+3. One graph per loop; findings for other graphs go to the backlog.
+4. Additions face the same test as removals.
 5. No change makes the system keep books, or lets a model decide a gate (LAW).
 
-### D5. When it ends
+### D6. When it ends
 
-Every graph has been through every lens once, and your minutes per client-month have reached
-the target you set (Q13). After that it becomes the practice's normal cycle: one graph loop a
-month on the latest ledger.
+Every graph has been compared in all three ways and the owner has chosen its design. After
+that, a graph loop runs whenever the ledger shows a graph has moved off its balance point.
 
 ---
 
 ## Part E — Order and decisions
 
 Order: Part A (two build sessions; your review of `LAW.md`) → Loop 0 (you) → B6 kit and
-evidence ledger → Loops 1 … n → Part C pilot (once WP-D4 is decided) → Part D loops. Part A
+evidence ledger → Loops 1 … n → Part C pilot (once WP-D4 is decided) → Part D loops.
+Decided by the owner on 2026-10-04 in the decision worksheet. Part A
 does not wait for Loop 0, and Loop 0 does not wait for Part A.
 
-| # | Decision | Recommendation |
+| # | Decision | Decided |
 |---|---|---|
-| Q1 | Tidy before the loop program | yes |
-| Q2 | `LAW.md`: amendments folded into rules with stable ids, history only in git | yes; you review the text before it replaces `00_LAW.md` |
+| Q1 | Tidy before the loop program | yes: tidy first, then the loop kit |
+| Q2 | `LAW.md`: amendments folded into rules with stable ids, history only in git | yes: amendments folded in, stable rule ids, history in git; the owner reviews `LAW.md` before it replaces `00_LAW.md` |
 | Q3 | Delete `docs/BUILD_DONE.md`, `docs/CATALOG_GAPS.md`, `annex/`, `docs/harvest/` (tag `pre-tidy` keeps them) | yes, after the harvest's unbuilt items are in `SURFACE.md` |
-| Q4 | WP numbers continue (WP-76 …) rather than restart | continue |
-| Q5 | `catalog/60_harvest/` renamed (e.g. `60_practice/`) | yes, or keep the name |
-| Q6 | Client-type matrix = the five synthetic firms; others added as **possible** rows | yes; add any client type you know is coming |
-| Q7 | Slices with no XML mouth (expenses, bonuri, payroll, fees): keyed by you from a list, or wait for `nota_nc_dbf` | keyed in loops; decide the DBF mouth after Loop 5 |
-| Q8 | Your time: one SAGA C session per loop, 10–30 documents per firm-month at first | confirm, or set the budget |
+| Q4 | WP numbers continue (WP-76 …) rather than restart | continue from WP-76 |
+| Q5 | `catalog/60_harvest/` renamed (e.g. `60_practice/`) | rename to `60_practice/` |
+| Q6 | Client-type matrix = the five synthetic firms; others added as **possible** rows | the five synthetic firms; others as **possible** rows |
+| Q7 | Slices with no XML mouth (expenses, bonuri, payroll, fees): keyed by you from a list, or wait for `nota_nc_dbf` | keyed by the owner from a printed list; the DBF mouth decided after Loop 5 |
+| Q8 | Your time: one SAGA C session per loop, 10–30 documents per firm-month at first | one SAGA C session per loop, 10–30 documents per firm-month |
 | Q9 | Language: English prose, Romanian fiscal terms | keep |
-| Q10 | The evidence ledger is built before Loop 1 and records your minutes per question | yes |
-| Q11 | Pilot: which 3–5 clients, from when (waits for WP-D4) | you choose, after Part B's first slices |
-| Q12 | Part D's entry gate: Part B ended + ≥3 pilot months on ≥3 client types | yes |
-| Q13 | Target: your minutes per client-month (sets when Part D ends) | set after the first pilot month shows today's figure |
+| Q10 | The evidence ledger: when, and what it records | built before Loop 1, counts and outcomes only, **no minutes**: Part D balances friction and control, not time saved |
+| Q11 | Pilot: which 3–5 clients, from when (waits for WP-D4) | open (waits for WP-D4) |
+| Q12 | Part D's entry gate: Part B ended + ≥3 pilot months on ≥3 client types | open; proposed: Part B ended + ≥3 pilot months on ≥3 client types |
+| Q13 | A time target for Part D | retired: Part D ends at the balance point (D6), not at a time target |
