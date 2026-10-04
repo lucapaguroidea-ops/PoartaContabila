@@ -29,6 +29,7 @@ done 2026-10-04) made the repo say what is true now. Approved by the owner on 20
 | WP-78 | todo | — | Evidence ledger (B6 item 5), before Loop 1 |
 | WP-79 | todo | — | Loop kit: `loops prepare` / `loops read` (B6 item 2) |
 | WP-80 | todo | WP-03, WP-79 | Loop 1: RO e-Factura sales + purchases, bank settlement (B5) |
+| WP-81 | todo | WP-80 | Surface review: a `class` column and the owner's review worksheet, after Loop 0 and the first loops |
 | WP-14 | parked | — | Bonuri through an accounting note (`bon_via_nota`, ArticolBon); Loop 5 |
 | WP-15 | parked | — | A read-only SAGA database copy as an eye (copy-firm test §9) |
 | WP-16 | parked | — | Agent Validare (L11) |
@@ -81,7 +82,7 @@ A loop takes **one slice**: a handful of rows, one or two client types, two or t
 | 6. Read | build agent | exports become the eye: reconcile + close against them |
 | 7. Compare | build agent | three diffs: generator ↔ SAGA (did SAGA book what we meant?), SAGA export ↔ our reader (did we read it right?), our simulated `Book` ↔ SAGA (does the generator's SAGA model match SAGA?) |
 | 8. Review | owner | the gap list: each proposed row approved as `draft`, or `out`, or deferred |
-| 9. Record | runtime | the loop's evidence ledger (B6, item 5): every question you answered, how long it took, whether you changed the proposal, every control that fired and what you did with it |
+| 9. Record | runtime | the loop's evidence ledger (B6, item 5): every question you answered, whether you changed the proposal, every control that fired and what you did with it |
 | 10. Close | build agent | rows → **saga**; reader, generator and simulated book fixed to SAGA's truth; real exports of the test firm become fixtures (invented data) |
 
 Each loop improves five things at once: the ingestion (step 3 failures), the reading (step 7
@@ -281,6 +282,47 @@ that, a graph loop runs whenever the ledger shows a graph has moved off its bala
 | Q13 | A time target for Part D | retired: Part D ends at the balance point (D6), not at a time target |
 
 ## WP details
+
+### WP-81 Surface review (after Loop 0 and the first loops)
+
+Owner, 2026-10-04: the review waits for loop evidence, so it judges the rows on what SAGA and
+the ledger showed, not only on the catalog's own reasons. A surface state says where a row
+stands; the review says what kind of problem keeps it from **saga**.
+
+1. **A `class` column** on every row that is not **saga** or **out**, in `SURFACE.md`:
+
+   | Class | Means | Fixed by | Decides |
+   |---|---|---|---|
+   | mechanical | the meaning is right; code, a route or a format is missing | building it | nobody: it is work |
+   | waiting | the meaning is right; blocked on an event (SAGA proof, a decision, the EU route, live models) | that event | owner / SAGA |
+   | structural | the graph has no place for it: no node asks, the path never binds it, the gate cannot fire | a graph or logic change (L46) | owner, from domain knowledge |
+   | semantic | the catalog's meaning does not match practice: superseded, duplicated, never needed, or SAGA booked something else | a change of meaning, a merge, or **out** | owner, from domain knowledge |
+
+   First pass written by the build agent from each row's reason and the loops' three diffs (B3
+   step 7: reader ↔ export and simulated book ↔ SAGA = mechanical; generator ↔ SAGA =
+   semantic) and the evidence ledger (a question always answered alike, a gate that never
+   stops anything = structural); the owner confirms or corrects; the confirmed class is
+   recorded in `surface/` beside `out.yaml`, and `surface.py` shows it.
+2. **The review as a worksheet** (as for the plan decisions and the LAW review): only the
+   structural and semantic rows, each with its question, its evidence, the options (keep /
+   move to node X / merge with Y / **out**) and room for notes. Answers become `out.yaml`
+   rows, catalog changes (`draft`), or graph changes (the owner's dated change, L46).
+
+First pass from the catalog alone (2026-10-04; 49 catalog rows **possible**), to be redone with
+the loops' evidence:
+
+| Rows | n | Class | The question |
+|---|---:|---|---|
+| `parteneri_xml`, `articole_xml`, `storno_intrare_xml`, `storno_iesire_xml` | 4 | waiting | none: Loop 0 §3 |
+| `nota_nc_dbf` | 1 | waiting | WP-D3 |
+| `recon_review_contest` | 1 | waiting | appears only with live model calls |
+| bonuri: `bon_cu_cui`, `bon_fara_cui`, `recon_pre_bon`, `recon_post_bon`, `job_bon`, `bon_fiscal`, `articol_bon`, `pre_bon_date_gross`, `post_bon_how`, `bon_via_nota` | 10 | waiting / semantic | do bonuri need their own path, or are they always evidence in a decont? (Loop 5) |
+| `stat_salarii`, `instructions`, `recon_vendor` | 3 | mechanical / semantic | payroll is evidence (L17): a route at all, or only the explained rule? |
+| `C2_waiting_for_xml`, `M1_9_4424_watched` (PASS and FAIL) | 4 | mechanical / structural | C2 needs the split answer to carry a number and date (an answer-shape change) |
+| `triage_place`, `triage_pair_efactura`, `triage_bon_fork`, `triage_extras` | 4 | structural | `folder_triage` decides by source document: are these articole needed, or is the source-doc table the triage logic? |
+| `which_cui`, `name_ambiguous`, `xml_pdf_pair`, `no_counterparty`, `request_devalidare`, `define_module`, `codit_combo`, `codit_premise`, `decision_menu`, `control_disposition`, `patch_maps` | 11 | structural | is there a real moment in the month for this question? If yes, which node asks it; if no, **out** |
+| `extras`, `extras_pdf`, `foreign_invoice`, `unknown`, `job_extras`, `define_class`, `define_articol`, `stmt_no_identity`, `bon_cui_unclear` | 9 | semantic | mostly **out**, unless refusing is wrong in practice (a statement without the tenant's CUI: refuse, or ask?) |
+| `P_prefile_duplicate`, `P_prefile_hard_failures` (FAIL) | 2 | structural | keep as a second guard, or a duplicate check? |
 
 ### WP-03 Invoice XML mouths
 - Exporter in `sinks/saga_xml.py`. Tags only from a successful copy-firm import.
