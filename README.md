@@ -69,6 +69,7 @@ documents (SPV zips, UBL XML, statement PDFs, expense reports)
 | `RESEARCH_LOG.md` | external formats and APIs, quoted from official pages with dates |
 | `catalog/` | the row-level law (`catalog/README.md`: which file to open) |
 | `docs/owner/` | the owner's guides: copy-firm test, checklist, EU route setup |
+| `loops/` | the SAGA C loops: each loop's definition, the files prepared for SAGA, SAGA's exports, what was read back |
 | `poarta_contabila/` | the package (`ARCHITECTURE.md` §11) |
 | `tests/`, `fixtures/` | pytest; synthetic documents, SAGA exports and scenarios (no client data, L36) |
 

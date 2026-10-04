@@ -26,8 +26,7 @@ done 2026-10-04) made the repo say what is true now. Approved by the owner on 20
 | id | status | depends | title |
 |---|---|---|---|
 | WP-03 | in-progress | — | Invoice XML mouths proven on a copy firm (Loop 0: `docs/owner/COPY_FIRM_TEST.md`) |
-| WP-79 | todo | — | Loop kit: `loops prepare` / `loops read` (B6 item 2) |
-| WP-80 | todo | WP-03, WP-79 | Loop 1: RO e-Factura sales + purchases, bank settlement (B5) |
+| WP-80 | todo | WP-03 | Loop 1: RO e-Factura sales + purchases, bank settlement (B5) |
 | WP-81 | todo | WP-80 | Surface review: a `class` column and the owner's review worksheet, after Loop 0 and the first loops |
 | WP-82 | todo | the loops end (Part B) | System map: deep-dive with the owner, then wireframes of the admin screens |
 | WP-83 | todo | WP-82 | System map: the system model exported as JSON from code and catalog, tested complete |
@@ -134,14 +133,17 @@ After Loop 4 and again after Loop 6, the owner reviews the watched accounts (LAW
 loops' evidence: 5124 and 4423/4424 may need to block for încasare and abroad firms
 (owner, 2026-10-04).
 
-#### B6. What gets built for the program (WP-79)
+#### B6. What gets built for the program
 
 1. **Surface states** (built, `poarta_contabila/surface.py`): the loop kit writes each loop's
    evidence file into `surface/evidence/` for the owner to approve.
-2. **Loop kit**: `python -m poarta_contabila.loops prepare <loop>` writes, per SAGA test firm,
-   the import folders in SAGA's file names and a keying list for documents with no mouth;
-   `… read <loop> <exports>` runs reconcile + close against the uploaded exports and writes
-   the three diffs and the proposed gap list.
+2. **Loop kit** (built, `poarta_contabila/loops.py`; layout in `loops/README.md`):
+   `uv run python -m poarta_contabila.loops prepare N` writes, per SAGA test firm, the firm's
+   settings, the keying list (opening balances and every line no package brings), the import
+   folders in SAGA's file names (one per import) and the exports we expect SAGA to show, plus
+   the owner's steps (`loops/loop-NN/prepared/STEPS.md`); `… read N` takes SAGA's real exports as the eye, runs reconcile and
+   close against them, and writes `loops/loop-NN/read/REPORT.md` (the three comparisons, the gap list with each
+   item's class, the evidence ledger) and one evidence draft per firm for the owner to approve.
 3. **Readers pinned to real exports**: each loop's real SAGA exports become fixtures; the
    readers' tests run on them.
 4. **Simulated book calibrated**: `poarta_contabila/synthetic/books.py` renderers checked against the same real

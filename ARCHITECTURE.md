@@ -255,6 +255,7 @@ poarta_contabila/
   scenarios.py         # YAML scenarios (fixtures/scenarios/) over HTTP, simulated SAGA agent
   surface.py           # the four surface states; generates SURFACE.md (with coverage.py)
   evidence.py          # the evidence ledger of a firm-month (friction and control)
+  loops.py             # the loop kit: files to a SAGA C test firm, its exports read back (loops/)
 ```
 
 No ReAct supervisor. No `Journal.post`.
