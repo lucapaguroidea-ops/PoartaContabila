@@ -1,0 +1,44 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Facturi>
+  <Factura>
+    <Antet>
+      <FurnizorNume>SINTETIC ALFA SRL</FurnizorNume>
+      <FurnizorCIF>1001012</FurnizorCIF>
+      <FurnizorNrRegCom />
+      <FurnizorIBAN />
+      <ClientNume>CLIENT ALFA SRL</ClientNume>
+      <ClientCIF>20010211</ClientCIF>
+      <FacturaNumar>SN1 2605004</FacturaNumar>
+      <FacturaData>09.05.2026</FacturaData>
+      <FacturaScadenta />
+      <FacturaTaxareInversa>Nu</FacturaTaxareInversa>
+      <FacturaTVAIncasare>Nu</FacturaTVAIncasare>
+      <FacturaMoneda>RON</FacturaMoneda>
+    </Antet>
+    <Detalii>
+      <Continut>
+        <Linie>
+          <LinieNrCrt>1</LinieNrCrt>
+          <Descriere>Carte tiparita</Descriere>
+          <UM>H87</UM>
+          <Cantitate>1.000</Cantitate>
+          <Pret>2989.00</Pret>
+          <Valoare>2989.00</Valoare>
+          <ProcTVA>11</ProcTVA>
+          <TVA>328.79</TVA>
+        </Linie>
+        <Linie>
+          <LinieNrCrt>2</LinieNrCrt>
+          <Descriere>Instruire personal</Descriere>
+          <UM>H87</UM>
+          <Cantitate>1.000</Cantitate>
+          <Pret>284.50</Pret>
+          <Valoare>284.50</Valoare>
+          <ProcTVA>21</ProcTVA>
+          <TVA>59.75</TVA>
+        </Linie>
+      </Continut>
+    </Detalii>
+    <FacturaID>80494f95-4901-4991-9d26-70b9cab0c2ab</FacturaID>
+  </Factura>
+</Facturi>

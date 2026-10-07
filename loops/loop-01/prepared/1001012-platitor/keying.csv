@@ -1,0 +1,11 @@
+period,day,journal,number,explanation,debit,credit,amount,partner,partner_cui
+2026-05,,sold inițial,,sold inițial,,1012,200.00,,
+2026-05,,sold inițial,,sold inițial,,117,24800.00,,
+2026-05,,sold inițial,,sold inițial,5121.01,,25000.00,,
+2026-05,2026-05-10,Banca,SAL2605,Plata salarii 2026-05,421,5121.01,2937.28,,
+2026-05,2026-05-10,Salarii,SAL2605,Salarii brute,641,421,5021.00,,
+2026-05,2026-05-10,Salarii,SAL2605,CAS,421,4315,1255.25,,
+2026-05,2026-05-10,Salarii,SAL2605,CASS,421,4316,502.10,,
+2026-05,2026-05-10,Salarii,SAL2605,Impozit salarii,421,444,326.37,,
+2026-05,2026-05-10,Salarii,SAL2605,CAM,646,436,112.97,,
+2026-05,2026-05-28,Banca,COM2605,Comision administrare cont,627,5121.01,12.50,,

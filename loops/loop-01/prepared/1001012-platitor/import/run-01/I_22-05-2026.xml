@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Incasari>
+  <Linie>
+    <Data>22.05.2026</Data>
+    <Numar>IN260507</Numar>
+    <Suma>3662.04</Suma>
+    <Cont>5121.01</Cont>
+    <Explicatie>Incasare CLIENT ALFA SRL SN1 2605004</Explicatie>
+    <FacturaNumar>SN1 2605004</FacturaNumar>
+    <CodFiscal>20010211</CodFiscal>
+  </Linie>
+</Incasari>

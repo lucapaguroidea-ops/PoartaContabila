@@ -1,0 +1,34 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Facturi>
+  <Factura>
+    <Antet>
+      <FurnizorNume>FURNIZOR ALFA SRL</FurnizorNume>
+      <FurnizorCIF>20010114</FurnizorCIF>
+      <FurnizorNrRegCom />
+      <FurnizorIBAN />
+      <ClientNume>SINTETIC ALFA SRL</ClientNume>
+      <ClientCIF>1001012</ClientCIF>
+      <FacturaNumar>FA 260501</FacturaNumar>
+      <FacturaData>03.05.2026</FacturaData>
+      <FacturaScadenta />
+      <FacturaTaxareInversa>Nu</FacturaTaxareInversa>
+      <FacturaTVAIncasare>Nu</FacturaTVAIncasare>
+      <FacturaMoneda>RON</FacturaMoneda>
+    </Antet>
+    <Detalii>
+      <Continut>
+        <Linie>
+          <LinieNrCrt>1</LinieNrCrt>
+          <Descriere>Carti tehnice</Descriere>
+          <UM>H87</UM>
+          <Cantitate>1.000</Cantitate>
+          <Pret>712.99</Pret>
+          <Valoare>712.99</Valoare>
+          <ProcTVA>11</ProcTVA>
+          <TVA>78.43</TVA>
+        </Linie>
+      </Continut>
+    </Detalii>
+    <FacturaID>26937552-f845-4d12-bd9e-6615c19dac59</FacturaID>
+  </Factura>
+</Facturi>

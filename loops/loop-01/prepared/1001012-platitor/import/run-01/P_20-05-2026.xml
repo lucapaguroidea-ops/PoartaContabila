@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Plati>
+  <Linie>
+    <Data>20.05.2026</Data>
+    <Numar>OP260506</Numar>
+    <Suma>791.42</Suma>
+    <Cont>5121.01</Cont>
+    <Explicatie>Plata FURNIZOR ALFA SRL fact FA 260501</Explicatie>
+    <FacturaNumar>FA 260501</FacturaNumar>
+    <CodFiscal>20010114</CodFiscal>
+  </Linie>
+</Plati>

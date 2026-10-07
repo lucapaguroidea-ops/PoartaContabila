@@ -5,7 +5,7 @@ note: >-
   plătitor firm: three purchase invoices and two sales invoices from SPV, one bank statement
   that pays one purchase and collects one sale (our incasare / plata mouths), a salary and a
   bank fee (keyed by hand: no mouth). Small on purpose (BUILD.md B4, rule 4): volume is Loop 10.
-status: proposed   # the owner writes "approved" (BUILD.md B3, step 1); then `loops prepare 1`
+status: approved   # owner, 2026-10-07
 target_rows:
   - source_doc:ro_efactura_ubl
   - source_doc:extras_statement_pdf
