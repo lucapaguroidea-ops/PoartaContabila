@@ -26,7 +26,7 @@ done 2026-10-04) made the repo say what is true now. Approved by the owner on 20
 | id | status | depends | title |
 |---|---|---|---|
 | WP-03 | in-progress | — | Invoice XML mouths proven on a copy firm (Loop 0: `docs/owner/COPY_FIRM_TEST.md`) |
-| WP-80 | todo | WP-03 | Loop 1: RO e-Factura sales + purchases, bank settlement (B5) |
+| WP-80 | todo | WP-03 | Loop 1: RO e-Factura sales + purchases, bank settlement (B5); proposed in `loops/loop-01/loop.yaml`, waits for the owner's approval |
 | WP-81 | todo | WP-80 | Surface review: a `class` column and the owner's review worksheet, after Loop 0 and the first loops |
 | WP-82 | todo | the loops end (Part B) | System map: deep-dive with the owner, then wireframes of the admin screens |
 | WP-83 | todo | WP-82 | System map: the system model exported as JSON from code and catalog, tested complete |

@@ -1,0 +1,46 @@
+loop: 1
+slice: RO e-Factura sales and purchases, settled through the bank (plătitor TVA lunar)
+note: >-
+  The first SAGA C loop after Loop 0 (the copy-firm test). One small standard month of the
+  plătitor firm: three purchase invoices and two sales invoices from SPV, one bank statement
+  that pays one purchase and collects one sale (our incasare / plata mouths), a salary and a
+  bank fee (keyed by hand: no mouth). Small on purpose (BUILD.md B4, rule 4): volume is Loop 10.
+status: proposed   # the owner writes "approved" (BUILD.md B3, step 1); then `loops prepare 1`
+target_rows:
+  - source_doc:ro_efactura_ubl
+  - source_doc:extras_statement_pdf
+  - source_doc:sink_rj
+  - source_doc:sink_balanta_saga
+  - job_kind:job_ro_efactura
+  - job_kind:job_extras_line
+  - articol:ro_efactura_inbound
+  - articol:ro_efactura_outbound
+  - articol:extras_statement
+  - articol:recon_pre_standard
+  - articol:recon_pre_extras
+  - articol:recon_post_standard
+  - articol:close_standard
+  - recon_profile:pre_doc_nr_date
+  - recon_profile:pre_extras_date_gross
+  - recon_profile:post_doc_how
+  - write_module:intrare_factura_xml
+  - write_module:iesire_factura_xml
+  - write_module:incasare_xml
+  - write_module:plata_xml
+  - hitl:v3_approve
+  - hitl:wait_validare
+  - close_kind:close_standard
+  - control:C1_outbound_complete:PASS
+  - control:M1_1_payables_tie:PASS
+  - control:M1_2_receivables_tie:PASS
+exit:
+  - every target row is driven by the run and proposed saga in the evidence draft
+  - meaning, reader and model comparisons are empty, or each difference is in the gap list with its class and the owner's decision
+  - every document reaches acked or already_in_sink
+  - the month closes not material
+runs:
+  - firm: platitor
+    period: 2026-05
+    seed: 0
+    answers:
+      v2_close: file
