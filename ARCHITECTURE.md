@@ -256,9 +256,26 @@ poarta_contabila/
   surface.py           # the four surface states; generates SURFACE.md (with coverage.py)
   evidence.py          # the evidence ledger of a firm-month (friction and control)
   loops.py             # the loop kit: files to a SAGA C test firm, its exports read back (loops/)
+  core/                # the deterministic core both runtimes share: re-exports only, no stores, no
+                       #   runtime stack; CORE_VERSION, tagged core-v<version>
 ```
 
 No ReAct supervisor. No `Journal.post`.
+
+**The core boundary** (`poarta_contabila/core/`). The module review's direction (approved
+by the owner, 2026-10-14) keeps one deterministic core for this runtime and DinamicaAgenti's.
+`poarta_contabila.core` re-exports it:
+- types and the catalog loader;
+- the readers and the SAGA renderer;
+- PRE / POST / settle;
+- the period difference and controls, explained rules, CO.DiT, the filing items;
+- the synthetic firms.
+
+The other runtime pins it by tag (`core-v<CORE_VERSION>`) instead of re-writing it. Every name
+is the very object of its home module, so this runtime's behaviour does not change. Importing
+the core pulls no graph, HTTP, database driver or model client, and stores stay with each
+runtime (`tests/test_core.py`). The core is extracted into its own package after the SAGA C
+loops.
 
 ## 12. Jev packs
 
