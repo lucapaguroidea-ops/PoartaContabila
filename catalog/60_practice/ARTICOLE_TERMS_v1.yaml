@@ -1,0 +1,103 @@
+# ARTICOLE_TERMS_v1.yaml
+# When each filing is due: one term per form, quoted from the notes library's declarations
+# register at a pinned commit (L40: source, as_of, certainty), never written from memory.
+# Read by poarta_contabila/calendar.py (core.calendar). The non-working days the term moves over
+# are pinned per year in 10_lege_firma/ARTICOLE_NONWORKING_v1.yaml.
+#
+# Term grammar (closed):
+#   months_after: months after the end of the filing's period (1 = the next month)
+#   day: N | last  (a day that does not exist in that month is refused, never moved)
+#   frequency: lunar | from_axis   (from_axis: the CO.DiT axis named in frequency_axis decides
+#              lunar or trimestrial; unset refuses)
+#   only_if: operations_in_period  (the item is conditional: owed only for a period with such
+#            operations, which the calendar does not know)
+#   shift: next_working_day  (the register's general rule; see register.rule_quote)
+
+file_schema: "1"
+catalog: ArticoleTerms
+status: draft
+valid_from: "2026-01-01"
+
+register:
+  library: 8REPOASTEMPLATE_NoteContabile
+  path: referinte/declaratii.md
+  commit: 5ca87f5cc540aa695313a5fe110e6c2bd6f0742f
+  verified_at: "2026-07-15"
+  rule_quote: "termenul care cade într-o zi nelucrătoare se mută pe prima zi lucrătoare următoare"
+
+terms:
+
+  - term_id: term_d300
+    form: D300
+    months_after: 1
+    day: 25
+    frequency: from_axis
+    frequency_axis: tva_period
+    shift: next_working_day
+    quote: "**25** a lunii următoare perioadei"
+    certainty: de_confirmat
+
+  - term_id: term_d394
+    form: D394
+    months_after: 1
+    day: 30
+    frequency: from_axis
+    frequency_axis: tva_period
+    shift: next_working_day
+    quote: "**30** a lunii următoare perioadei"
+    certainty: de_confirmat
+    note: "Day 30 does not exist in February: refused until the register says what applies."
+
+  - term_id: term_d406
+    form: D406
+    months_after: 1
+    day: last
+    frequency: from_axis
+    frequency_axis: tva_period
+    shift: next_working_day
+    quote: "**ultima zi calendaristică** a lunii următoare perioadei"
+    certainty: de_confirmat
+
+  - term_id: term_d100
+    form: D100
+    months_after: 1
+    day: 25
+    frequency: from_axis
+    frequency_axis: d100_period
+    shift: next_working_day
+    quote: "**25** a lunii următoare perioadei"
+    certainty: de_confirmat
+
+  - term_id: term_d112
+    form: D112
+    months_after: 1
+    day: 25
+    frequency: from_axis
+    frequency_axis: d112_period
+    shift: next_working_day
+    quote: "**25** a lunii următoare"
+    certainty: de_confirmat
+
+  - term_id: term_d301
+    form: D301
+    months_after: 1
+    day: 25
+    frequency: lunar
+    only_if: operations_in_period
+    shift: next_working_day
+    quote: "**25** a lunii următoare celei în care ia naștere exigibilitatea (art. 326 CF)"
+    certainty: de_confirmat
+
+  - term_id: term_d390
+    form: D390
+    months_after: 1
+    day: 25
+    frequency: lunar
+    only_if: operations_in_period
+    shift: next_working_day
+    quote: "**25** a lunii următoare"
+    certainty: de_confirmat
+
+never:
+  - a_term_written_from_memory
+  - moving_a_day_that_does_not_exist

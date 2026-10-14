@@ -245,6 +245,7 @@ poarta_contabila/
   catalog.py flux.py hitl.py jsonlogic.py     # Catalog Cale loader, matches(), typed HITL
   types/               # closed domain types; money and fiscal dates are strings
   jobs.py packages.py registry.py storage.py answers.py rules.py codit.py filings.py
+  calendar.py          # when each owed filing is due: register terms + pinned non-working days
   extract/             # XML first (ubl.py); statements (statement.py, document_ai.py, gemini.py)
   recon/               # PRE / POST / settle (deterministic, no model)
   period_diff.py       # Layer 1 + ArticoleControls; not a ledger
@@ -276,6 +277,23 @@ is the very object of its home module, so this runtime's behaviour does not chan
 the core pulls no graph, HTTP, database driver or model client, and stores stay with each
 runtime (`tests/test_core.py`). The core is extracted into its own package after the SAGA C
 loops.
+
+**The calendar** (`calendar.py`, in the core). `obligations(cat, axes, period)` lists every
+filing the CO.DiT axes owe whose filing period ends in that month, with its due date.
+- **The term:** a row of `ArticoleTerms`, quoted from the notes library's declarations register
+  at a pinned commit.
+- **The frequency:** the CO.DiT axes `tva_period`, `d100_period` and `d112_period`.
+- **The move:** a due date on a non-working day moves to the next working day, over the days
+  `ArticoleNonWorking` pins per year with their source.
+
+Each owed filing gets exactly one item or one refusal with its reason. The calendar refuses in
+these cases:
+- no term for the form;
+- the frequency axis is unset;
+- the month has no such day;
+- no non-working days are pinned for the year.
+
+No year is pinned yet, so on the real catalog every date is refused until one is added.
 
 ## 12. Jev packs
 

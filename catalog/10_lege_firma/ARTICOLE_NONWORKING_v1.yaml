@@ -1,0 +1,18 @@
+# ARTICOLE_NONWORKING_v1.yaml
+# The non-working days a due date moves over, pinned per year from an official source (L40).
+# No year is pinned yet: neither the legal corpus nor the notes library lists them (checked
+# 2026-10-14), so the calendar refuses every year until a row is added here with its source.
+# A year row lists its weekly rest days and its dated non-working days; nothing is assumed.
+#
+# Row shape:
+#   - year_id: nonworking_ro_<year>
+#     year: <year>
+#     weekly_rest: [saturday, sunday]      # as the source states
+#     days: ["<year>-MM-DD", ...]           # every other non-working day of the year
+#     provenance: {source: ..., as_of: ..., certainty: confirmed | de_confirmat}
+
+file_schema: "1"
+catalog: ArticoleNonWorking
+status: draft
+
+years: []

@@ -31,7 +31,7 @@ done 2026-10-04) made the repo say what is true now. Approved by the owner on 20
 | WP-82 | todo | the loops end (Part B) | System map: deep-dive with the owner, then wireframes of the admin screens |
 | WP-83 | todo | WP-82 | System map: the system model exported as JSON from code and catalog, tested complete |
 | WP-84 | todo | WP-83 | System map: the read-only `/system` page, then the surface and ledger overlays |
-| WP-86 | todo | the notes library's register pinned, a pinned non-working-day list | `core.calendar`: every owed obligation's due date from CO.DiT, dated profile facts and the notes library's declarations register at a pinned commit (R22) |
+| WP-86 | in-progress | a pinned non-working-day list (none in the legal corpus or the notes library yet) | `core.calendar`: every owed filing's due date from the register's terms at a pinned commit and the CO.DiT frequency axes (R22). Built; waits on a sourced non-working-day year in `ArticoleNonWorking` and the owner reading one synthetic quarter against their diary |
 | WP-87 | todo | WP-86 | Filing items open with their due date; a stale register pin is refused (R21, R23) |
 | WP-88 | todo | WP-87 | The portfolio calendar: a read-only page of every tenant's obligations by due date and mode, no client data beyond the tenant key (R45) |
 | WP-89 | todo | WP-86 | Provenance by lock set: every proposal, verdict, tie-out and calendar entry records the core version, library commit and corpus release; an impact query by lock set (R36) |

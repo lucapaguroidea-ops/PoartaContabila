@@ -19,6 +19,15 @@ modules it is drawn from. A name enters the core only from a declared home modul
 from __future__ import annotations
 
 from poarta_contabila import synthetic
+from poarta_contabila.calendar import (
+    CalendarError,
+    CalendarResult,
+    NonWorkingYear,
+    Obligation,
+    load_nonworking,
+    obligations,
+    terms_by_form,
+)
 from poarta_contabila.catalog import (
     Catalog,
     CatalogError,
@@ -154,11 +163,11 @@ from poarta_contabila.types import (
     cui_key,
 )
 
-CORE_VERSION = "0.1.0"
+CORE_VERSION = "0.2.0"
 CORE_TAG = f"core-v{CORE_VERSION}"
 
 # The review register's shared-core modules (its §2) → their home modules here.
-# core.calendar is WP-86; core.pins, core.provenance, core.tenancy and core.runs are law or
+# core.pins, core.provenance, core.tenancy and core.runs are law or
 # runtime today and enter when they have deterministic code to share.
 CORE_MODULES: dict[str, tuple[str, ...]] = {
     "core.types": ("poarta_contabila.types",),
@@ -179,6 +188,7 @@ CORE_MODULES: dict[str, tuple[str, ...]] = {
     "core.rules": ("poarta_contabila.rules",),
     "core.codit": ("poarta_contabila.codit",),
     "core.filings": ("poarta_contabila.filings",),
+    "core.calendar": ("poarta_contabila.calendar",),
     "core.synthetic": ("poarta_contabila.synthetic",),
 }
 CORE_MODULES_FLAT: tuple[str, ...] = tuple(m for ms in CORE_MODULES.values() for m in ms)
@@ -317,6 +327,14 @@ __all__ = [
     "books_gate",
     "due_filings",
     "views",
+    # core.calendar
+    "CalendarError",
+    "CalendarResult",
+    "NonWorkingYear",
+    "Obligation",
+    "load_nonworking",
+    "obligations",
+    "terms_by_form",
     # core.synthetic
     "synthetic",
 ]
