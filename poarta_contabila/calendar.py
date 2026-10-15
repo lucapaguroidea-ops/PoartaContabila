@@ -24,6 +24,7 @@ from typing import Any
 
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.filings import due_filings
+from poarta_contabila.lockset import LockSet, lock_set
 
 WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
 FREQUENCIES = ("lunar", "trimestrial")
@@ -58,6 +59,7 @@ class Obligation:
     certainty: str
     term_id: str
     source: str
+    lock: LockSet  # the pins this entry was computed under (core.provenance)
 
 
 @dataclass
@@ -157,6 +159,7 @@ def obligations(
         raise CalendarError(f"period must be YYYY-MM, not {period!r}")
     years = load_nonworking(cat) if nonworking is None else nonworking
     terms = terms_by_form(cat)
+    lock = lock_set(cat)
     result = CalendarResult(period=period)
     for row in due_filings(cat, axes):
         fid, form = row["filing_id"], row["form"]
@@ -197,6 +200,7 @@ def obligations(
                 certainty="confirmed" if certainties == {"confirmed"} else "de_confirmat",
                 term_id=term["term_id"],
                 source=_source(cat, term),
+                lock=lock,
             )
         )
     return result

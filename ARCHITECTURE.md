@@ -246,6 +246,7 @@ poarta_contabila/
   types/               # closed domain types; money and fiscal dates are strings
   jobs.py packages.py registry.py storage.py answers.py rules.py codit.py filings.py
   calendar.py          # when each owed filing is due: register terms + pinned non-working days
+  lockset.py           # the pins a result was read under (core, library commit, corpus); impact query
   extract/             # XML first (ubl.py); statements (statement.py, document_ai.py, gemini.py)
   recon/               # PRE / POST / settle (deterministic, no model)
   period_diff.py       # Layer 1 + ArticoleControls; not a ledger
@@ -294,6 +295,12 @@ these cases:
 - no non-working days are pinned for the year.
 
 No year is pinned yet, so on the real catalog every date is refused until one is added.
+
+**The lock set** (`lockset.py`, in the core). Every calendar entry records the pins it was
+computed under: `CORE_VERSION`, the register's full commit, and the legal corpus release.
+The corpus release is `None` until a corpus is pinned here. `impacted(entries, library=…)`
+returns exactly the entries that read a given pin, so a corrected or revoked value finds its
+consumers.
 
 ## 12. Jev packs
 

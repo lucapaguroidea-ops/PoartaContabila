@@ -71,6 +71,7 @@ from poarta_contabila.extract.ubl import (
 )
 from poarta_contabila.filings import FilingView, books_gate, due_filings, views
 from poarta_contabila.flux import MatchContext, match_articole
+from poarta_contabila.lockset import LockSet, LockSetError, impacted, lock_set
 from poarta_contabila.packages import PackageRow, write_once
 from poarta_contabila.period_diff import (
     ExpectedJob,
@@ -163,11 +164,11 @@ from poarta_contabila.types import (
     cui_key,
 )
 
-CORE_VERSION = "0.2.0"
+CORE_VERSION = "0.3.0"
 CORE_TAG = f"core-v{CORE_VERSION}"
 
 # The review register's shared-core modules (its §2) → their home modules here.
-# core.pins, core.provenance, core.tenancy and core.runs are law or
+# core.pins, core.tenancy and core.runs are law or
 # runtime today and enter when they have deterministic code to share.
 CORE_MODULES: dict[str, tuple[str, ...]] = {
     "core.types": ("poarta_contabila.types",),
@@ -189,6 +190,7 @@ CORE_MODULES: dict[str, tuple[str, ...]] = {
     "core.codit": ("poarta_contabila.codit",),
     "core.filings": ("poarta_contabila.filings",),
     "core.calendar": ("poarta_contabila.calendar",),
+    "core.provenance": ("poarta_contabila.lockset",),
     "core.synthetic": ("poarta_contabila.synthetic",),
 }
 CORE_MODULES_FLAT: tuple[str, ...] = tuple(m for ms in CORE_MODULES.values() for m in ms)
@@ -335,6 +337,11 @@ __all__ = [
     "load_nonworking",
     "obligations",
     "terms_by_form",
+    # core.provenance
+    "LockSet",
+    "LockSetError",
+    "impacted",
+    "lock_set",
     # core.synthetic
     "synthetic",
 ]
