@@ -34,7 +34,7 @@ done 2026-10-04) made the repo say what is true now. Approved by the owner on 20
 | WP-86 | in-progress | a pinned non-working-day list (none in the legal corpus or the notes library yet) | `core.calendar`: every owed filing's due date from the register's terms at a pinned commit and the CO.DiT frequency axes (R22). Built; waits on a sourced non-working-day year in `ArticoleNonWorking` and the owner reading one synthetic quarter against their diary |
 | WP-87 | todo | WP-86 | Filing items open with their due date; a stale register pin is refused (R21, R23) |
 | WP-88 | todo | WP-87 | The portfolio calendar: a read-only page of every tenant's obligations by due date and mode, no client data beyond the tenant key (R45) |
-| WP-89 | todo | WP-86 | Provenance by lock set: every proposal, verdict, tie-out and calendar entry records the core version, library commit and corpus release; an impact query by lock set (R36) |
+| WP-90 | todo | — | Provenance by lock set on stored results: every proposal, verdict and tie-out records the lock set it was computed under (`lockset.LockSet`), and the impact query runs over the domain store (R36) |
 | WP-14 | parked | — | Bonuri through an accounting note (`bon_via_nota`, ArticolBon); Loop 5 |
 | WP-15 | parked | — | A read-only SAGA database copy as an eye (copy-firm test §9) |
 | WP-16 | parked | — | Agent Validare (L11) |
@@ -46,7 +46,7 @@ done 2026-10-04) made the repo say what is true now. Approved by the owner on 20
 
 Later loops (2 … n), the pilot and the graph loops get WP ids when they start.
 
-WP-86 … WP-89 and WP-D5 come from the module review's direction, approved by the owner on
+WP-86 … WP-88, WP-90 and WP-D5 come from the module review's direction, approved by the owner on
 2026-10-14 (repository `MASTER_1WORKCLIENTx3SYSTEMCONTA`, its direction file §3–§5): the first slice,
 obligations as data, on synthetic firms only, beside the loops and never ahead of them.
 
