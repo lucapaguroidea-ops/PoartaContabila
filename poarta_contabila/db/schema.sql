@@ -238,3 +238,12 @@ CREATE TABLE IF NOT EXISTS domain.triage_batches (
     at        timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS triage_batches_cui ON domain.triage_batches (cui, at);
+
+-- The lock set a stored result was computed under (core version, the notes library register's
+-- commit, the legal corpus release): proposals, verdicts and tie-outs (R36, lockset.py).
+-- NULL on rows written before lock sets were recorded.
+ALTER TABLE domain.jobs ADD COLUMN IF NOT EXISTS lock jsonb;
+ALTER TABLE domain.recon_verdicts ADD COLUMN IF NOT EXISTS lock jsonb;
+ALTER TABLE domain.close_snapshots ADD COLUMN IF NOT EXISTS lock jsonb;
+ALTER TABLE domain.control_runs ADD COLUMN IF NOT EXISTS lock jsonb;
+ALTER TABLE domain.close_runs ADD COLUMN IF NOT EXISTS lock jsonb;

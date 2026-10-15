@@ -247,6 +247,7 @@ poarta_contabila/
   jobs.py packages.py registry.py storage.py answers.py rules.py codit.py filings.py
   calendar.py          # when each owed filing is due: register terms + pinned non-working days
   lockset.py           # the pins a result was read under (core, library commit, corpus); impact query
+  provenance.py        # the lock set on stored proposals, verdicts and tie-outs; impact query over stores
   extract/             # XML first (ubl.py); statements (statement.py, document_ai.py, gemini.py)
   recon/               # PRE / POST / settle (deterministic, no model)
   period_diff.py       # Layer 1 + ArticoleControls; not a ledger
@@ -301,6 +302,18 @@ computed under: `CORE_VERSION`, the register's full commit, and the legal corpus
 The corpus release is `None` until a corpus is pinned here. `impacted(entries, library=…)`
 returns exactly the entries that read a given pin, so a corrected or revoked value finds its
 consumers.
+
+**Stored results carry it too** (`provenance.py`). At boot the runtime gives the stores the
+catalog's lock set. Each one writes it, as a `lock jsonb` column, on every new row:
+- `domain.jobs`: the proposals;
+- `domain.recon_verdicts`: the PRE / POST verdicts;
+- `domain.close_snapshots` and `domain.control_runs`: the tie-outs;
+- `domain.close_runs`: the close decision.
+
+A replayed write keeps the first lock set (L22). A close is decided again in place, so it takes
+the lock set it was last decided under. `impacted_records(runtime.records(), library=…)` lists
+the stored results of a pin, and `unlocked_records` lists rows written before lock sets were
+recorded. A register named without its full commit stops the boot (L24).
 
 ## 12. Jev packs
 

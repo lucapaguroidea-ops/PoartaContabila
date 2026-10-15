@@ -39,6 +39,7 @@ from poarta_contabila.codit import CoditError, next_period, v4_patch, v4_rules, 
 from poarta_contabila.hitl import ask
 from poarta_contabila.jev import V2Gate
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
+from poarta_contabila.provenance import lock_from, lock_json
 from poarta_contabila.rules import ExplainedRuleResume, check_explained_rule
 from poarta_contabila.sinks.saga_eye import SagaEye
 from poarta_contabila.types import Closed, Cui, Period, PeriodDiff, Slug
@@ -85,12 +86,19 @@ class CloseRun(Closed):
 @dataclass
 class InMemoryCloseStore:
     rows: dict[tuple[str, str], CloseRun] = field(default_factory=dict)
+    lock: Any = None  # the LockSet a close is decided under (provenance.py)
+    locks: dict[tuple[str, str], Any] = field(default_factory=dict)
 
     def get(self, cui: str, period: str) -> CloseRun | None:
         return self.rows.get((cui, period))
 
     def put(self, run: CloseRun) -> None:
         self.rows[(run.cui, run.period)] = run
+        self.locks[(run.cui, run.period)] = self.lock  # decided again: the latest pins
+
+    def locked(self) -> list[tuple[tuple[str, ...], Any]]:
+        """``((cui, period), lock set or None)`` per close run (provenance.py)."""
+        return [(k, self.locks.get(k)) for k in self.rows]
 
 
 class PostgresCloseStore:
@@ -100,6 +108,7 @@ class PostgresCloseStore:
         import psycopg
 
         self._dsn, self._psycopg = dsn, psycopg
+        self.lock: Any = None  # the LockSet a close is decided under (provenance.py)
 
     def get(self, cui: str, period: str) -> CloseRun | None:
         with self._psycopg.connect(self._dsn) as conn:
@@ -112,11 +121,26 @@ class PostgresCloseStore:
     def put(self, run: CloseRun) -> None:
         with self._psycopg.connect(self._dsn, autocommit=True) as conn:
             conn.execute(
-                "INSERT INTO domain.close_runs (cui, period, expected_set_hash, body)"
-                " VALUES (%s, %s, %s, %s) ON CONFLICT (cui, period) DO UPDATE"
-                " SET expected_set_hash = EXCLUDED.expected_set_hash, body = EXCLUDED.body",
-                (run.cui, run.period, run.expected_set_hash, run.model_dump_json()),
+                "INSERT INTO domain.close_runs (cui, period, expected_set_hash, body, lock)"
+                " VALUES (%s, %s, %s, %s, %s) ON CONFLICT (cui, period) DO UPDATE"
+                " SET expected_set_hash = EXCLUDED.expected_set_hash, body = EXCLUDED.body,"
+                " lock = EXCLUDED.lock",
+                (
+                    run.cui,
+                    run.period,
+                    run.expected_set_hash,
+                    run.model_dump_json(),
+                    lock_json(self.lock),
+                ),
             )
+
+    def locked(self) -> list[tuple[tuple[str, ...], Any]]:
+        """``((cui, period), lock set or None)`` per close run (provenance.py)."""
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT cui, period, lock FROM domain.close_runs ORDER BY cui, period"
+            ).fetchall()
+        return [((c, p), lock_from(lk)) for c, p, lk in rows]
 
 
 # ----- graph -----

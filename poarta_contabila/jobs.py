@@ -13,8 +13,9 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from poarta_contabila.provenance import lock_from, lock_json
 from poarta_contabila.types import JobRecord, TenantRef
 
 if TYPE_CHECKING:
@@ -63,6 +64,8 @@ class InMemoryJobStore:
 
     jobs: dict[tuple[str, str], JobRecord] = field(default_factory=dict)
     events: list[JobEvent] = field(default_factory=list)
+    lock: Any = None  # the LockSet a new job is proposed under (provenance.py)
+    locks: dict[str, Any] = field(default_factory=dict)
 
     def get(self, job_id: str) -> JobRecord:
         for job in self.jobs.values():
@@ -104,6 +107,7 @@ class InMemoryJobStore:
         if key in self.jobs:
             return EmitResult(self.jobs[key], created=False)
         self.jobs[key] = job
+        self.locks[job.job_id] = self.lock
         self.events.append(JobEvent(job.job_id, job.status, _now()))
         return EmitResult(job, created=True)
 
@@ -111,6 +115,10 @@ class InMemoryJobStore:
         """Every status event of the jobs of *cui* in *period*, oldest first."""
         ids = {j.job_id for j in self.for_period(cui, period)}
         return [e for e in self.events if e.job_id in ids]
+
+    def locked(self) -> list[tuple[tuple[str, ...], Any]]:
+        """``((job_id,), lock set or None)`` for every job (provenance.py)."""
+        return [((j.job_id,), self.locks.get(j.job_id)) for j in self.jobs.values()]
 
 
 class PostgresJobStore:
@@ -123,6 +131,7 @@ class PostgresJobStore:
 
         self._dsn = dsn
         self._psycopg = psycopg
+        self.lock: Any = None  # the LockSet a new job is proposed under (provenance.py)
         with psycopg.connect(dsn, autocommit=True) as conn:
             if reset:
                 conn.execute("DROP SCHEMA IF EXISTS domain CASCADE")
@@ -132,8 +141,9 @@ class PostgresJobStore:
         job = _new_job(pack, decision)
         with self._psycopg.connect(self._dsn, autocommit=True) as conn:
             row = conn.execute(
-                "INSERT INTO domain.jobs (job_id, tenant_cui, source_hash, period, status, body)"
-                " VALUES (%s, %s, %s, %s, %s, %s)"
+                "INSERT INTO domain.jobs"
+                " (job_id, tenant_cui, source_hash, period, status, body, lock)"
+                " VALUES (%s, %s, %s, %s, %s, %s, %s)"
                 " ON CONFLICT ON CONSTRAINT jobs_source_once DO NOTHING RETURNING body",
                 (
                     job.job_id,
@@ -142,6 +152,7 @@ class PostgresJobStore:
                     pack.period,
                     job.status,
                     job.model_dump_json(),
+                    lock_json(self.lock),
                 ),
             ).fetchone()
             if row is not None:
@@ -218,3 +229,11 @@ class PostgresJobStore:
                 (cui, articol_id, list(_PACKAGED_OR_LATER)),
             ).fetchone()
         return int(n)
+
+    def locked(self) -> list[tuple[tuple[str, ...], Any]]:
+        """``((job_id,), lock set or None)`` for every job (provenance.py)."""
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT job_id, lock FROM domain.jobs ORDER BY created_at, job_id"
+            ).fetchall()
+        return [((job_id,), lock_from(lock)) for job_id, lock in rows]

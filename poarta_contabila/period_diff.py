@@ -37,6 +37,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 from poarta_contabila.catalog import Catalog
+from poarta_contabila.provenance import lock_from, lock_json
 from poarta_contabila.recon.numbers import normalize
 from poarta_contabila.rules import ExplainedRule, explained_turnover
 from poarta_contabila.sinks.exports import synthetic as synthetic_account
@@ -621,14 +622,24 @@ def prefile_failures(cat: Catalog, *, pre_verdict: str | None) -> list[str]:
 class InMemoryPeriodStore:
     diffs: dict[str, PeriodDiff] = None  # type: ignore[assignment]
     runs: dict[tuple[str, str, str, str], ControlRun] = None  # type: ignore[assignment]
+    lock: Any = None  # the LockSet a new tie-out is computed under (provenance.py)
+    locks: dict[tuple[str, ...], Any] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
-        self.diffs, self.runs = {}, {}
+        self.diffs, self.runs, self.locks = {}, {}, {}
 
     def save(self, diff: PeriodDiff, runs: list[ControlRun]) -> None:
         self.diffs.setdefault(diff.snapshot_id, diff)
+        self.locks.setdefault((diff.cui, diff.period, diff.snapshot_id), self.lock)
         for r in runs:
-            self.runs.setdefault((diff.cui, diff.period, r.control_id, diff.snapshot_id), r)
+            key = (diff.cui, diff.period, r.control_id, diff.snapshot_id)
+            self.runs.setdefault(key, r)
+            self.locks.setdefault(key, self.lock)
+
+    def locked(self) -> list[tuple[tuple[str, ...], Any]]:
+        """Per diff ``(cui, period, snapshot_id)`` and per control run
+        ``(cui, period, control_id, snapshot_id)``: its lock set or None (provenance.py)."""
+        return list(self.locks.items())
 
     def runs_for(self, cui: str, period: str) -> list[tuple[str, ControlRun]]:
         """``(snapshot_id, run)`` of every control run of *cui* in *period*, oldest first."""
@@ -642,20 +653,46 @@ class PostgresPeriodStore:
         import psycopg
 
         self._dsn, self._psycopg = dsn, psycopg
+        self.lock: Any = None  # the LockSet a new tie-out is computed under (provenance.py)
 
     def save(self, diff: PeriodDiff, runs: list[ControlRun]) -> None:
+        lock = lock_json(self.lock)
         with self._psycopg.connect(self._dsn, autocommit=True) as conn:
             conn.execute(
-                "INSERT INTO domain.close_snapshots (snapshot_id, cui, period, body)"
-                " VALUES (%s, %s, %s, %s) ON CONFLICT (snapshot_id) DO NOTHING",
-                (diff.snapshot_id, diff.cui, diff.period, diff.model_dump_json()),
+                "INSERT INTO domain.close_snapshots (snapshot_id, cui, period, body, lock)"
+                " VALUES (%s, %s, %s, %s, %s) ON CONFLICT (snapshot_id) DO NOTHING",
+                (diff.snapshot_id, diff.cui, diff.period, diff.model_dump_json(), lock),
             )
             for r in runs:
                 conn.execute(
-                    "INSERT INTO domain.control_runs (cui, period, control_id, snapshot_id, body)"
-                    " VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
-                    (diff.cui, diff.period, r.control_id, diff.snapshot_id, r.model_dump_json()),
+                    "INSERT INTO domain.control_runs"
+                    " (cui, period, control_id, snapshot_id, body, lock)"
+                    " VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                    (
+                        diff.cui,
+                        diff.period,
+                        r.control_id,
+                        diff.snapshot_id,
+                        r.model_dump_json(),
+                        lock,
+                    ),
                 )
+
+    def locked(self) -> list[tuple[tuple[str, ...], Any]]:
+        """Per diff ``(cui, period, snapshot_id)`` and per control run
+        ``(cui, period, control_id, snapshot_id)``: its lock set or None (provenance.py)."""
+        with self._psycopg.connect(self._dsn) as conn:
+            diffs = conn.execute(
+                "SELECT cui, period, snapshot_id, lock FROM domain.close_snapshots"
+                " ORDER BY captured_at, snapshot_id"
+            ).fetchall()
+            runs = conn.execute(
+                "SELECT cui, period, control_id, snapshot_id, lock FROM domain.control_runs"
+                " ORDER BY cui, period, snapshot_id, control_id"
+            ).fetchall()
+        return [((c, p, s), lock_from(lk)) for c, p, s, lk in diffs] + [
+            ((c, p, cid, s), lock_from(lk)) for c, p, cid, s, lk in runs
+        ]
 
     def runs_for(self, cui: str, period: str) -> list[tuple[str, ControlRun]]:
         """``(snapshot_id, run)`` of every control run of *cui* in *period*, oldest first."""
