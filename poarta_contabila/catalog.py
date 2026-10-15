@@ -45,6 +45,8 @@ _ROWS: dict[str, list[tuple[str, str]]] = {
     "ArticoleFiling": [("filings", "filing_id")],
     "ArticoleExtrasGrain": [],
     "ArticoleModelRoles": [("roles", "role_id")],
+    "ArticoleTerms": [("terms", "term_id")],
+    "ArticoleNonWorking": [("years", "year_id")],
 }
 
 # Illustrations, not law (they carry no ``catalog:`` key).

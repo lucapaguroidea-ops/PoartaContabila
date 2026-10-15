@@ -37,6 +37,7 @@ so is an unknown `articol_id` or HITL kind.
 | Bon matrix? | `30_cale/ARTICOL_BON_v1.yaml` (parked, WP-14) |
 | Statement grain? | `60_practice/ARTICOLE_EXTRAS_GRAIN_v1.yaml`: one Job per movement line, never per statement total |
 | May Jev answer this field? | `50_control/JEV_ANNEX_v1.yaml` + `JEV_VALIDATE_V_v1.yaml` (`JEV_ANNEX_EXAMPLE_source_bon.yaml` is a worked example, used by `fixtures/test_jev_validate.py`) |
+| When is a filing due? | `60_practice/ARTICOLE_TERMS_v1.yaml` (terms quoted from the notes library's register at a pinned commit) + `10_lege_firma/ARTICOLE_NONWORKING_v1.yaml` (non-working days per year; none pinned yet) |
 | Which model, where? | `50_control/ARTICOLE_MODEL_ROLES_v1.yaml` (L28–L33) |
 
 What is not in the catalog yet, and why, is in `SURFACE.md`; which rows a scenario drives is

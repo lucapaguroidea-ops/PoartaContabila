@@ -43,6 +43,18 @@ new_axes:
   marketplace:
     values: [none, yes]
     default: none
+  tva_period:
+    values: [lunar, trimestrial]
+    default: null
+    note: "The VAT period: how often D300, D394 and D406 are filed (register: 'lunar/trimestrial'). Unset: the calendar refuses them."
+  d100_period:
+    values: [lunar, trimestrial]
+    default: null
+    note: "How often D100 is filed (register: 'lunar/trimestrial, după obligație'). Unset: the calendar refuses it."
+  d112_period:
+    values: [lunar, trimestrial]
+    default: null
+    note: "How often D112 is filed (register: 'lunar (trimestrial pentru opțiuni)'). Unset: the calendar refuses it."
 
 certainty_on_every_axis:
   fields: [value, as_of, source, certainty]
