@@ -56,9 +56,11 @@ from poarta_contabila.jev import (
     role_pin,
     role_transport,
 )
+from poarta_contabila.lockset import lock_set
 from poarta_contabila.model_roles import CALL_MODES, InMemoryModelCallStore, ModelGateway, brief
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
+from poarta_contabila.provenance import RECORDS
 from poarta_contabila.provider_policy import (
     InMemoryPolicyStore,
     InMemoryRoleChoiceStore,
@@ -293,6 +295,16 @@ class Runtime:
         )
         self.deps.settlement = self.settlement
         self.triage = build_triage_graph(self.catalog, self.jobs, checkpointer=self.checkpointer)
+        # Every stored proposal, verdict and tie-out records the pins it was computed under
+        # (provenance.py); a register named without its full commit stops the boot (L24).
+        lock = lock_set(self.catalog)
+        for store in self.records().values():
+            if store is not None:
+                store.lock = lock
+
+    def records(self) -> dict[str, Any]:
+        """The stores whose rows carry a lock set, by record name (provenance.py)."""
+        return {record: getattr(self, attr) for record, attr in RECORDS.items()}
 
     # -- helpers --
 

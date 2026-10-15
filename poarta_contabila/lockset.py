@@ -32,6 +32,19 @@ class LockSet:
     library: str | None  # the notes library register's full commit
     corpus: str | None  # the legal corpus release; None until one is pinned
 
+    def as_dict(self) -> dict[str, str | None]:
+        """The stored shape (a JSON object in the domain store)."""
+        return {"core": self.core, "library": self.library, "corpus": self.corpus}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any] | None) -> LockSet | None:
+        """Back from the stored shape; ``None`` (a row written before lock sets) stays ``None``."""
+        if data is None:
+            return None
+        if set(data) != {"core", "library", "corpus"}:
+            raise LockSetError(f"a stored lock set names core, library and corpus: {data!r}")
+        return cls(core=data["core"], library=data["library"], corpus=data["corpus"])
+
     @property
     def key(self) -> str:
         lib = f"library@{self.library[:7]}" if self.library else "library@unpinned"

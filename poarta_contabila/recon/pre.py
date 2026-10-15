@@ -34,6 +34,7 @@ from pydantic import Field
 
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.flux import MatchContext, match_articole
+from poarta_contabila.provenance import lock_from, lock_json
 from poarta_contabila.recon.numbers import LEVELS, NumberLevel, match_level
 from poarta_contabila.sinks.saga_eye import SagaEye
 from poarta_contabila.sinks.spv_register import RegisterInvoice, _plain
@@ -86,10 +87,18 @@ class ReconStore(Protocol):
 @dataclass
 class InMemoryReconStore:
     rows: dict[tuple[str, str, str], PreResult] = field(default_factory=dict)
+    lock: Any = None  # the LockSet a new verdict is given under (provenance.py)
+    locks: dict[tuple[str, str, str], Any] = field(default_factory=dict)
 
     def put_once(self, job_id: str, stage: str, result: Any) -> Any:
         """Store the verdict for this sink snapshot; a replay returns the first one."""
-        return self.rows.setdefault((job_id, stage, result.snapshot_id), result)
+        key = (job_id, stage, result.snapshot_id)
+        self.locks.setdefault(key, self.lock)
+        return self.rows.setdefault(key, result)
+
+    def locked(self) -> list[tuple[tuple[str, ...], Any]]:
+        """``((job_id, stage, snapshot_id), lock set or None)`` per verdict (provenance.py)."""
+        return [(k, self.locks.get(k)) for k in self.rows]
 
     def get(self, job_id: str, stage: str, snapshot_id: str) -> dict[str, Any] | None:
         row = self.rows.get((job_id, stage, snapshot_id))
@@ -104,14 +113,15 @@ class PostgresReconStore:
 
         self._dsn = dsn
         self._psycopg = psycopg
+        self.lock: Any = None  # the LockSet a new verdict is given under (provenance.py)
 
     def put_once(self, job_id: str, stage: str, result: Any) -> Any:
         """Store once; returns the stored verdict as *result*'s own type (PRE or POST)."""
         with self._psycopg.connect(self._dsn, autocommit=True) as conn:
             conn.execute(
-                "INSERT INTO domain.recon_verdicts (job_id, stage, sink_snapshot_id, body)"
-                " VALUES (%s, %s, %s, %s) ON CONFLICT DO NOTHING",
-                (job_id, stage, result.snapshot_id, result.model_dump_json()),
+                "INSERT INTO domain.recon_verdicts (job_id, stage, sink_snapshot_id, body, lock)"
+                " VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING",
+                (job_id, stage, result.snapshot_id, result.model_dump_json(), lock_json(self.lock)),
             )
             (body,) = conn.execute(
                 "SELECT body FROM domain.recon_verdicts"
@@ -128,6 +138,15 @@ class PostgresReconStore:
                 (job_id, stage, snapshot_id),
             ).fetchone()
         return row[0] if row else None
+
+    def locked(self) -> list[tuple[tuple[str, ...], Any]]:
+        """``((job_id, stage, snapshot_id), lock set or None)`` per verdict (provenance.py)."""
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT job_id, stage, sink_snapshot_id, lock FROM domain.recon_verdicts"
+                " ORDER BY job_id, stage, sink_snapshot_id"
+            ).fetchall()
+        return [((j, st, sid), lock_from(lock)) for j, st, sid, lock in rows]
 
 
 # ----- profile -----
