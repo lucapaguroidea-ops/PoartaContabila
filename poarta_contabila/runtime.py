@@ -14,6 +14,7 @@ import io
 import os
 import uuid
 import zipfile
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
@@ -45,7 +46,7 @@ from poarta_contabila.extract.statement import (
     statement_line_document,
 )
 from poarta_contabila.extract.ubl import UblError, parse_ubl, read_spv_zip, to_canonical
-from poarta_contabila.filings import due_filings
+from poarta_contabila.filings import due_filings, portfolio
 from poarta_contabila.filings import views as filing_views
 from poarta_contabila.ingest import IngestDeps, build_ingest_graph, start_payload
 from poarta_contabila.jev import (
@@ -1271,6 +1272,25 @@ class Runtime:
             else {}
         )
         return [v.model_dump() for v in filing_views(self.catalog, cui, period, items, controls)]
+
+    def portfolio(
+        self, keep: Callable[[str], bool] | None = None
+    ) -> dict[str, list[dict[str, Any]]]:
+        """The portfolio calendar (R45): every tenant's filing items by due date, the undated
+        ones apart with the calendar's reason. Read-only: it reads the filing and CO.DiT stores
+        and writes nothing; it computes no date (each item shows what was recorded when it was
+        opened). *keep* keeps only the tenant keys it accepts."""
+        if self.filings is None:
+            raise IngestRefused("filing store not wired")
+        seen: dict[tuple[str, str], dict[str, str]] = {}
+
+        def axes(cui: str, period: str) -> dict[str, str]:
+            if (cui, period) not in seen:
+                doc = self.codits.get(cui, period) if self.codits is not None else None
+                seen[(cui, period)] = doc.derive() if doc is not None else {}
+            return seen[(cui, period)]
+
+        return portfolio(self.catalog, self.filings.every_item(), axes, keep=keep)
 
     def filing_receipt(
         self, cui: str, period: str, filing_id: str, data: bytes, filename: str, by: str

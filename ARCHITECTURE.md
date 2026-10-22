@@ -193,6 +193,7 @@ Operator routes take `GRAPHUSERTOKEN_OPERATOR`, or the build agent's
 ```
 GET  /health  /ready                          # liveness; readiness and token strength
 GET  /review  /review/{file}                  # the review page, no token (L26)
+GET  /portfolio  /portfolio/{file}            # the portfolio calendar page, no token (R45)
 
 # tenants and witnesses
 PUT  /tenants/{cui}                           # name, firm folder, book of record, bank accounts, data_class
@@ -218,6 +219,7 @@ GET  /evidence/{cui}/{period}                 # the evidence ledger: friction an
 # the month
 GET  /periods/{cui}/{period}/diff             # Layer 1: PeriodDiff and controls
 POST /filings/{cui}/{period}  GET …  POST /filings/{cui}/{period}/{filing_id}/receipt
+GET  /calendar                                # all tenants' filing items by due date (R45)
 POST /rules                      GET /rules/{cui}                    # explained rules
 
 # model roles
@@ -242,6 +244,7 @@ poarta_contabila/
                                               #   reconcile_sink, monthly_close
   runtime.py           # wiring: stores, bucket, checkpointer, graphs, model gateway, inbox
   app.py operator_api.py agent_api.py review.py ui/   # HTTP; the review page (L26)
+  portfolio.py         # the portfolio calendar page over GET /calendar (R45), read-only
   catalog.py flux.py hitl.py jsonlogic.py     # Catalog Cale loader, matches(), typed HITL
   types/               # closed domain types; money and fiscal dates are strings
   jobs.py packages.py registry.py storage.py answers.py rules.py codit.py filings.py
@@ -318,6 +321,19 @@ was computed under; a corrected pin finds it through that lock set, because fili
 provenance record (`filings`, below). An open item with no recorded date takes the newer
 answer, so a refusal clears once the calendar can date the item. A filed item is not touched.
 
+**The portfolio calendar** (`portfolio.py`, `filings.portfolio`, R45). A read-only page
+(`/portfolio`) over `GET /calendar`: every tenant's filing items, from the filing store, with
+the tenant key as the only client field. Each row holds the tenant key, the form and item, the
+period, the due date, the engagement mode and frequency of that period's CO.DiT, the state and
+the lock-set key (`filings.PORTFOLIO_FIELDS`); no name, address, amount, receipt or person.
+- **Dated** items are ordered by due date; any further order is the accountant's (H-08).
+- **Refused**, **later** and **unrecorded** items (opened before due dates were recorded) are
+  listed apart, each with its reason; an item with no date is never dropped.
+
+Nothing is computed: each row shows what the calendar recorded when the item was opened. While
+no non-working year is pinned, every item is refused, and the page says that no item has a due
+date. The build agent's token sees synthetic tenants only (L35).
+
 **The lock set** (`lockset.py`, in the core). Every calendar entry records the pins it was
 computed under: `CORE_VERSION`, the register's full commit, and the legal corpus release.
 The corpus release is `None` until a corpus is pinned here. `impacted(entries, library=…)`
@@ -338,8 +354,9 @@ store-wide lock. An item the calendar gave no date has no lock set and is listed
 
 A replayed write keeps the first lock set (L22). A close is decided again in place, so it takes
 the lock set it was last decided under. `impacted_records(runtime.records(), library=…)` lists
-the stored results of a pin, and `unlocked_records` lists rows written before lock sets were
-recorded, and the filing items with no due date. A register named without its full commit stops the boot (L24).
+the stored results of a pin. `unlocked_records` lists the rows no pin can place, each with its
+`reason`: `pre-lock` for a row written before lock sets were recorded, `undated` for a filing
+item with no due date. A register named without its full commit stops the boot (L24).
 
 ## 12. Jev packs
 
