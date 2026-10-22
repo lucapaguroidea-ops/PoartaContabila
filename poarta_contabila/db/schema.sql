@@ -100,6 +100,12 @@ CREATE TABLE IF NOT EXISTS domain.filing_items (
     CONSTRAINT filed_needs_receipt CHECK (state = 'open' OR receipt_key IS NOT NULL)
 );
 ALTER TABLE domain.filing_items ADD COLUMN IF NOT EXISTS submitted_by text;
+-- What the calendar said when the item was opened (calendar.py): its due date with the lock set
+-- it was computed under, or the calendar's refusal reason. Information, not a gate (L43).
+-- NULL on items opened before due dates were recorded; re-opening fills them.
+ALTER TABLE domain.filing_items ADD COLUMN IF NOT EXISTS due text;
+ALTER TABLE domain.filing_items ADD COLUMN IF NOT EXISTS due_lock jsonb;
+ALTER TABLE domain.filing_items ADD COLUMN IF NOT EXISTS due_refused text;
 
 CREATE TABLE IF NOT EXISTS domain.codit (
     cui     text NOT NULL,

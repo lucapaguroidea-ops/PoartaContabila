@@ -26,6 +26,7 @@ from poarta_contabila.calendar import (
     Obligation,
     load_nonworking,
     obligations,
+    register_freshness,
     terms_by_form,
 )
 from poarta_contabila.catalog import (
@@ -164,7 +165,7 @@ from poarta_contabila.types import (
     cui_key,
 )
 
-CORE_VERSION = "0.3.0"
+CORE_VERSION = "0.4.0"
 CORE_TAG = f"core-v{CORE_VERSION}"
 
 # The review register's shared-core modules (its §2) → their home modules here.
@@ -336,6 +337,7 @@ __all__ = [
     "Obligation",
     "load_nonworking",
     "obligations",
+    "register_freshness",
     "terms_by_form",
     # core.provenance
     "LockSet",

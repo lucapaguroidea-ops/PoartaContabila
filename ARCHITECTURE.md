@@ -280,8 +280,8 @@ the core pulls no graph, HTTP, database driver or model client, and stores stay 
 runtime (`tests/test_core.py`). The core is extracted into its own package after the SAGA C
 loops.
 
-**The calendar** (`calendar.py`, in the core). `obligations(cat, axes, period)` lists every
-filing the CO.DiT axes owe whose filing period ends in that month, with its due date.
+**The calendar** (`calendar.py`, in the core). `obligations(cat, axes, period, as_of=…)` lists
+every filing the CO.DiT axes owe whose filing period ends in that month, with its due date.
 - **The term:** a row of `ArticoleTerms`, quoted from the notes library's declarations register
   at a pinned commit.
 - **The frequency:** the CO.DiT axes `tva_period`, `d100_period` and `d112_period`.
@@ -293,9 +293,25 @@ these cases:
 - no term for the form;
 - the frequency axis is unset;
 - the month has no such day;
-- no non-working days are pinned for the year.
+- no non-working days are pinned for the year;
+- the register pin is not fresh on `as_of` (below): then every owed filing is refused.
 
-No year is pinned yet, so on the real catalog every date is refused until one is added.
+A quarterly filing in a month that does not end its quarter is listed as `later`, with its
+reason. No year is pinned yet, so on the real catalog every date is refused until one is added.
+
+**Due dates on filing items, and freshness** (R21, R23). The register pin in `ArticoleTerms`
+carries `verified_at` and the owner's window `max_age_days`, which stays `null` until the owner
+sets it. `register_freshness(cat, as_of)` refuses when the window is unset, or when `as_of`
+is more than the window after `verified_at`. `as_of` is a required argument of `obligations`,
+so no due date is computed without the check. The core reads no clock: the runtime passes
+today's date (`Runtime.today`, UTC by default). When `Runtime.open_filings` opens a period's
+filing items, each item records what the calendar said: its due date with the calendar
+entry's lock set (`domain.filing_items.due`, `due_lock`), or the refusal reason
+(`due_refused`). `filings_view` shows the three fields. The due date is information, not a
+gate: a refusal blocks neither opening, nor a receipt, nor the close (L43). Re-opening keeps a
+recorded due date, so the date stays with the lock set it was computed under; a corrected pin
+finds it through that lock set. An open item with no recorded date takes the newer answer, so a
+refusal clears once the calendar can date the item. A filed item is not touched.
 
 **The lock set** (`lockset.py`, in the core). Every calendar entry records the pins it was
 computed under: `CORE_VERSION`, the register's full commit, and the legal corpus release.

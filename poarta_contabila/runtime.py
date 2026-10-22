@@ -15,7 +15,7 @@ import os
 import uuid
 import zipfile
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -25,6 +25,7 @@ from langgraph.types import Command
 from poarta_contabila.agent import AgentService
 from poarta_contabila.answers import InMemoryAnswerLog
 from poarta_contabila.answers import record as record_answer
+from poarta_contabila.calendar import CalendarError, obligations
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.close import CloseDeps, InMemoryCloseStore, build_close_graph
 from poarta_contabila.codit import Codit, CoditInput, write_codit
@@ -174,6 +175,7 @@ class Runtime:
     provider_policies: Any = None  # InMemoryPolicyStore | PostgresPolicyStore
     role_choices: Any = None  # InMemoryRoleChoiceStore | PostgresRoleChoiceStore
     batches: Any = None  # InMemoryBatchIndex | PostgresBatchIndex
+    today: Any = None  # () -> date: the day due dates are computed on; None = today (UTC)
 
     def __post_init__(self) -> None:
         if self.model_calls is None:
@@ -1227,9 +1229,33 @@ class Runtime:
         doc = self.codits.get(cui, period) if self.codits is not None else None
         if doc is None:
             raise IngestRefused(f"no CO.DiT for {period}: nothing is assumed due")
-        for row in due_filings(self.catalog, doc.derive()):
-            self.filings.open(cui, period, row["filing_id"])
+        axes = doc.derive()
+        due = self._due_dates(axes, period)
+        for row in due_filings(self.catalog, axes):
+            answer = due.get(row["filing_id"], {"due_refused": "the calendar gave no answer"})
+            self.filings.open(cui, period, row["filing_id"], **answer)
         return self.filings_view(cui, period)
+
+    def _due_dates(self, axes: dict[str, str], period: str) -> dict[str, dict[str, Any]]:
+        """What the calendar says of each owed filing on today's date: a due date with its lock
+        set, or the reason it gives none. The register pin's freshness is checked inside
+        ``obligations`` (R23). Information only: a refusal never stops an item opening (L43)."""
+        try:
+            cal = obligations(self.catalog, axes, period, as_of=self._today())
+        except CalendarError as exc:
+            reason = f"the calendar refused: {exc}"
+            owed = due_filings(self.catalog, axes)
+            return {r["filing_id"]: {"due_refused": reason} for r in owed}
+        out: dict[str, dict[str, Any]] = {
+            o.filing_id: {"due": o.due, "due_lock": o.lock.as_dict()} for o in cal.items
+        }
+        for r in cal.refused + cal.later:
+            out[r["filing_id"]] = {"due_refused": r["reason"]}
+        return out
+
+    def _today(self) -> date:
+        """The day the register pin's freshness is judged on (UTC, as the runtime's clock)."""
+        return self.today() if self.today is not None else datetime.now(UTC).date()
 
     def filings_view(self, cui: str, period: str) -> list[dict[str, Any]]:
         if self.filings is None:

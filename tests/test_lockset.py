@@ -5,6 +5,7 @@ by lock set returns exactly the entries that read a given pin (R36)."""
 from __future__ import annotations
 
 import copy
+from datetime import date
 
 import pytest
 
@@ -24,7 +25,16 @@ AXES = {
 
 @pytest.fixture(scope="module")
 def cat():
-    return load_catalog()
+    other = load_catalog()
+    # an invented freshness window for the tests: the catalog leaves it to the owner (R23)
+    other.docs["ArticoleTerms"]["register"]["max_age_days"] = 90
+    return other
+
+
+def owed(cat, axes, period, nw):
+    """The calendar on the day the register pin was verified (fresh under any window)."""
+    day = date.fromisoformat(cat.docs["ArticoleTerms"]["register"]["verified_at"])
+    return obligations(cat, axes, period, nw, as_of=day)
 
 
 def synthetic(year: int) -> dict[int, NonWorkingYear]:
@@ -55,7 +65,7 @@ def test_the_lock_set_names_the_core_the_register_and_the_corpus(cat) -> None:
 
 
 def test_every_calendar_entry_records_its_lock_set(cat) -> None:
-    items = obligations(cat, AXES, "2026-04", synthetic(2026)).items
+    items = owed(cat, AXES, "2026-04", synthetic(2026)).items
     assert items
     assert {o.lock for o in items} == {lock_set(cat)}
 
@@ -63,13 +73,13 @@ def test_every_calendar_entry_records_its_lock_set(cat) -> None:
 def test_a_different_register_pin_is_a_different_lock_set(cat) -> None:
     other = with_register_commit(cat, "0" * 40)
     assert lock_set(other) != lock_set(cat)
-    assert obligations(other, AXES, "2026-04", synthetic(2026)).items[0].lock == lock_set(other)
+    assert owed(other, AXES, "2026-04", synthetic(2026)).items[0].lock == lock_set(other)
 
 
 def test_impact_query_returns_exactly_the_entries_of_a_pin(cat) -> None:
     old = with_register_commit(cat, "0" * 40)
-    before = obligations(old, AXES, "2026-04", synthetic(2026)).items
-    after = obligations(cat, AXES, "2026-04", synthetic(2026)).items
+    before = owed(old, AXES, "2026-04", synthetic(2026)).items
+    after = owed(cat, AXES, "2026-04", synthetic(2026)).items
     entries = before + after
     hit = impacted(entries, library="0" * 40)
     assert hit == before

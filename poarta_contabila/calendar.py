@@ -10,16 +10,24 @@ holiday is written here (L40).
 Fail closed (L24): an owed filing whose due date cannot be computed is **refused** with its
 reason (no term for its form, its frequency axis unset, a day the month does not have, a year
 with no pinned non-working days), never dropped and never guessed. Every owed filing ends up
-in exactly one of ``CalendarResult.items`` or ``CalendarResult.refused``.
+in exactly one of ``CalendarResult.items``, ``CalendarResult.refused`` or, for a filing whose
+quarter does not end with the month, ``CalendarResult.later``.
 
-Pure: no store, no clock, no I/O beyond the catalog already loaded.
+Freshness (R23): the register pin carries the day it was verified (``verified_at``) and the
+owner's window (``max_age_days``). On a day *as_of* the caller passes, a pin older than the
+window, or a window the owner has not set, refuses **every** owed filing with that reason:
+a stale pin dates nothing. ``as_of`` is required, so no caller computes a due date without
+the check.
+
+Pure: no store, no clock (the caller passes ``as_of``), no I/O beyond the catalog already
+loaded.
 """
 
 from __future__ import annotations
 
 import calendar as _cal
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from poarta_contabila.catalog import Catalog
@@ -67,6 +75,7 @@ class CalendarResult:
     period: str
     items: list[Obligation] = field(default_factory=list)
     refused: list[dict[str, str]] = field(default_factory=list)
+    later: list[dict[str, str]] = field(default_factory=list)  # owed once its quarter ends
 
 
 def load_nonworking(cat: Catalog) -> dict[int, NonWorkingYear]:
@@ -101,6 +110,34 @@ def terms_by_form(cat: Catalog) -> dict[str, dict[str, Any]]:
             raise CalendarError(f"two terms for {row['form']}")
         out[row["form"]] = row
     return out
+
+
+def register_freshness(cat: Catalog, as_of: date) -> str | None:
+    """Why the register pin may not date anything on *as_of*, or ``None`` when it is fresh.
+
+    Fresh means: the owner set ``register.max_age_days`` and ``as_of - verified_at`` is within
+    it. An unset window refuses (no window is assumed); so do a missing ``verified_at`` and a
+    window that is not a whole number of days.
+    """
+    if not isinstance(as_of, date) or isinstance(as_of, datetime):
+        raise CalendarError(f"as_of must be a date, not {as_of!r}")
+    reg = (cat.docs.get("ArticoleTerms") or {}).get("register") or {}
+    window = reg.get("max_age_days")
+    if window is None:
+        return "the register pin's freshness window is not set: the owner sets max_age_days"
+    if isinstance(window, bool) or not isinstance(window, int) or window < 0:
+        return f"the register pin's max_age_days must be a whole number of days, not {window!r}"
+    try:
+        verified = date.fromisoformat(str(reg.get("verified_at")))
+    except ValueError:
+        return f"the register pin has no verified_at date: {reg.get('verified_at')!r}"
+    age = (as_of - verified).days
+    if age > window:
+        return (
+            f"the register pin is stale: verified {verified.isoformat()}, {age} days before"
+            f" {as_of.isoformat()}, over its {window}-day window"
+        )
+    return None
 
 
 def _source(cat: Catalog, term: dict[str, Any]) -> str:
@@ -149,14 +186,24 @@ def obligations(
     axes: dict[str, str],
     period: str,
     nonworking: dict[int, NonWorkingYear] | None = None,
+    *,
+    as_of: date,
 ) -> CalendarResult:
     """Every filing *axes* owe whose filing period ends with month *period*, and when it is due.
 
     *axes* are the firm's CO.DiT values for that period. *nonworking* defaults to the catalog's
-    pinned years.
+    pinned years. *as_of* is the day the register pin's freshness is judged on: a stale pin, or
+    an unset window, refuses every owed filing.
     """
     if len(period) != 7 or period[4] != "-":
         raise CalendarError(f"period must be YYYY-MM, not {period!r}")
+    stale = register_freshness(cat, as_of)
+    if stale is not None:
+        refused = [
+            {"filing_id": r["filing_id"], "form": r["form"], "reason": stale}
+            for r in due_filings(cat, axes)
+        ]
+        return CalendarResult(period=period, refused=refused)
     years = load_nonworking(cat) if nonworking is None else nonworking
     terms = terms_by_form(cat)
     lock = lock_set(cat)
@@ -178,8 +225,11 @@ def obligations(
         else:
             frequency = term["frequency"]
         span = _month_end_periods(period, frequency)
-        if span is None:
-            continue  # a quarterly filing whose quarter does not end this month: nothing owed yet
+        if span is None:  # a quarterly filing whose quarter does not end this month
+            result.later.append(
+                {"filing_id": fid, "form": form, "reason": f"its quarter does not end in {period}"}
+            )
+            continue
         filing_period, end = span
         try:
             unshifted = _target(end, int(term["months_after"]), term["day"])

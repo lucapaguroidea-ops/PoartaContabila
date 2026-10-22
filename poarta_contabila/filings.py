@@ -3,14 +3,22 @@
 This system never submits to ANAF. A due item comes from an ArticoleFiling row whose
 ``require`` / ``forbid`` fit the period's CO.DiT (no CO.DiT → nothing is assumed due).
 It closes only when a receipt artefact is stored (``closer: receipt``) — a calendar
-date passing closes nothing. Due dates are law facts not pinned here: they stay
-``[de confirmat]``. Each item carries its ``books_gate``: whether the controls it names
-passed on the period's latest Layer 1 run. Once any receipt exists for a period, no
-package is regenerated for it.
+date passing closes nothing. An item records, when it is opened, what the calendar
+(``calendar.obligations``) said of it: its due date with the lock set it was computed under,
+or the calendar's refusal reason. The due date is information, not a gate: a refusal blocks
+neither opening, nor a receipt, nor the close. Each item carries its ``books_gate``: whether
+the controls it names passed on the period's latest Layer 1 run. Once any receipt exists for
+a period, no package is regenerated for it.
+
+Re-opening keeps a recorded due date (it stays with the lock set it was computed under; a
+corrected pin finds it through that lock set, never by a silent rewrite). An open item with no
+due date recorded (refused, or opened before due dates were recorded) takes the newer answer,
+so a refusal clears once the calendar can date the item. A filed item is not touched.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -18,8 +26,6 @@ from pydantic import Field
 
 from poarta_contabila.catalog import Catalog
 from poarta_contabila.types import Closed, Cui, FilingItem, Period, Slug
-
-DUE_UNPINNED = "[de confirmat: legal.lock not pinned]"
 
 
 class FilingView(Closed):
@@ -30,7 +36,9 @@ class FilingView(Closed):
     state: str
     receipt_key: str | None = None
     submitted_by: str | None = None
-    due: str = DUE_UNPINNED
+    due: str | None = None  # ISO date the calendar gave when the item was opened
+    due_lock: dict[str, str | None] | None = None  # the lock set that due date was computed under
+    due_refused: str | None = None  # the calendar's reason when it gave no date
     certainty: str
     books_gate: dict[str, str] = Field(default_factory=dict)
     books_support: bool
@@ -64,10 +72,27 @@ def books_gate(row: dict[str, Any], controls: dict[str, str]) -> tuple[dict[str,
 class InMemoryFilingStore:
     rows: dict[tuple[str, str, str], dict[str, Any]] = field(default_factory=dict)
 
-    def open(self, cui: str, period: str, filing_id: str) -> None:
-        self.rows.setdefault(
-            (cui, period, filing_id), {"state": "open", "receipt_key": None, "submitted_by": None}
-        )
+    def open(
+        self,
+        cui: str,
+        period: str,
+        filing_id: str,
+        *,
+        due: str | None = None,
+        due_lock: dict[str, str | None] | None = None,
+        due_refused: str | None = None,
+    ) -> None:
+        answer = {"due": due, "due_lock": due_lock, "due_refused": due_refused}
+        row = self.rows.get((cui, period, filing_id))
+        if row is None:
+            self.rows[(cui, period, filing_id)] = {
+                "state": "open",
+                "receipt_key": None,
+                "submitted_by": None,
+                **answer,
+            }
+        elif row["state"] == "open" and row.get("due") is None:
+            row.update(answer)  # a recorded due date is kept; a missing one takes the answer
 
     def items(self, cui: str, period: str) -> dict[str, dict[str, Any]]:
         return {f: dict(v) for (c, p, f), v in self.rows.items() if (c, p) == (cui, period)}
@@ -90,22 +115,46 @@ class PostgresFilingStore:
 
         self._dsn, self._psycopg = dsn, psycopg
 
-    def open(self, cui: str, period: str, filing_id: str) -> None:
+    def open(
+        self,
+        cui: str,
+        period: str,
+        filing_id: str,
+        *,
+        due: str | None = None,
+        due_lock: dict[str, str | None] | None = None,
+        due_refused: str | None = None,
+    ) -> None:
+        lock = json.dumps(due_lock) if due_lock is not None else None
         with self._psycopg.connect(self._dsn, autocommit=True) as conn:
             conn.execute(
-                "INSERT INTO domain.filing_items (cui, period, filing_id) VALUES (%s, %s, %s)"
-                " ON CONFLICT DO NOTHING",
-                (cui, period, filing_id),
+                "INSERT INTO domain.filing_items"
+                " (cui, period, filing_id, due, due_lock, due_refused)"
+                " VALUES (%s, %s, %s, %s, %s::jsonb, %s)"
+                " ON CONFLICT (cui, period, filing_id) DO UPDATE SET due = EXCLUDED.due,"
+                " due_lock = EXCLUDED.due_lock, due_refused = EXCLUDED.due_refused"
+                " WHERE domain.filing_items.state = 'open' AND domain.filing_items.due IS NULL",
+                (cui, period, filing_id, due, lock, due_refused),
             )
 
     def items(self, cui: str, period: str) -> dict[str, dict[str, Any]]:
         with self._psycopg.connect(self._dsn) as conn:
             rows = conn.execute(
-                "SELECT filing_id, state, receipt_key, submitted_by FROM domain.filing_items"
-                " WHERE cui = %s AND period = %s",
+                "SELECT filing_id, state, receipt_key, submitted_by, due, due_lock, due_refused"
+                " FROM domain.filing_items WHERE cui = %s AND period = %s",
                 (cui, period),
             ).fetchall()
-        return {r[0]: {"state": r[1], "receipt_key": r[2], "submitted_by": r[3]} for r in rows}
+        return {
+            r[0]: {
+                "state": r[1],
+                "receipt_key": r[2],
+                "submitted_by": r[3],
+                "due": r[4],
+                "due_lock": json.loads(r[5]) if isinstance(r[5], str) else r[5],
+                "due_refused": r[6],
+            }
+            for r in rows
+        }
 
     def receipt(self, cui: str, period: str, filing_id: str, key: str, by: str) -> None:
         with self._psycopg.connect(self._dsn, autocommit=True) as conn:
@@ -152,6 +201,9 @@ def views(
                 state=item["state"],
                 receipt_key=item["receipt_key"],
                 submitted_by=item.get("submitted_by"),
+                due=item.get("due"),
+                due_lock=item.get("due_lock"),
+                due_refused=item.get("due_refused"),
                 certainty=row.get("certainty", "de_confirmat"),
                 books_gate=gate,
                 books_support=ok,
