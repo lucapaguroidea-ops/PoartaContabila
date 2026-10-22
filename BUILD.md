@@ -32,8 +32,7 @@ done 2026-10-04) made the repo say what is true now. Approved by the owner on 20
 | WP-83 | todo | WP-82 | System map: the system model exported as JSON from code and catalog, tested complete |
 | WP-84 | todo | WP-83 | System map: the read-only `/system` page, then the surface and ledger overlays |
 | WP-86 | in-progress | a pinned non-working-day list (none in the legal corpus or the notes library yet) | `core.calendar`: every owed filing's due date from the register's terms at a pinned commit and the CO.DiT frequency axes (R22). Built; waits on a sourced non-working-day year in `ArticoleNonWorking` and the owner reading one synthetic quarter against their diary |
-| WP-87 | todo | WP-86 | Filing items open with their due date; a stale register pin is refused (R21, R23) |
-| WP-88 | todo | WP-87 | The portfolio calendar: a read-only page of every tenant's obligations by due date and mode, no client data beyond the tenant key (R45) |
+| WP-88 | todo | — | The portfolio calendar: a read-only page of every tenant's obligations by due date and mode, no client data beyond the tenant key (R45) |
 | WP-14 | parked | — | Bonuri through an accounting note (`bon_via_nota`, ArticolBon); Loop 5 |
 | WP-15 | parked | — | A read-only SAGA database copy as an eye (copy-firm test §9) |
 | WP-16 | parked | — | Agent Validare (L11) |

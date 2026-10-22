@@ -12,6 +12,10 @@
 #   only_if: operations_in_period  (the item is conditional: owed only for a period with such
 #            operations, which the calendar does not know)
 #   shift: next_working_day  (the register's general rule; see register.rule_quote)
+#
+# Freshness: register.verified_at is the day the pin was read against the register;
+# register.max_age_days is the owner's window. On the day the calendar is asked (as_of), a pin
+# older than the window, or an unset window, refuses every item (calendar.register_freshness).
 
 file_schema: "1"
 catalog: ArticoleTerms
@@ -23,6 +27,9 @@ register:
   path: referinte/declaratii.md
   commit: 5ca87f5cc540aa695313a5fe110e6c2bd6f0742f
   verified_at: "2026-07-15"
+  # The owner's freshness window (R23): how many days after verified_at the pin may still date
+  # a filing. Unset (null) until the owner sets it; while unset, the calendar refuses every item.
+  max_age_days: null
   rule_quote: "termenul care cade într-o zi nelucrătoare se mută pe prima zi lucrătoare următoare"
 
 terms:

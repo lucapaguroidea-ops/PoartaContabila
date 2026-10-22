@@ -1,15 +1,24 @@
-"""filings — due from CO.DiT, closed only by a stored receipt, never by the calendar."""
+"""filings — due from CO.DiT, closed only by a stored receipt, never by the calendar. An item
+records what the calendar said when it was opened: its due date with the lock set, or the
+calendar's refusal; a refusal is information and blocks nothing (L43)."""
 
 from __future__ import annotations
 
+import copy
 import os
+from datetime import date, timedelta
 
 import pytest
 
+from poarta_contabila.calendar import obligations
 from poarta_contabila.catalog import load_catalog
 from poarta_contabila.codit import InMemoryCoditStore
-from poarta_contabila.filings import DUE_UNPINNED, InMemoryFilingStore, books_gate, due_filings
+from poarta_contabila.filings import InMemoryFilingStore, books_gate, due_filings
+from poarta_contabila.lockset import lock_set
 from tests.test_controls import CUI, PERIOD
+
+WINDOW = 90  # an invented freshness window for the tests; the catalog leaves it to the owner
+LOCK = {"core": "0.0.0", "library": "f" * 40, "corpus": None}  # a stored lock set's shape
 
 
 @pytest.fixture(scope="module")
@@ -46,6 +55,69 @@ def test_books_gate_needs_every_named_control_passed(cat):
     }
 
 
+def dated(cat):
+    """*cat* with an invented freshness window and an invented non-working year for 2026, so
+    the calendar can date this period's items (neither is in the catalog: the owner sets the
+    window, and no year is pinned)."""
+    other = copy.deepcopy(cat)
+    other.docs["ArticoleTerms"]["register"]["max_age_days"] = WINDOW
+    other.docs["ArticoleNonWorking"]["years"] = [
+        {
+            "year_id": "nonworking_synthetic_2026",
+            "year": 2026,
+            "weekly_rest": ["saturday", "sunday"],
+            "days": [],
+            "provenance": {"source": "synthetic test year (invented)", "certainty": "de_confirmat"},
+        }
+    ]
+    return other
+
+
+def verified(cat) -> date:
+    return date.fromisoformat(cat.docs["ArticoleTerms"]["register"]["verified_at"])
+
+
+def test_an_open_item_records_its_due_date_or_its_refusal():
+    store = InMemoryFilingStore()
+    store.open(CUI, PERIOD, "d300_platitor", due="2026-10-26", due_lock=LOCK)
+    store.open(CUI, PERIOD, "d394_platitor", due_refused="no term for D394")
+    items = store.items(CUI, PERIOD)
+    assert items["d300_platitor"]["due"] == "2026-10-26"
+    assert items["d300_platitor"]["due_lock"] == LOCK
+    assert items["d300_platitor"]["due_refused"] is None
+    assert items["d394_platitor"]["due"] is None
+    assert items["d394_platitor"]["due_refused"] == "no term for D394"
+
+
+def test_reopening_keeps_a_recorded_due_date_and_fills_a_missing_one():
+    store = InMemoryFilingStore()
+    store.open(CUI, PERIOD, "d300_platitor", due="2026-10-26", due_lock=LOCK)
+    store.open(CUI, PERIOD, "d300_platitor", due="2026-10-27", due_lock=None)  # not overwritten
+    store.open(CUI, PERIOD, "d394_platitor", due_refused="stale")
+    store.open(CUI, PERIOD, "d394_platitor", due="2026-10-30", due_lock=LOCK)  # a refusal clears
+    store.open(CUI, PERIOD, "d406_saft", due_refused="stale")
+    store.receipt(CUI, PERIOD, "d406_saft", "k.pdf", "contabil@test")
+    store.open(CUI, PERIOD, "d406_saft", due="2026-10-31", due_lock=LOCK)  # filed: untouched
+    items = store.items(CUI, PERIOD)
+    assert (items["d300_platitor"]["due"], items["d300_platitor"]["due_lock"]) == (
+        "2026-10-26",
+        LOCK,
+    )
+    assert items["d394_platitor"]["due"] == "2026-10-30"
+    assert items["d394_platitor"]["due_refused"] is None
+    assert items["d406_saft"]["due"] is None and items["d406_saft"]["state"] == "filed"
+
+
+def test_a_later_item_is_kept_apart_from_a_refusal():
+    store = InMemoryFilingStore()
+    store.open(CUI, PERIOD, "d300_platitor", due_later="its quarter does not end in 2026-09")
+    d300 = store.items(CUI, PERIOD)["d300_platitor"]
+    assert d300["due_later"] and d300["due_refused"] is None and d300["due"] is None
+    store.open(CUI, PERIOD, "d300_platitor", due="2026-10-26", due_lock=LOCK)  # dated later on
+    d300 = store.items(CUI, PERIOD)["d300_platitor"]
+    assert (d300["due"], d300["due_later"], d300["due_refused"]) == ("2026-10-26", None, None)
+
+
 def test_only_a_receipt_closes_an_item():
     store = InMemoryFilingStore()
     store.open(CUI, PERIOD, "d300_platitor")
@@ -63,27 +135,24 @@ def test_only_a_receipt_closes_an_item():
 # ----- runtime -----
 
 
-def _ops(cat):
+def _ops(cat, today=None):
     from tests.test_runtime import Ops, _runtime
 
-    o = Ops(_runtime(cat, codits=InMemoryCoditStore(), filings=InMemoryFilingStore()))
+    o = Ops(_runtime(cat, codits=InMemoryCoditStore(), filings=InMemoryFilingStore(), today=today))
     o.tenant()
     o.upload_rj()
     return o
 
 
-def _codit(o):
-    o.http.put(
-        f"/codit/{CUI}/{PERIOD}",
-        headers=o.op,
-        json={
-            "axes": {
-                "tva": {"value": "tva_platitor", "certainty": "confirmed"},
-                "forma": {"value": "srl", "certainty": "confirmed"},
-                "impozit": {"value": "micro_1", "certainty": "confirmed"},
-            }
-        },
-    )
+def _codit(o, period=PERIOD, **extra):
+    axes = {
+        "tva": {"value": "tva_platitor", "certainty": "confirmed"},
+        "forma": {"value": "srl", "certainty": "confirmed"},
+        "impozit": {"value": "micro_1", "certainty": "confirmed"},
+        **{k: {"value": v, "certainty": "confirmed"} for k, v in extra.items()},
+    }
+    r = o.http.put(f"/codit/{CUI}/{period}", headers=o.op, json={"axes": axes})
+    assert r.status_code == 200, r.text
 
 
 def _receipt(o, filing_id, data=b"%PDF-1.4 recipisa", by="contabil@test"):
@@ -105,7 +174,8 @@ def test_filings_over_http(cat):
     }
     assert set(items) == {"d300_platitor", "d394_platitor", "d406_saft", "d100_micro"}
     d300 = items["d300_platitor"]
-    assert d300["state"] == "open" and d300["due"] == DUE_UNPINNED
+    assert d300["state"] == "open" and d300["due"] is None  # the window is the owner's: unset
+    assert "freshness window is not set" in d300["due_refused"]
     assert d300["books_support"] is False  # the sample books do not support it yet
     assert _receipt(o, "d300_platitor", data=b"").status_code == 422
     assert _receipt(o, "d112_payroll").status_code == 422  # not due for this profile
@@ -116,6 +186,85 @@ def test_filings_over_http(cat):
     assert key.startswith(f"tenants/{CUI}/default/{PERIOD}/receipts/d300_platitor/")
     assert o.rt.blobs.get(key) == b"%PDF-1.4 recipisa"
     assert after["d394_platitor"]["state"] == "open"  # one receipt closes one item
+
+
+FREQS = {"tva_period": "lunar", "d100_period": "lunar"}
+
+
+def _open(o, period=PERIOD):
+    r = o.http.post(f"/filings/{CUI}/{period}", headers=o.op)
+    assert r.status_code == 200, r.text
+    return {i["filing_id"]: i for i in r.json()}
+
+
+def test_open_filings_records_each_due_date_with_its_lock_set(cat):
+    other = dated(cat)
+    day = verified(other) + timedelta(days=1)
+    o = _ops(other, today=lambda: day)
+    _codit(o, **FREQS)
+    items = _open(o)
+    axes = o.rt.codits.get(CUI, PERIOD).derive()
+    want = {x.filing_id: x for x in obligations(other, axes, PERIOD, as_of=day).items}
+    assert set(items) == set(want) and want
+    for fid, item in items.items():
+        assert item["due"] == want[fid].due and item["due_refused"] is None
+        assert item["due_lock"] == lock_set(other).as_dict()
+
+
+def test_open_filings_judges_freshness_on_the_runtimes_today(cat):
+    other = dated(cat)
+    stale = verified(other) + timedelta(days=WINDOW + 1)
+    o = _ops(other, today=lambda: stale)
+    _codit(o, **FREQS)
+    items = _open(o)
+    assert items and all(i["state"] == "open" and i["due"] is None for i in items.values())
+    assert all(i["due_refused"].startswith("the register pin is stale") for i in items.values())
+    o.rt.today = lambda: verified(other)  # the pin is fresh again: re-opening dates them
+    again = _open(o)
+    assert all(i["due"] and i["due_refused"] is None for i in again.values())
+    o.rt.today = lambda: stale  # stale once more: a recorded due date is kept
+    assert _open(o) == again
+
+
+def test_a_quarterly_filing_mid_quarter_is_later_not_refused(cat):
+    other = dated(cat)
+    day = verified(other) + timedelta(days=1)
+    o = _ops(other, today=lambda: day)
+    mid = "2026-08"  # not the end of a quarter
+    _codit(o, period=mid, tva_period="trimestrial", d100_period="lunar")
+    items = _open(o, mid)
+    d300 = items["d300_platitor"]
+    assert d300["due"] is None and d300["due_refused"] is None
+    assert d300["due_later"] == f"its quarter does not end in {mid}"
+    assert items["d100_micro"]["due"] and items["d100_micro"]["due_later"] is None
+
+
+def test_a_malformed_term_never_blocks_opening(cat):
+    other = dated(cat)
+    del next(t for t in other.docs["ArticoleTerms"]["terms"] if t["form"] == "D300")["frequency"]
+    day = verified(other) + timedelta(days=1)
+    o = _ops(other, today=lambda: day)
+    _codit(o, **FREQS)
+    items = _open(o)
+    assert "term_d300 for D300 is malformed" in items["d300_platitor"]["due_refused"]
+    assert all(i["due"] for f, i in items.items() if f != "d300_platitor")  # the others dated
+    other.docs["ArticoleTerms"]["terms"].append({"term_id": "term_x"})  # invented, no form
+    o.rt.filings.rows.clear()
+    items = _open(o)  # the calendar cannot read its terms at all: every item is still opened
+    assert items and all("names no form" in i["due_refused"] for i in items.values())
+
+
+def test_a_refused_due_date_blocks_neither_opening_nor_receipts_nor_close(cat):
+    o = _ops(cat)  # the catalog as it is: the window is unset, so every due date is refused
+    _codit(o, **FREQS)
+    items = _open(o)
+    assert set(items) == {"d300_platitor", "d394_platitor", "d406_saft", "d100_micro"}
+    assert all(i["due"] is None and i["due_refused"] for i in items.values())
+    assert _receipt(o, "d300_platitor").status_code == 200
+    out = o.http.post(f"/close/{CUI}/{PERIOD}", headers=o.op).json()
+    blockers = " ".join(out["question"]["blockers"] if out.get("question") else [])
+    assert out["run"]["status"] == "v2_ready", out  # the close reaches its question as before
+    assert "register" not in blockers and "due" not in blockers  # no gate was added (L43)
 
 
 def test_a_period_with_a_receipt_gets_no_new_package(cat):
@@ -144,9 +293,20 @@ def test_postgres_filing_store(cat):
 
     PostgresJobStore(dsn, reset=True)
     store = PostgresFilingStore(dsn)
-    store.open(CUI, PERIOD, "d300_platitor")
-    store.open(CUI, PERIOD, "d300_platitor")
-    assert store.items(CUI, PERIOD)["d300_platitor"]["state"] == "open"
+    store.open(CUI, PERIOD, "d300_platitor", due="2026-10-26", due_lock=LOCK)
+    store.open(
+        CUI, PERIOD, "d300_platitor", due="2026-10-27", due_lock=None
+    )  # kept, not overwritten
+    d300 = store.items(CUI, PERIOD)["d300_platitor"]
+    assert d300["state"] == "open" and d300["due"] == "2026-10-26" and d300["due_lock"] == LOCK
+    store.open(CUI, PERIOD, "d394_platitor", due_refused="stale")
+    assert store.items(CUI, PERIOD)["d394_platitor"]["due_refused"] == "stale"
+    store.open(CUI, PERIOD, "d394_platitor", due="2026-10-30", due_lock=LOCK)  # a refusal clears
+    d394 = store.items(CUI, PERIOD)["d394_platitor"]
+    assert (d394["due"], d394["due_lock"], d394["due_refused"]) == ("2026-10-30", LOCK, None)
+    store.open(CUI, PERIOD, "d406_saft", due_later="its quarter does not end in 2026-09")
+    d406 = store.items(CUI, PERIOD)["d406_saft"]
+    assert d406["due_later"] and d406["due_refused"] is None and d406["due"] is None
     with (
         psycopg.connect(dsn, autocommit=True) as conn,
         pytest.raises(psycopg.errors.CheckViolation),
