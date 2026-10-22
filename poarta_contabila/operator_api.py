@@ -8,15 +8,16 @@ LAW L35: ``GRAPHUSERTOKEN_CLAUDE_SYSBUILDER`` is the build agent's token (Claude
 owner): the same routes, **synthetic tenants only**. Every request must resolve to a tenant
 marked ``data_class: synthetic`` (by the path's ``cui``, the ``cui`` query, the job's or the
 batch's tenant), else 403; a tenant is never registered or turned into client data with it;
-the model-call and answer logs show it only synthetic tenants' rows; its answers are logged
-as ``claude-sysbuilder``. A route that names no tenant and is not listed is refused (default
-deny). A sysbuilder token equal to another token is ignored.
+the model-call and answer logs and the portfolio calendar show it only synthetic tenants'
+rows; its answers are logged as ``claude-sysbuilder``. A route that names no tenant and is not
+listed is refused (default deny). A sysbuilder token equal to another token is ignored.
 """
 
 from __future__ import annotations
 
 import base64
 import binascii
+import functools
 import hmac
 import re
 from collections.abc import Callable
@@ -68,6 +69,7 @@ _TENANTLESS = {
     "/model-keys",
     "/answers",
     "/rules",
+    "/calendar",
 }  # filtered or body-checked
 
 
@@ -307,6 +309,17 @@ def operator_router(
     def get_filings(cui: str, period: str, rt: Runtime = Depends(operator)) -> list[dict]:
         try:
             return rt.filings_view(cui, period)
+        except IngestRefused as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @router.get("/calendar")
+    def get_calendar(request: Request, rt: Runtime = Depends(operator)) -> dict[str, list[dict]]:
+        """The portfolio calendar (R45): every tenant's filing items by due date, the undated
+        ones apart with the calendar's reason; the tenant key is the only client field.
+        Read-only. The build agent sees synthetic tenants' items only."""
+        keep = functools.cache(rt._synthetic) if _builder(request) else None
+        try:
+            return rt.portfolio(keep)
         except IngestRefused as exc:
             raise HTTPException(422, str(exc)) from exc
 

@@ -22,6 +22,7 @@ from poarta_contabila.agent_api import agent_router
 from poarta_contabila.catalog import load_catalog
 from poarta_contabila.db import schema_sql
 from poarta_contabila.operator_api import operator_router
+from poarta_contabila.portfolio import portfolio_router
 from poarta_contabila.review import review_router
 
 
@@ -240,6 +241,7 @@ def create_app(
         return rt.agent if rt is not None else None
 
     app.include_router(review_router())
+    app.include_router(portfolio_router())
     app.include_router(agent_router(current_agent, lambda: token or None))
     app.include_router(
         operator_router(
