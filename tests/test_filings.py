@@ -307,6 +307,26 @@ def test_postgres_filing_store(cat):
     store.open(CUI, PERIOD, "d406_saft", due_later="its quarter does not end in 2026-09")
     d406 = store.items(CUI, PERIOD)["d406_saft"]
     assert d406["due_later"] and d406["due_refused"] is None and d406["due"] is None
+    store.open(CUI, PERIOD, "d406_saft", due="2026-10-26", due_lock=LOCK)  # its quarter ended
+    d406 = store.items(CUI, PERIOD)["d406_saft"]
+    assert (d406["due"], d406["due_lock"], d406["due_later"], d406["due_refused"]) == (
+        "2026-10-26",
+        LOCK,
+        None,
+        None,
+    )
+    # a filed item with no due date is not touched by a later answer of the calendar
+    store.open(CUI, PERIOD, "d100_micro", due_refused="stale")
+    store.receipt(CUI, PERIOD, "d100_micro", "k100.pdf", "contabil@test")
+    store.open(CUI, PERIOD, "d100_micro", due="2026-10-26", due_lock=LOCK)
+    d100 = store.items(CUI, PERIOD)["d100_micro"]
+    assert (d100["state"], d100["receipt_key"], d100["due"], d100["due_lock"]) == (
+        "filed",
+        "k100.pdf",
+        None,
+        None,
+    )
+    assert d100["due_refused"] == "stale"
     with (
         psycopg.connect(dsn, autocommit=True) as conn,
         pytest.raises(psycopg.errors.CheckViolation),

@@ -4,8 +4,9 @@ Every proposal (a Job), verdict (PRE / POST) and tie-out (the period difference,
 runs, the close decision) a store writes records the ``LockSet`` the runtime read its pins
 under (``lockset.py``): the core version, the notes library register's commit, the legal
 corpus release. When a pin is corrected or revoked, ``impacted_records`` lists exactly the
-stored results that read it; ``unlocked_records`` lists the rows written before lock sets were
-recorded, which nothing can place.
+stored results that read it; ``unlocked_records`` lists the rows no pin can place, each with
+its ``reason``: ``"pre-lock"`` for a row written before lock sets were recorded, ``"undated"``
+for a filing item the calendar gave no due date.
 
 The runtime gives each store in ``RUNTIME_LOCKED`` its lock set at boot
 (``Runtime.__post_init__``); such a store writes it with every new row and keeps the first one
@@ -70,7 +71,18 @@ def impacted_records(
     return impacted(locked, core=core, library=library, corpus=corpus)
 
 
+UNLOCKED_REASONS = ("pre-lock", "undated")
+
+
 def unlocked_records(stores: Mapping[str, Any]) -> list[dict[str, Any]]:
-    """Stored results whose pins are unknown: rows written before lock sets were recorded, and
-    filing items the calendar gave no due date (nothing was computed under a pin)."""
-    return [r for r in _rows(stores) if r["lock"] is None]
+    """Stored results no pin can place: ``{record, key, lock, reason}`` with ``lock`` None.
+
+    ``reason`` tells the two kinds apart: ``"pre-lock"`` for a row of a store that writes the
+    runtime's lock set (``RUNTIME_LOCKED``) but was written before lock sets were recorded, and
+    ``"undated"`` for a filing item the calendar gave no due date (refused, owed later, or
+    opened before due dates were recorded), so nothing was computed under a pin."""
+    return [
+        {**r, "reason": "pre-lock" if r["record"] in RUNTIME_LOCKED else "undated"}
+        for r in _rows(stores)
+        if r["lock"] is None
+    ]

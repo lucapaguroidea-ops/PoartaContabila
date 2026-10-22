@@ -338,8 +338,9 @@ store-wide lock. An item the calendar gave no date has no lock set and is listed
 
 A replayed write keeps the first lock set (L22). A close is decided again in place, so it takes
 the lock set it was last decided under. `impacted_records(runtime.records(), library=…)` lists
-the stored results of a pin, and `unlocked_records` lists rows written before lock sets were
-recorded, and the filing items with no due date. A register named without its full commit stops the boot (L24).
+the stored results of a pin. `unlocked_records` lists the rows no pin can place, each with its
+`reason`: `pre-lock` for a row written before lock sets were recorded, `undated` for a filing
+item with no due date. A register named without its full commit stops the boot (L24).
 
 ## 12. Jev packs
 

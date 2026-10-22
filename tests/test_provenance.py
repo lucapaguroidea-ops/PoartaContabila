@@ -30,6 +30,7 @@ from poarta_contabila.recon.pre import InMemoryReconStore, PostgresReconStore
 from poarta_contabila.registry import InMemoryRegistry
 from poarta_contabila.runtime import build_runtime
 from poarta_contabila.triage import EmitDecision, Pack
+from poarta_contabila.types import cui_is_valid
 
 OLD = LockSet(core="0.3.0", library="a" * 40, corpus=None)
 NEW = LockSet(core="0.3.0", library="b" * 40, corpus=None)
@@ -128,7 +129,9 @@ def test_the_impact_query_separates_pins_and_lists_the_unlocked() -> None:
     assert [r["key"] for r in impacted_records(stores, library=NEW.library)] == [
         ("job-2", "post", "s2")
     ]
-    assert [r["key"] for r in unlocked_records(stores)] == [("job-0", "pre", "s0")]
+    assert [(r["key"], r["reason"]) for r in unlocked_records(stores)] == [
+        (("job-0", "pre", "s0"), "pre-lock")
+    ]
     with pytest.raises(LockSetError):
         impacted_records(stores)  # a query names a pin
 
@@ -153,11 +156,11 @@ def test_the_close_decision_takes_the_lock_set_it_was_last_decided_under() -> No
     assert not impacted_records({"closes": closes}, library=OLD.library)
 
 
-def _dated_items(filings, period: str) -> None:
+def _dated_items(filings, period: str, cui: str = CUI) -> None:
     """Three filing items: one dated under OLD, one under NEW, one the calendar refused."""
-    filings.open(CUI, period, "d300_platitor", due="2026-10-26", due_lock=OLD.as_dict())
-    filings.open(CUI, period, "d394_platitor", due="2026-10-30", due_lock=NEW.as_dict())
-    filings.open(CUI, period, "d406_saft", due_refused="the register pin is stale")
+    filings.open(cui, period, "d300_platitor", due="2026-10-26", due_lock=OLD.as_dict())
+    filings.open(cui, period, "d394_platitor", due="2026-10-30", due_lock=NEW.as_dict())
+    filings.open(cui, period, "d406_saft", due_refused="the register pin is stale")
 
 
 def test_filing_items_are_found_by_the_lock_set_their_due_date_was_computed_under() -> None:
@@ -171,7 +174,24 @@ def test_filing_items_are_found_by_the_lock_set_their_due_date_was_computed_unde
     assert [r["key"] for r in impacted_records(stores, library=NEW.library)] == [
         (CUI, "2026-09", "d394_platitor")
     ]
-    assert [r["key"] for r in unlocked_records(stores)] == [(CUI, "2026-09", "d406_saft")]
+    assert [(r["key"], r["reason"]) for r in unlocked_records(stores)] == [
+        ((CUI, "2026-09", "d406_saft"), "undated")
+    ]
+
+
+def test_unlocked_rows_say_why_no_pin_places_them() -> None:
+    recon = InMemoryReconStore()
+    recon.put_once("job-0", "pre", _verdict("s0"))  # written before any lock set
+    filings = InMemoryFilingStore()
+    filings.open(CUI, "2026-08", "d300_platitor", due_later="its quarter does not end in 2026-08")
+    filings.open(CUI, "2026-09", "d300_platitor", due_refused="the register pin is stale")
+    rows = unlocked_records({"recon": recon, "filings": filings})
+    assert [(r["record"], r["key"], r["reason"]) for r in rows] == [
+        ("recon", ("job-0", "pre", "s0"), "pre-lock"),
+        ("filings", (CUI, "2026-08", "d300_platitor"), "undated"),
+        ("filings", (CUI, "2026-09", "d300_platitor"), "undated"),
+    ]
+    assert all(r["lock"] is None for r in rows)
 
 
 def test_the_runtime_gives_its_stores_the_catalog_lock_set() -> None:
@@ -241,22 +261,33 @@ def test_postgres_stores_record_and_query_the_lock_set(dsn: str) -> None:
         conn.execute("DELETE FROM domain.jobs WHERE job_id = %s", (job.job_id,))
 
 
+def _invented_cui() -> str:
+    """A fresh invented CUI per call (passes the check digit, L36), so concurrent runs against
+    one scratch database never share a filing item."""
+    while True:
+        body = str(int.from_bytes(os.urandom(4), "big") % 90_000_000 + 10_000_000)
+        cui = next(body + str(d) for d in range(10) if cui_is_valid(body + str(d)))
+        if cui != CUI:
+            return cui
+
+
 def test_postgres_filing_items_are_found_by_their_lock_set(dsn: str) -> None:
     import psycopg
 
-    period = f"2098-{int(os.urandom(1).hex(), 16) % 12 + 1:02d}"
+    cui, period = _invented_cui(), "2098-09"
+    assert cui_is_valid(cui)
     filings = PostgresFilingStore(dsn)
-    with psycopg.connect(dsn, autocommit=True) as conn:
-        conn.execute("DELETE FROM domain.filing_items WHERE period = %s", (period,))
-    _dated_items(filings, period)
-    stores = {"filings": filings}
-    mine = [r for r in impacted_records(stores, library=OLD.library) if r["key"][1] == period]
-    assert [r["key"] for r in mine] == [(CUI, period, "d300_platitor")]
-    assert all(r["lock"] == OLD for r in mine)
-    mine = [r for r in impacted_records(stores, library=NEW.library) if r["key"][1] == period]
-    assert [r["key"] for r in mine] == [(CUI, period, "d394_platitor")]
-    assert [r["key"] for r in unlocked_records(stores) if r["key"][1] == period] == [
-        (CUI, period, "d406_saft")
-    ]
-    with psycopg.connect(dsn, autocommit=True) as conn:
-        conn.execute("DELETE FROM domain.filing_items WHERE period = %s", (period,))
+    try:
+        _dated_items(filings, period, cui)
+        stores = {"filings": filings}
+        mine = [r for r in impacted_records(stores, library=OLD.library) if r["key"][0] == cui]
+        assert [r["key"] for r in mine] == [(cui, period, "d300_platitor")]
+        assert all(r["lock"] == OLD for r in mine)
+        mine = [r for r in impacted_records(stores, library=NEW.library) if r["key"][0] == cui]
+        assert [r["key"] for r in mine] == [(cui, period, "d394_platitor")]
+        assert [
+            (r["key"], r["reason"]) for r in unlocked_records(stores) if r["key"][0] == cui
+        ] == [((cui, period, "d406_saft"), "undated")]
+    finally:
+        with psycopg.connect(dsn, autocommit=True) as conn:
+            conn.execute("DELETE FROM domain.filing_items WHERE cui = %s", (cui,))
