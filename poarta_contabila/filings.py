@@ -4,16 +4,20 @@ This system never submits to ANAF. A due item comes from an ArticoleFiling row w
 ``require`` / ``forbid`` fit the period's CO.DiT (no CO.DiT → nothing is assumed due).
 It closes only when a receipt artefact is stored (``closer: receipt``) — a calendar
 date passing closes nothing. An item records, when it is opened, what the calendar
-(``calendar.obligations``) said of it: its due date with the lock set it was computed under,
-or the calendar's refusal reason. The due date is information, not a gate: a refusal blocks
-neither opening, nor a receipt, nor the close. Each item carries its ``books_gate``: whether
-the controls it names passed on the period's latest Layer 1 run. Once any receipt exists for
-a period, no package is regenerated for it.
+(``calendar.obligations``) said of it, in exactly one of three fields: its due date with the
+lock set it was computed under (``due``, ``due_lock``), the calendar's refusal reason
+(``due_refused``), or, for a quarterly filing whose quarter does not end in the period, why it
+is owed later (``due_later``, not a refusal). The due date is information, not a gate: a
+refusal blocks neither opening, nor a receipt, nor the close. Each item carries its
+``books_gate``: whether the controls it names passed on the period's latest Layer 1 run. Once
+any receipt exists for a period, no package is regenerated for it.
 
-Re-opening keeps a recorded due date (it stays with the lock set it was computed under; a
-corrected pin finds it through that lock set, never by a silent rewrite). An open item with no
-due date recorded (refused, or opened before due dates were recorded) takes the newer answer,
-so a refusal clears once the calendar can date the item. A filed item is not touched.
+Re-opening keeps a recorded due date: it stays with the lock set it was computed under, never
+silently rewritten. A corrected pin finds it through that lock set: each store's ``locked()``
+lists every item with its ``due_lock``, so ``provenance.impacted_records`` returns the items
+dated under a pin (record ``filings``). An open item with no due date recorded (refused, later,
+or opened before due dates were recorded) takes the newer answer, so a refusal clears once the
+calendar can date the item. A filed item is not touched.
 """
 
 from __future__ import annotations
@@ -25,6 +29,7 @@ from typing import Any
 from pydantic import Field
 
 from poarta_contabila.catalog import Catalog
+from poarta_contabila.lockset import LockSet
 from poarta_contabila.types import Closed, Cui, FilingItem, Period, Slug
 
 
@@ -38,7 +43,8 @@ class FilingView(Closed):
     submitted_by: str | None = None
     due: str | None = None  # ISO date the calendar gave when the item was opened
     due_lock: dict[str, str | None] | None = None  # the lock set that due date was computed under
-    due_refused: str | None = None  # the calendar's reason when it gave no date
+    due_refused: str | None = None  # the calendar's reason when it refused a date
+    due_later: str | None = None  # why it is owed later (its quarter does not end in the period)
     certainty: str
     books_gate: dict[str, str] = Field(default_factory=dict)
     books_support: bool
@@ -81,8 +87,14 @@ class InMemoryFilingStore:
         due: str | None = None,
         due_lock: dict[str, str | None] | None = None,
         due_refused: str | None = None,
+        due_later: str | None = None,
     ) -> None:
-        answer = {"due": due, "due_lock": due_lock, "due_refused": due_refused}
+        answer = {
+            "due": due,
+            "due_lock": due_lock,
+            "due_refused": due_refused,
+            "due_later": due_later,
+        }
         row = self.rows.get((cui, period, filing_id))
         if row is None:
             self.rows[(cui, period, filing_id)] = {
@@ -96,6 +108,11 @@ class InMemoryFilingStore:
 
     def items(self, cui: str, period: str) -> dict[str, dict[str, Any]]:
         return {f: dict(v) for (c, p, f), v in self.rows.items() if (c, p) == (cui, period)}
+
+    def locked(self) -> list[tuple[tuple[str, ...], LockSet | None]]:
+        """``((cui, period, filing_id), lock set or None)`` per item: the lock set its due date
+        was computed under, None when the calendar gave it no date (provenance.py)."""
+        return [(k, LockSet.from_dict(v.get("due_lock"))) for k, v in sorted(self.rows.items())]
 
     def receipt(self, cui: str, period: str, filing_id: str, key: str, by: str) -> None:
         row = self.rows.get((cui, period, filing_id))
@@ -124,24 +141,26 @@ class PostgresFilingStore:
         due: str | None = None,
         due_lock: dict[str, str | None] | None = None,
         due_refused: str | None = None,
+        due_later: str | None = None,
     ) -> None:
         lock = json.dumps(due_lock) if due_lock is not None else None
         with self._psycopg.connect(self._dsn, autocommit=True) as conn:
             conn.execute(
                 "INSERT INTO domain.filing_items"
-                " (cui, period, filing_id, due, due_lock, due_refused)"
-                " VALUES (%s, %s, %s, %s, %s::jsonb, %s)"
+                " (cui, period, filing_id, due, due_lock, due_refused, due_later)"
+                " VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s)"
                 " ON CONFLICT (cui, period, filing_id) DO UPDATE SET due = EXCLUDED.due,"
-                " due_lock = EXCLUDED.due_lock, due_refused = EXCLUDED.due_refused"
+                " due_lock = EXCLUDED.due_lock, due_refused = EXCLUDED.due_refused,"
+                " due_later = EXCLUDED.due_later"
                 " WHERE domain.filing_items.state = 'open' AND domain.filing_items.due IS NULL",
-                (cui, period, filing_id, due, lock, due_refused),
+                (cui, period, filing_id, due, lock, due_refused, due_later),
             )
 
     def items(self, cui: str, period: str) -> dict[str, dict[str, Any]]:
         with self._psycopg.connect(self._dsn) as conn:
             rows = conn.execute(
-                "SELECT filing_id, state, receipt_key, submitted_by, due, due_lock, due_refused"
-                " FROM domain.filing_items WHERE cui = %s AND period = %s",
+                "SELECT filing_id, state, receipt_key, submitted_by, due, due_lock, due_refused,"
+                " due_later FROM domain.filing_items WHERE cui = %s AND period = %s",
                 (cui, period),
             ).fetchall()
         return {
@@ -152,9 +171,23 @@ class PostgresFilingStore:
                 "due": r[4],
                 "due_lock": json.loads(r[5]) if isinstance(r[5], str) else r[5],
                 "due_refused": r[6],
+                "due_later": r[7],
             }
             for r in rows
         }
+
+    def locked(self) -> list[tuple[tuple[str, ...], LockSet | None]]:
+        """``((cui, period, filing_id), lock set or None)`` per item: the lock set its due date
+        was computed under, None when the calendar gave it no date (provenance.py)."""
+        with self._psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT cui, period, filing_id, due_lock FROM domain.filing_items"
+                " ORDER BY cui, period, filing_id"
+            ).fetchall()
+        return [
+            ((c, p, f), LockSet.from_dict(json.loads(lk) if isinstance(lk, str) else lk))
+            for c, p, f, lk in rows
+        ]
 
     def receipt(self, cui: str, period: str, filing_id: str, key: str, by: str) -> None:
         with self._psycopg.connect(self._dsn, autocommit=True) as conn:
@@ -204,6 +237,7 @@ def views(
                 due=item.get("due"),
                 due_lock=item.get("due_lock"),
                 due_refused=item.get("due_refused"),
+                due_later=item.get("due_later"),
                 certainty=row.get("certainty", "de_confirmat"),
                 books_gate=gate,
                 books_support=ok,

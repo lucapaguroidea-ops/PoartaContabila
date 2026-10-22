@@ -101,11 +101,13 @@ CREATE TABLE IF NOT EXISTS domain.filing_items (
 );
 ALTER TABLE domain.filing_items ADD COLUMN IF NOT EXISTS submitted_by text;
 -- What the calendar said when the item was opened (calendar.py): its due date with the lock set
--- it was computed under, or the calendar's refusal reason. Information, not a gate (L43).
+-- it was computed under, the calendar's refusal reason, or why it is owed later. Information, not a gate (L43).
 -- NULL on items opened before due dates were recorded; re-opening fills them.
 ALTER TABLE domain.filing_items ADD COLUMN IF NOT EXISTS due text;
 ALTER TABLE domain.filing_items ADD COLUMN IF NOT EXISTS due_lock jsonb;
 ALTER TABLE domain.filing_items ADD COLUMN IF NOT EXISTS due_refused text;
+-- A quarterly filing whose quarter does not end in the period: owed later, not refused.
+ALTER TABLE domain.filing_items ADD COLUMN IF NOT EXISTS due_later text;
 
 CREATE TABLE IF NOT EXISTS domain.codit (
     cui     text NOT NULL,

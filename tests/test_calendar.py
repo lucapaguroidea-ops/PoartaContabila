@@ -197,6 +197,36 @@ def test_refuses_an_owed_filing_with_no_term(cat) -> None:
     assert _refused(res, "D406") == "no term for D406"
 
 
+BROKEN_TERMS = [  # each breaks the D300 term row in a different way (L24: refused, not raised)
+    ("a missing frequency", lambda t: t.pop("frequency")),  # KeyError
+    ("a missing term_id", lambda t: t.pop("term_id")),  # KeyError, read last
+    ("an unhashable axis name", lambda t: t.update(frequency_axis=["tva_period"])),  # TypeError
+    ("months past any date", lambda t: t.update(months_after=10**6)),  # ValueError
+    ("months that are not a number", lambda t: t.update(months_after="one")),
+    ("an unknown frequency", lambda t: t.update(frequency="anual")),
+]
+
+
+@pytest.mark.parametrize(("label", "brk"), BROKEN_TERMS, ids=[b[0] for b in BROKEN_TERMS])
+def test_a_malformed_term_row_refuses_only_its_own_item(cat, label, brk) -> None:
+    other = copy.deepcopy(cat)
+    brk(next(t for t in other.docs["ArticoleTerms"]["terms"] if t["form"] == "D300"))
+    axes = {"tva": "tva_platitor", **FREQ}
+    good = ask(cat, axes, "2026-04", years(2026))
+    res = ask(other, axes, "2026-04", years(2026))
+    assert "D300" in {o.form for o in good.items}
+    assert {o.form for o in res.items} == {o.form for o in good.items} - {"D300"}
+    reason = _refused(res, "D300")
+    assert "malformed" in reason or "must be" in reason, reason
+
+
+def test_a_term_row_naming_no_form_is_refused(cat) -> None:
+    other = copy.deepcopy(cat)
+    other.docs["ArticoleTerms"]["terms"].append({"term_id": "term_x"})  # invented, broken
+    with pytest.raises(CalendarError, match="names no form"):
+        terms_by_form(other)
+
+
 def test_refuses_a_non_working_year_without_a_source(cat) -> None:
     other = copy.deepcopy(cat)
     other.docs["ArticoleNonWorking"]["years"] = [

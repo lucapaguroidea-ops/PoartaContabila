@@ -9,9 +9,10 @@ holiday is written here (L40).
 
 Fail closed (L24): an owed filing whose due date cannot be computed is **refused** with its
 reason (no term for its form, its frequency axis unset, a day the month does not have, a year
-with no pinned non-working days), never dropped and never guessed. Every owed filing ends up
-in exactly one of ``CalendarResult.items``, ``CalendarResult.refused`` or, for a filing whose
-quarter does not end with the month, ``CalendarResult.later``.
+with no pinned non-working days, a malformed term row), never dropped and never guessed. A
+malformed term refuses only its own item. Every owed filing ends up in exactly one of
+``CalendarResult.items``, ``CalendarResult.refused`` or, for a filing whose quarter does not
+end with the month, ``CalendarResult.later``.
 
 Freshness (R23): the register pin carries the day it was verified (``verified_at``) and the
 owner's window (``max_age_days``). On a day *as_of* the caller passes, a pin older than the
@@ -106,9 +107,12 @@ def terms_by_form(cat: Catalog) -> dict[str, dict[str, Any]]:
     doc = cat.docs.get("ArticoleTerms") or {}
     out: dict[str, dict[str, Any]] = {}
     for row in doc.get("terms") or []:
-        if row["form"] in out:
-            raise CalendarError(f"two terms for {row['form']}")
-        out[row["form"]] = row
+        form = row.get("form") if isinstance(row, dict) else None
+        if not isinstance(form, str):
+            raise CalendarError(f"a term row names no form: {row!r}")
+        if form in out:
+            raise CalendarError(f"two terms for {form}")
+        out[form] = row
     return out
 
 
@@ -214,43 +218,68 @@ def obligations(
         if term is None:
             result.refused.append({"filing_id": fid, "form": form, "reason": f"no term for {form}"})
             continue
-        if term["frequency"] == "from_axis":
-            axis = term["frequency_axis"]
-            frequency = axes.get(axis)
-            if frequency not in FREQUENCIES:
-                result.refused.append(
-                    {"filing_id": fid, "form": form, "reason": f"CO.DiT axis {axis} is not set"}
-                )
-                continue
-        else:
-            frequency = term["frequency"]
-        span = _month_end_periods(period, frequency)
-        if span is None:  # a quarterly filing whose quarter does not end this month
-            result.later.append(
-                {"filing_id": fid, "form": form, "reason": f"its quarter does not end in {period}"}
-            )
-            continue
-        filing_period, end = span
         try:
-            unshifted = _target(end, int(term["months_after"]), term["day"])
-            due = _shift(unshifted, years) if term.get("shift") == "next_working_day" else unshifted
+            answer = _obligation(cat, fid, form, term, axes, period, years, lock)
         except CalendarError as exc:
-            result.refused.append({"filing_id": fid, "form": form, "reason": str(exc)})
-            continue
-        pinned = (years[d.year].certainty for d in (unshifted, due) if d.year in years)
-        certainties = {term.get("certainty"), *pinned}
-        result.items.append(
-            Obligation(
-                filing_id=fid,
-                form=form,
-                filing_period=filing_period,
-                due=due.isoformat(),
-                unshifted=unshifted.isoformat(),
-                conditional=term.get("only_if"),
-                certainty="confirmed" if certainties == {"confirmed"} else "de_confirmat",
-                term_id=term["term_id"],
-                source=_source(cat, term),
-                lock=lock,
-            )
-        )
+            answer = str(exc)
+        except (KeyError, ValueError, TypeError) as exc:
+            # a malformed term row refuses its own item; it never stops the others (L24, L43)
+            answer = f"the term {term.get('term_id', '?')} for {form} is malformed: {exc!r}"
+        if isinstance(answer, Obligation):
+            result.items.append(answer)
+        elif isinstance(answer, _Later):
+            result.later.append({"filing_id": fid, "form": form, "reason": answer.reason})
+        else:
+            result.refused.append({"filing_id": fid, "form": form, "reason": answer})
     return result
+
+
+@dataclass(frozen=True)
+class _Later:
+    reason: str
+
+
+def _obligation(
+    cat: Catalog,
+    fid: str,
+    form: str,
+    term: dict[str, Any],
+    axes: dict[str, str],
+    period: str,
+    years: dict[int, NonWorkingYear],
+    lock: LockSet,
+) -> Obligation | _Later | str:
+    """One owed filing: its ``Obligation``, a ``_Later`` (its quarter does not end in *period*),
+    or the refusal reason. A malformed term raises; ``obligations`` turns that into a refusal."""
+    if term["frequency"] == "from_axis":
+        axis = term["frequency_axis"]
+        frequency = axes.get(axis)
+        if frequency not in FREQUENCIES:
+            return f"CO.DiT axis {axis} is not set"
+    else:
+        frequency = term["frequency"]
+        if frequency not in FREQUENCIES:
+            raise CalendarError(f"{term['term_id']}: frequency must be one of {FREQUENCIES}")
+    span = _month_end_periods(period, frequency)
+    if span is None:  # a quarterly filing whose quarter does not end this month
+        return _Later(f"its quarter does not end in {period}")
+    filing_period, end = span
+    months_after = term["months_after"]
+    if isinstance(months_after, bool) or not isinstance(months_after, int) or months_after < 0:
+        raise CalendarError(f"{term['term_id']}: months_after must be a whole number of months")
+    unshifted = _target(end, months_after, term["day"])
+    due = _shift(unshifted, years) if term.get("shift") == "next_working_day" else unshifted
+    pinned = (years[d.year].certainty for d in (unshifted, due) if d.year in years)
+    certainties = {term.get("certainty"), *pinned}
+    return Obligation(
+        filing_id=fid,
+        form=form,
+        filing_period=filing_period,
+        due=due.isoformat(),
+        unshifted=unshifted.isoformat(),
+        conditional=term.get("only_if"),
+        certainty="confirmed" if certainties == {"confirmed"} else "de_confirmat",
+        term_id=term["term_id"],
+        source=_source(cat, term),
+        lock=lock,
+    )

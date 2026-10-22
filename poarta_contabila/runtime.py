@@ -61,7 +61,7 @@ from poarta_contabila.lockset import lock_set
 from poarta_contabila.model_roles import CALL_MODES, InMemoryModelCallStore, ModelGateway, brief
 from poarta_contabila.packages import BlobStore, PackageStore
 from poarta_contabila.period_diff import ExpectedJob, build_period_diff, can_file
-from poarta_contabila.provenance import RECORDS
+from poarta_contabila.provenance import RECORDS, RUNTIME_LOCKED
 from poarta_contabila.provider_policy import (
     InMemoryPolicyStore,
     InMemoryRoleChoiceStore,
@@ -299,9 +299,10 @@ class Runtime:
         self.triage = build_triage_graph(self.catalog, self.jobs, checkpointer=self.checkpointer)
         # Every stored proposal, verdict and tie-out records the pins it was computed under
         # (provenance.py); a register named without its full commit stops the boot (L24).
+        # Filing items record their calendar entry's lock set instead (open_filings).
         lock = lock_set(self.catalog)
-        for store in self.records().values():
-            if store is not None:
+        for record, store in self.records().items():
+            if record in RUNTIME_LOCKED and store is not None:
                 store.lock = lock
 
     def records(self) -> dict[str, Any]:
@@ -1239,18 +1240,21 @@ class Runtime:
     def _due_dates(self, axes: dict[str, str], period: str) -> dict[str, dict[str, Any]]:
         """What the calendar says of each owed filing on today's date: a due date with its lock
         set, or the reason it gives none. The register pin's freshness is checked inside
-        ``obligations`` (R23). Information only: a refusal never stops an item opening (L43)."""
+        ``obligations`` (R23). Information only: a refusal never stops an item opening (L43), so
+        a catalog the calendar cannot read at all refuses every item with the reason."""
         try:
             cal = obligations(self.catalog, axes, period, as_of=self._today())
-        except CalendarError as exc:
-            reason = f"the calendar refused: {exc}"
+        except (CalendarError, KeyError, ValueError, TypeError) as exc:
+            reason = f"the calendar refused: {exc if isinstance(exc, CalendarError) else repr(exc)}"
             owed = due_filings(self.catalog, axes)
             return {r["filing_id"]: {"due_refused": reason} for r in owed}
         out: dict[str, dict[str, Any]] = {
             o.filing_id: {"due": o.due, "due_lock": o.lock.as_dict()} for o in cal.items
         }
-        for r in cal.refused + cal.later:
+        for r in cal.refused:
             out[r["filing_id"]] = {"due_refused": r["reason"]}
+        for r in cal.later:  # owed once its quarter ends: not a refusal
+            out[r["filing_id"]] = {"due_later": r["reason"]}
         return out
 
     def _today(self) -> date:

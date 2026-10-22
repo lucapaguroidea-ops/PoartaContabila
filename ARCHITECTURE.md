@@ -247,7 +247,7 @@ poarta_contabila/
   jobs.py packages.py registry.py storage.py answers.py rules.py codit.py filings.py
   calendar.py          # when each owed filing is due: register terms + pinned non-working days
   lockset.py           # the pins a result was read under (core, library commit, corpus); impact query
-  provenance.py        # the lock set on stored proposals, verdicts and tie-outs; impact query over stores
+  provenance.py        # the lock set on stored proposals, verdicts, tie-outs and due dates; impact query
   extract/             # XML first (ubl.py); statements (statement.py, document_ai.py, gemini.py)
   recon/               # PRE / POST / settle (deterministic, no model)
   period_diff.py       # Layer 1 + ArticoleControls; not a ledger
@@ -297,7 +297,9 @@ these cases:
 - the register pin is not fresh on `as_of` (below): then every owed filing is refused.
 
 A quarterly filing in a month that does not end its quarter is listed as `later`, with its
-reason. No year is pinned yet, so on the real catalog every date is refused until one is added.
+reason. A malformed term row (a missing field, a value the term grammar does not allow, a date
+out of range) refuses only its own item, with the reason; it never stops the others. No year is
+pinned yet, so on the real catalog every date is refused until one is added.
 
 **Due dates on filing items, and freshness** (R21, R23). The register pin in `ArticoleTerms`
 carries `verified_at` and the owner's window `max_age_days`, which stays `null` until the owner
@@ -305,13 +307,16 @@ sets it. `register_freshness(cat, as_of)` refuses when the window is unset, or w
 is more than the window after `verified_at`. `as_of` is a required argument of `obligations`,
 so no due date is computed without the check. The core reads no clock: the runtime passes
 today's date (`Runtime.today`, UTC by default). When `Runtime.open_filings` opens a period's
-filing items, each item records what the calendar said: its due date with the calendar
-entry's lock set (`domain.filing_items.due`, `due_lock`), or the refusal reason
-(`due_refused`). `filings_view` shows the three fields. The due date is information, not a
-gate: a refusal blocks neither opening, nor a receipt, nor the close (L43). Re-opening keeps a
-recorded due date, so the date stays with the lock set it was computed under; a corrected pin
-finds it through that lock set. An open item with no recorded date takes the newer answer, so a
-refusal clears once the calendar can date the item. A filed item is not touched.
+filing items, each item records what the calendar said, in exactly one of three ways: its due
+date with the calendar entry's lock set (`domain.filing_items.due`, `due_lock`), the refusal
+reason (`due_refused`), or, for a quarterly filing mid-quarter, why it is owed later
+(`due_later`, its own column: a later item is not a refusal). `filings_view` shows the four
+fields. The due date is information, not a gate: a refusal blocks neither opening, nor a
+receipt, nor the close (L43); a catalog the calendar cannot read at all refuses every item and
+still opens them. Re-opening keeps a recorded due date, so the date stays with the lock set it
+was computed under; a corrected pin finds it through that lock set, because filing items are a
+provenance record (`filings`, below). An open item with no recorded date takes the newer
+answer, so a refusal clears once the calendar can date the item. A filed item is not touched.
 
 **The lock set** (`lockset.py`, in the core). Every calendar entry records the pins it was
 computed under: `CORE_VERSION`, the register's full commit, and the legal corpus release.
@@ -319,17 +324,22 @@ The corpus release is `None` until a corpus is pinned here. `impacted(entries, l
 returns exactly the entries that read a given pin, so a corrected or revoked value finds its
 consumers.
 
-**Stored results carry it too** (`provenance.py`). At boot the runtime gives the stores the
-catalog's lock set. Each one writes it, as a `lock jsonb` column, on every new row:
+**Stored results carry it too** (`provenance.py`). At boot the runtime gives the stores in
+`RUNTIME_LOCKED` the catalog's lock set. Each one writes it, as a `lock jsonb` column, on every
+new row:
 - `domain.jobs`: the proposals;
 - `domain.recon_verdicts`: the PRE / POST verdicts;
 - `domain.close_snapshots` and `domain.control_runs`: the tie-outs;
 - `domain.close_runs`: the close decision.
 
+Filing items (`domain.filing_items`, record `filings`) are stamped per item instead: each keeps
+the lock set of the calendar entry that dated it (`due_lock`), so the filing store has no
+store-wide lock. An item the calendar gave no date has no lock set and is listed as unlocked.
+
 A replayed write keeps the first lock set (L22). A close is decided again in place, so it takes
 the lock set it was last decided under. `impacted_records(runtime.records(), library=…)` lists
 the stored results of a pin, and `unlocked_records` lists rows written before lock sets were
-recorded. A register named without its full commit stops the boot (L24).
+recorded, and the filing items with no due date. A register named without its full commit stops the boot (L24).
 
 ## 12. Jev packs
 

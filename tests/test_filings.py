@@ -108,6 +108,16 @@ def test_reopening_keeps_a_recorded_due_date_and_fills_a_missing_one():
     assert items["d406_saft"]["due"] is None and items["d406_saft"]["state"] == "filed"
 
 
+def test_a_later_item_is_kept_apart_from_a_refusal():
+    store = InMemoryFilingStore()
+    store.open(CUI, PERIOD, "d300_platitor", due_later="its quarter does not end in 2026-09")
+    d300 = store.items(CUI, PERIOD)["d300_platitor"]
+    assert d300["due_later"] and d300["due_refused"] is None and d300["due"] is None
+    store.open(CUI, PERIOD, "d300_platitor", due="2026-10-26", due_lock=LOCK)  # dated later on
+    d300 = store.items(CUI, PERIOD)["d300_platitor"]
+    assert (d300["due"], d300["due_later"], d300["due_refused"]) == ("2026-10-26", None, None)
+
+
 def test_only_a_receipt_closes_an_item():
     store = InMemoryFilingStore()
     store.open(CUI, PERIOD, "d300_platitor")
@@ -134,14 +144,14 @@ def _ops(cat, today=None):
     return o
 
 
-def _codit(o, **extra):
+def _codit(o, period=PERIOD, **extra):
     axes = {
         "tva": {"value": "tva_platitor", "certainty": "confirmed"},
         "forma": {"value": "srl", "certainty": "confirmed"},
         "impozit": {"value": "micro_1", "certainty": "confirmed"},
         **{k: {"value": v, "certainty": "confirmed"} for k, v in extra.items()},
     }
-    r = o.http.put(f"/codit/{CUI}/{PERIOD}", headers=o.op, json={"axes": axes})
+    r = o.http.put(f"/codit/{CUI}/{period}", headers=o.op, json={"axes": axes})
     assert r.status_code == 200, r.text
 
 
@@ -181,8 +191,8 @@ def test_filings_over_http(cat):
 FREQS = {"tva_period": "lunar", "d100_period": "lunar"}
 
 
-def _open(o):
-    r = o.http.post(f"/filings/{CUI}/{PERIOD}", headers=o.op)
+def _open(o, period=PERIOD):
+    r = o.http.post(f"/filings/{CUI}/{period}", headers=o.op)
     assert r.status_code == 200, r.text
     return {i["filing_id"]: i for i in r.json()}
 
@@ -214,6 +224,34 @@ def test_open_filings_judges_freshness_on_the_runtimes_today(cat):
     assert all(i["due"] and i["due_refused"] is None for i in again.values())
     o.rt.today = lambda: stale  # stale once more: a recorded due date is kept
     assert _open(o) == again
+
+
+def test_a_quarterly_filing_mid_quarter_is_later_not_refused(cat):
+    other = dated(cat)
+    day = verified(other) + timedelta(days=1)
+    o = _ops(other, today=lambda: day)
+    mid = "2026-08"  # not the end of a quarter
+    _codit(o, period=mid, tva_period="trimestrial", d100_period="lunar")
+    items = _open(o, mid)
+    d300 = items["d300_platitor"]
+    assert d300["due"] is None and d300["due_refused"] is None
+    assert d300["due_later"] == f"its quarter does not end in {mid}"
+    assert items["d100_micro"]["due"] and items["d100_micro"]["due_later"] is None
+
+
+def test_a_malformed_term_never_blocks_opening(cat):
+    other = dated(cat)
+    del next(t for t in other.docs["ArticoleTerms"]["terms"] if t["form"] == "D300")["frequency"]
+    day = verified(other) + timedelta(days=1)
+    o = _ops(other, today=lambda: day)
+    _codit(o, **FREQS)
+    items = _open(o)
+    assert "term_d300 for D300 is malformed" in items["d300_platitor"]["due_refused"]
+    assert all(i["due"] for f, i in items.items() if f != "d300_platitor")  # the others dated
+    other.docs["ArticoleTerms"]["terms"].append({"term_id": "term_x"})  # invented, no form
+    o.rt.filings.rows.clear()
+    items = _open(o)  # the calendar cannot read its terms at all: every item is still opened
+    assert items and all("names no form" in i["due_refused"] for i in items.values())
 
 
 def test_a_refused_due_date_blocks_neither_opening_nor_receipts_nor_close(cat):
@@ -266,6 +304,9 @@ def test_postgres_filing_store(cat):
     store.open(CUI, PERIOD, "d394_platitor", due="2026-10-30", due_lock=LOCK)  # a refusal clears
     d394 = store.items(CUI, PERIOD)["d394_platitor"]
     assert (d394["due"], d394["due_lock"], d394["due_refused"]) == ("2026-10-30", LOCK, None)
+    store.open(CUI, PERIOD, "d406_saft", due_later="its quarter does not end in 2026-09")
+    d406 = store.items(CUI, PERIOD)["d406_saft"]
+    assert d406["due_later"] and d406["due_refused"] is None and d406["due"] is None
     with (
         psycopg.connect(dsn, autocommit=True) as conn,
         pytest.raises(psycopg.errors.CheckViolation),
